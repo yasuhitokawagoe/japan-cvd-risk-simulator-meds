@@ -1,0 +1,61 @@
+general:
+  max_age: 110
+  min_age: 20
+
+baseline_incidence:
+  # Fallback Gompertz-like parameters used if CSVs are empty or missing.
+  mi:
+    male:   { a: 0.00025, b: 0.080 }
+    female: { a: 0.00015, b: 0.085 }
+  stroke:
+    male:   { a: 0.00035, b: 0.075 }
+    female: { a: 0.00030, b: 0.078 }
+  mortality:
+    male:   { a: 0.00090, b: 0.085 }   # qx ~ 1-exp(-a*exp(b*(age-40)))
+    female: { a: 0.00070, b: 0.082 }
+
+baseline_ci_percent:
+  mi: 0.20        # 95%CI 概算幅（±20%）
+  stroke: 0.15    # ±15%
+  mortality: 0.05 # ±5%
+
+age_effect:
+  sbp:
+    start_age: 75
+    end_age: 85
+    strength: 1.0   # SBPは強く減衰（lnRRを(1-w)へ、w∈[0,1]）
+  ldl:
+    start_age: 85
+    end_age: 90
+    strength: 0.3   # LDLは弱く減衰
+  hba1c:
+    start_age: 75
+    end_age: 85
+    strength: 0.8   # HbA1cは宏血管効果を強めに中立化
+
+risk_models:
+  sbp:
+    rr_per_10mmhg_mi: 0.78
+    rr_per_10mmhg_stroke: 0.70
+    rr_per_10mmhg_mortality: 0.85
+  ldl:
+    rr_per_1mmol_mi: 0.72
+    rr_per_1mmol_stroke: 0.88
+    rr_per_1mmol_mortality: 0.82
+    lower_bound_mgdl: 60
+    comfort_range_mgdl: [70, 100]
+  hba1c:
+    rr_per_1pct_mi: 1.18
+    rr_per_1pct_stroke: 1.17
+    rr_per_1pct_mortality: 1.15
+    u_shape_low_threshold: 6.0
+    u_shape_multiplier: 1.10
+  smoking:
+    beta_packyear_mi: 0.0133
+    beta_packyear_stroke: 0.0101
+    beta_packyear_mortality: 0.0120
+    packyear_max: 60
+    residual_hr_after_long_quit_mi: 1.10
+    residual_hr_after_long_quit_stroke: 1.15
+    residual_hr_after_long_quit_mortality: 1.10
+    years_to_reach_residual: 12
