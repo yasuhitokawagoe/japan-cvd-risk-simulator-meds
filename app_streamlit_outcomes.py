@@ -13,6 +13,13 @@ st.caption("教育・共有意思決定のため。医療機器ではありま�
 
 engine = OutcomesEngine("config.yaml")
 
+MORTALITY_ALL_CAUSE_DEATH_CAPTION = (
+    "※全死亡は、心血管疾患に限らず、がんや他の病気を含むすべての死亡を対象としています。"
+)
+
+# 画面上の表示順（サマリー横並び・詳細グラフの並びを統一）
+OUTCOME_DISPLAY_ORDER = ("mortality", "mi", "stroke")
+
 # ====== 薬剤Excelのパス（必要なら修正） ======
 BP_XLSX_PATH = "降圧薬詳細_Ca-ARNI_薬価付き_日本語表_英語タイトル引用付き.xlsx"
 LIPID_GLU_XLSX_PATH = "LDL_HbA1c_用量別_薬価付き_日本語表_英語タイトル引用付き.xlsx"
@@ -241,7 +248,7 @@ st.markdown("## 📊 リスク比較サマリー")
 labels = {"mi": "心筋梗塞", "stroke": "脳卒中", "mortality": "全死亡"}
 cols = st.columns(3)
 
-for i, outcome in enumerate(["mi", "stroke", "mortality"]):
+for i, outcome in enumerate(OUTCOME_DISPLAY_ORDER):
     with cols[i]:
         st.subheader(labels[outcome])
         for horizon in horizons:
@@ -257,6 +264,8 @@ for i, outcome in enumerate(["mi", "stroke", "mortality"]):
                 f"{arr:.1f}%",
                 delta=f"現在 {r['baseline']*100:.1f}% → 目標 {r['target']*100:.1f}%"
             )
+        if outcome == "mortality":
+            st.caption(MORTALITY_ALL_CAUSE_DEATH_CAPTION)
 
 st.divider()
 
@@ -274,11 +283,12 @@ st.divider()
 # ---- 曲線（MI / Stroke / Mortality すべて表示） ----
 st.markdown("## 📈 累積リスク曲線（95%CI）")
 
-outcomes_config = [
-    {"key": "mi", "title": "🫀 心筋梗塞", "icon": "🫀"},
-    {"key": "stroke", "title": "🧠 脳卒中", "icon": "🧠"},
-    {"key": "mortality", "title": "💀 全死亡", "icon": "💀"},
-]
+_OUTCOME_DETAIL_META = {
+    "mortality": {"title": "💀 全死亡", "icon": "💀"},
+    "mi": {"title": "🫀 心筋梗塞", "icon": "🫀"},
+    "stroke": {"title": "🧠 脳卒中", "icon": "🧠"},
+}
+outcomes_config = [{"key": k, **_OUTCOME_DETAIL_META[k]} for k in OUTCOME_DISPLAY_ORDER]
 
 def plot_risk_curve(outcome_key: str, title: str):
     """リスク曲線を描画する関数"""
@@ -342,5 +352,7 @@ for outcome_config in outcomes_config:
     st.markdown(f"### {outcome_config['title']}")
     fig = plot_risk_curve(outcome_config["key"], outcome_config["title"])
     st.plotly_chart(fig, use_container_width=True)
+    if outcome_config["key"] == "mortality":
+        st.caption(MORTALITY_ALL_CAUSE_DEATH_CAPTION)
     st.markdown("---")
 
