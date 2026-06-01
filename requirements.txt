@@ -4,3 +4,4 @@ numpy
 plotly
 pyyaml
 openpyxl
+scipy
