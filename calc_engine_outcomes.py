@@ -1,4 +1,6 @@
 import math, yaml, numpy as np, pandas as pd, os
+from typing import Dict, List, Any
+from meds_catalog import MedicationAdjustment
 
 # 性別の正規化ヘルパー
 _SEX_ALIASES = {
@@ -447,6 +449,7 @@ class OutcomesEngine:
         return {'baseline': risk_base, 'target': risk_tgt}
     
     def cumulative_incidence_with_ci(self, outcome: str, sex: str, start_age: int, years: int,
+
                                    sbp_now: float, sbp_target: float,
                                    ldl_now_mg: float, ldl_target_mg: float,
                                    hba1c_now: float, hba1c_target: float,
@@ -571,3 +574,63 @@ class OutcomesEngine:
             results[scenario] = {'baseline': risk_base, 'target': risk_tgt}
         
         return results
+
+    def cumulative_incidence_with_adjustment(
+        self,
+        outcome: str,
+        sex: str,
+        start_age: int,
+        years: int,
+        sbp_now: float,
+        ldl_now_mg: float,
+        hba1c_now: float,
+        current_meds: Dict[str, List[Dict[str, Any]]],
+        adjusted_meds: Dict[str, List[Dict[str, Any]]],
+        smoking_status: str,
+        cigs_per_day: int,
+        years_smoked: float,
+        years_since_quit: float,
+        assume_quit_today_in_target: bool = False,
+        confidence_level: float = 0.95,
+        bmi_now: float = None,
+        bmi_target: float = None,
+        egfr_now: float = None,
+        egfr_target: float = None,
+        acr_now: str = None,
+        acr_target: str = None,
+    ) -> Dict[str, Any]:
+        """
+        現在の服薬状態から変更後の服薬状態への累積リスクを計算する。
+        
+        baseline側は現在の測定値を、そのまま使用する。
+        target側は現在の測定値に薬剤変更差分を加えた値を使用する。
+        """
+        # 1. 薬剤変更差分を計算
+        adj = MedicationAdjustment(
+            sbp_now, ldl_now_mg, hba1c_now,
+            current_meds, adjusted_meds
+        )
+        
+        # 2. 変更後の目標値を取得
+        adj_targets = adj.adjusted_targets()
+        
+        # 3. 既存メソッドを呼び出す
+        # baselineは現在値そのままなので、sbp_now等をbaselineとして渡す
+        res = self.cumulative_incidence_with_ci(
+            outcome, sex, start_age, years,
+            sbp_now, adj_targets["sbp_target"],
+            ldl_now_mg, adj_targets["ldl_target"],
+            hba1c_now, adj_targets["a1c_target"],
+            smoking_status, cigs_per_day, years_smoked, years_since_quit,
+            assume_quit_today_in_target,
+            confidence_level,
+            bmi_now, bmi_target,
+            egfr_now, egfr_target,
+            acr_now, acr_target,
+        )
+        
+        # 4. 費用・副作用情報を付加
+        res["costs"] = adj.costs()
+        res["side_effect_changes"] = adj.side_effect_changes()
+        
+        return res
