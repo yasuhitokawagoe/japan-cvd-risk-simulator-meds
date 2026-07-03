@@ -103,6 +103,12 @@ with st.sidebar:
     sbp_sel_keys = []
     ldl_sel_keys = []
     a1c_sel_keys = []
+    current_sbp_keys = []
+    current_ldl_keys = []
+    current_a1c_keys = []
+    adjusted_sbp_keys = []
+    adjusted_ldl_keys = []
+    adjusted_a1c_keys = []
     meds_summary = None
     mode = "add"  # デフォルト（catalog_error時やuse_meds=False時も安全に参照できるように）
 
@@ -151,7 +157,7 @@ with st.sidebar:
             )
 
             # MVP：明示的に「現在の薬を変更後にコピー」するボタン
-            if st.button("現在の薬を変更後に反映", use_container_width=True):
+            if st.button("現在の薬を変更後に反映", width="stretch"):
                 st.session_state.adjusted_sbp = list(current_sbp_keys)
                 st.session_state.adjusted_ldl = list(current_ldl_keys)
                 st.session_state.adjusted_a1c = list(current_a1c_keys)
@@ -191,26 +197,32 @@ with st.sidebar:
             se_changes = adj.side_effect_changes()
 
             def _se_md_for_changes(stopped, added, continued):
-                lines = []
+                sections = []
                 if stopped:
-                    lines.append("**中止で消える副作用**")
-                    for m in stopped:
-                        se = (m.get("side_effects") or "").strip()
-                        if se:
-                            lines.append(f"- {m['key']}: {se}")
+                    items = [
+                        f"- {m['key']}: {(m.get('side_effects') or '').strip()}"
+                        for m in stopped
+                        if (m.get("side_effects") or "").strip()
+                    ]
+                    if items:
+                        sections.append("**中止で消える副作用**\n" + "\n".join(items))
                 if added:
-                    lines.append("**新規で追加される副作用**")
-                    for m in added:
-                        se = (m.get("side_effects") or "").strip()
-                        if se:
-                            lines.append(f"- {m['key']}: {se}")
+                    items = [
+                        f"- {m['key']}: {(m.get('side_effects') or '').strip()}"
+                        for m in added
+                        if (m.get("side_effects") or "").strip()
+                    ]
+                    if items:
+                        sections.append("**新規で追加される副作用**\n" + "\n".join(items))
                 if continued:
-                    lines.append("**継続中の副作用**")
-                    for m in continued:
-                        se = (m.get("side_effects") or "").strip()
-                        if se:
-                            lines.append(f"- {m['key']}: {se}")
-                return "\n".join(lines)
+                    items = [
+                        f"- {m['key']}: {(m.get('side_effects') or '').strip()}"
+                        for m in continued
+                        if (m.get("side_effects") or "").strip()
+                    ]
+                    if items:
+                        sections.append("**継続中の副作用**\n" + "\n".join(items))
+                return "\n\n".join(sections)
 
             # 継続薬 = current と adjusted の両方にある薬
             current_key_set = {m["key"] for domain in current_meds.values() for m in domain}
@@ -355,9 +367,22 @@ current_params = {
     "egfr_now": egfr_now, "egfr_target": egfr_target,
     "acr_now": acr_now, "acr_target": acr_target,
     "which": which,
-    "sbp_meds": tuple(sbp_sel_keys) if use_meds and meds_catalog else (),
-    "ldl_meds": tuple(ldl_sel_keys) if use_meds and meds_catalog else (),
-    "a1c_meds": tuple(a1c_sel_keys) if use_meds and meds_catalog else (),
+    "mode": mode,
+    "sbp_meds": (
+        tuple(sbp_sel_keys)
+        if mode == "add"
+        else tuple(current_sbp_keys) + tuple(adjusted_sbp_keys)
+    ),
+    "ldl_meds": (
+        tuple(ldl_sel_keys)
+        if mode == "add"
+        else tuple(current_ldl_keys) + tuple(adjusted_ldl_keys)
+    ),
+    "a1c_meds": (
+        tuple(a1c_sel_keys)
+        if mode == "add"
+        else tuple(current_a1c_keys) + tuple(adjusted_a1c_keys)
+    ),
     "use_meds": use_meds,
 }
 params_hash = hashlib.md5(str(sorted(current_params.items())).encode()).hexdigest()
@@ -523,7 +548,7 @@ def plot_risk_curve(outcome_key: str, title: str):
 for outcome_config in outcomes_config:
     st.markdown(f"### {outcome_config['title']}")
     fig = plot_risk_curve(outcome_config["key"], outcome_config["title"])
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
     if outcome_config["key"] == "mortality":
         st.caption(MORTALITY_ALL_CAUSE_DEATH_CAPTION)
     st.markdown("---")

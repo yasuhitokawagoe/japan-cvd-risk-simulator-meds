@@ -4,7 +4,7 @@ import streamlit as st
 import plotly.graph_objects as go
 import numpy as np
 from calc_engine_outcomes import OutcomesEngine
-from meds_catalog import load_meds_catalog, apply_meds_to_targets
+from meds_catalog import load_meds_catalog, apply_meds_to_targets, MedicationAdjustment
 
 st.set_page_config(
     page_title="一次予防リスク（モバイル）",
@@ -527,8 +527,18 @@ with st.expander("生活習慣その他", expanded=True):
 selected_sbp_meds = []
 selected_ldl_meds = []
 selected_a1c_meds = []
+sbp_sel_keys = []
+ldl_sel_keys = []
+a1c_sel_keys = []
+current_sbp_keys = []
+current_ldl_keys = []
+current_a1c_keys = []
+adjusted_sbp_keys = []
+adjusted_ldl_keys = []
+adjusted_a1c_keys = []
 meds_summary = None
 use_meds = False
+mode = "add"
 
 with st.expander("💊 薬剤で目標値を自動生成", expanded=True):
     use_meds = st.checkbox("薬剤を選んで目標値を自動計算する", value=True)
@@ -540,36 +550,179 @@ with st.expander("💊 薬剤で目標値を自動生成", expanded=True):
 
     if use_meds and meds_catalog:
         sbp_options = [m["key"] for m in meds_catalog["sbp"]]
-        sbp_sel_keys = st.multiselect("降圧薬（SBPに反映）", options=sbp_options)
-        selected_sbp_meds = [m for m in meds_catalog["sbp"] if m["key"] in sbp_sel_keys]
-
         ldl_options = [m["key"] for m in meds_catalog["ldl"]]
-        ldl_sel_keys = st.multiselect("脂質薬（LDLに反映）", options=ldl_options)
-        selected_ldl_meds = [m for m in meds_catalog["ldl"] if m["key"] in ldl_sel_keys]
-
         a1c_options = [m["key"] for m in meds_catalog["hba1c"]]
-        a1c_sel_keys = st.multiselect("糖尿病薬（HbA1cに反映）", options=a1c_options)
-        selected_a1c_meds = [m for m in meds_catalog["hba1c"] if m["key"] in a1c_sel_keys]
 
-        meds_summary = apply_meds_to_targets(
-            sbp_now=float(sbp_now),
-            ldl_now_mg=float(ldl_now),
-            a1c_now=float(a1c_now),
-            selected_sbp=selected_sbp_meds,
-            selected_ldl=selected_ldl_meds,
-            selected_a1c=selected_a1c_meds,
+        mode = st.radio(
+            "シミュレーションモード",
+            ["add", "adjust"],
+            format_func=lambda x: (
+                "💊 薬を追加する" if x == "add"
+                else "💊 薬を増減させる"
+            ),
         )
 
-        st.caption("合成ルール：SBPは足し算 / LDLは%低下を掛け算 / HbA1cは足し算")
-        st.metric("年間薬剤費（合計）", f"{meds_summary['annual_cost_yen']:,} 円/年")
-        st.markdown("**自動計算された目標値（この値でリスク計算）**")
-        st.write(f"- SBP 目標: **{meds_summary['sbp_target']:.0f} mmHg**")
-        st.write(f"- LDL 目標: **{meds_summary['ldl_target']:.0f} mg/dL**")
-        st.write(f"- HbA1c 目標: **{meds_summary['a1c_target']:.1f} %**")
+        if mode == "add":
+            sbp_sel_keys = st.multiselect("降圧薬（SBPに反映）", options=sbp_options)
+            selected_sbp_meds = [m for m in meds_catalog["sbp"] if m["key"] in sbp_sel_keys]
 
-        if meds_summary["side_effects_md"].strip():
-            with st.expander("主な副作用（薬剤ごと）"):
-                st.markdown(meds_summary["side_effects_md"])
+            ldl_sel_keys = st.multiselect("脂質薬（LDLに反映）", options=ldl_options)
+            selected_ldl_meds = [m for m in meds_catalog["ldl"] if m["key"] in ldl_sel_keys]
+
+            a1c_sel_keys = st.multiselect("糖尿病薬（HbA1cに反映）", options=a1c_options)
+            selected_a1c_meds = [m for m in meds_catalog["hba1c"] if m["key"] in a1c_sel_keys]
+
+            meds_summary = apply_meds_to_targets(
+                sbp_now=float(sbp_now),
+                ldl_now_mg=float(ldl_now),
+                a1c_now=float(a1c_now),
+                selected_sbp=selected_sbp_meds,
+                selected_ldl=selected_ldl_meds,
+                selected_a1c=selected_a1c_meds,
+            )
+        else:
+            st.markdown("**現在服用中の薬**")
+            current_sbp_keys = st.multiselect(
+                "降圧薬（現在）", options=sbp_options, key="mobile_current_sbp"
+            )
+            current_ldl_keys = st.multiselect(
+                "脂質薬（現在）", options=ldl_options, key="mobile_current_ldl"
+            )
+            current_a1c_keys = st.multiselect(
+                "糖尿病薬（現在）", options=a1c_options, key="mobile_current_a1c"
+            )
+
+            if st.button("現在の薬を変更後に反映", width="stretch"):
+                st.session_state.mobile_adjusted_sbp = list(current_sbp_keys)
+                st.session_state.mobile_adjusted_ldl = list(current_ldl_keys)
+                st.session_state.mobile_adjusted_a1c = list(current_a1c_keys)
+
+            st.markdown("**変更後に残す薬**")
+            adjusted_sbp_keys = st.multiselect(
+                "降圧薬（変更後）", options=sbp_options, key="mobile_adjusted_sbp"
+            )
+            adjusted_ldl_keys = st.multiselect(
+                "脂質薬（変更後）", options=ldl_options, key="mobile_adjusted_ldl"
+            )
+            adjusted_a1c_keys = st.multiselect(
+                "糖尿病薬（変更後）", options=a1c_options, key="mobile_adjusted_a1c"
+            )
+
+            current_meds = {
+                "sbp": [m for m in meds_catalog["sbp"] if m["key"] in current_sbp_keys],
+                "ldl": [m for m in meds_catalog["ldl"] if m["key"] in current_ldl_keys],
+                "hba1c": [m for m in meds_catalog["hba1c"] if m["key"] in current_a1c_keys],
+            }
+            adjusted_meds = {
+                "sbp": [m for m in meds_catalog["sbp"] if m["key"] in adjusted_sbp_keys],
+                "ldl": [m for m in meds_catalog["ldl"] if m["key"] in adjusted_ldl_keys],
+                "hba1c": [m for m in meds_catalog["hba1c"] if m["key"] in adjusted_a1c_keys],
+            }
+
+            adj = MedicationAdjustment(
+                sbp_now=float(sbp_now),
+                ldl_now_mg=float(ldl_now),
+                a1c_now=float(a1c_now),
+                current_meds=current_meds,
+                adjusted_meds=adjusted_meds,
+            )
+            baseline_targets = adj.baseline_targets()
+            adjusted_targets = adj.adjusted_targets()
+            costs = adj.costs()
+            se_changes = adj.side_effect_changes()
+
+            current_key_set = {m["key"] for domain in current_meds.values() for m in domain}
+            continued_meds = [
+                m
+                for domain in adjusted_meds.values()
+                for m in domain
+                if m["key"] in current_key_set
+            ]
+
+            def _se_md_for_changes(stopped, added, continued):
+                sections = []
+                if stopped:
+                    items = [
+                        f"- {m['key']}: {(m.get('side_effects') or '').strip()}"
+                        for m in stopped
+                        if (m.get("side_effects") or "").strip()
+                    ]
+                    if items:
+                        sections.append("**中止で消える副作用**\n" + "\n".join(items))
+                if added:
+                    items = [
+                        f"- {m['key']}: {(m.get('side_effects') or '').strip()}"
+                        for m in added
+                        if (m.get("side_effects") or "").strip()
+                    ]
+                    if items:
+                        sections.append("**新規で追加される副作用**\n" + "\n".join(items))
+                if continued:
+                    items = [
+                        f"- {m['key']}: {(m.get('side_effects') or '').strip()}"
+                        for m in continued
+                        if (m.get("side_effects") or "").strip()
+                    ]
+                    if items:
+                        sections.append("**継続中の副作用**\n" + "\n".join(items))
+                return "\n\n".join(sections)
+
+            side_effects_md = _se_md_for_changes(
+                se_changes["stopped"], se_changes["added"], continued_meds
+            )
+
+            meds_summary = {
+                "sbp_target": adjusted_targets["sbp_target"],
+                "ldl_target": adjusted_targets["ldl_target"],
+                "a1c_target": adjusted_targets["a1c_target"],
+                "annual_cost_yen": costs["adjusted"],
+                "side_effects_md": side_effects_md,
+                "mode": "adjust",
+                "baseline_targets": baseline_targets,
+                "costs": costs,
+            }
+
+        st.caption("合成ルール：SBPは足し算 / LDLは%低下を掛け算 / HbA1cは足し算")
+        if meds_summary is not None:
+            if meds_summary.get("mode") == "adjust":
+                st.metric("年間薬剤費（変更後）", f"{meds_summary['annual_cost_yen']:,} 円/年")
+                st.markdown("**自動計算された目標値**")
+                st.write(f"- SBP: **{meds_summary['sbp_target']:.0f} mmHg**")
+                st.write(f"- LDL: **{meds_summary['ldl_target']:.0f} mg/dL**")
+                st.write(f"- HbA1c: **{meds_summary['a1c_target']:.1f} %**")
+
+                st.markdown("**薬剤変更の比較**")
+                costs = meds_summary["costs"]
+                delta = costs["delta"]
+                delta_sign = "＋" if delta > 0 else ""
+                st.write(
+                    f"- 年間費用: {costs['baseline']:,} → {costs['adjusted']:,} "
+                    f"（{delta_sign}{delta:,}）"
+                )
+                st.write(
+                    f"- SBP: {meds_summary['baseline_targets']['sbp_target']:.0f} → "
+                    f"{meds_summary['sbp_target']:.0f} mmHg"
+                )
+                st.write(
+                    f"- LDL: {meds_summary['baseline_targets']['ldl_target']:.0f} → "
+                    f"{meds_summary['ldl_target']:.0f} mg/dL"
+                )
+                st.write(
+                    f"- HbA1c: {meds_summary['baseline_targets']['a1c_target']:.1f} → "
+                    f"{meds_summary['a1c_target']:.1f} %"
+                )
+            else:
+                st.metric("年間薬剤費（合計）", f"{meds_summary['annual_cost_yen']:,} 円/年")
+                st.markdown("**自動計算された目標値**")
+                st.write(f"- SBP: **{meds_summary['sbp_target']:.0f} mmHg**")
+                st.write(f"- LDL: **{meds_summary['ldl_target']:.0f} mg/dL**")
+                st.write(f"- HbA1c: **{meds_summary['a1c_target']:.1f} %**")
+
+            if meds_summary["side_effects_md"].strip():
+                with st.expander("主な副作用（薬剤ごと）"):
+                    st.markdown(meds_summary["side_effects_md"])
+        elif mode == "adjust":
+            st.caption("薬増減モード：現在の薬と変更後の薬を選択してください。")
     else:
         st.caption("薬剤を使わない場合は、上の手動目標値で計算します。")
 
@@ -610,9 +763,22 @@ current_params = {
     "years_smoked": years_smoked, "years_since_quit": years_since_quit,
     "quit_today": quit_today,
     "which": which,
-    "sbp_meds": tuple(sbp_sel_keys) if use_meds and meds_catalog else (),
-    "ldl_meds": tuple(ldl_sel_keys) if use_meds and meds_catalog else (),
-    "a1c_meds": tuple(a1c_sel_keys) if use_meds and meds_catalog else (),
+    "mode": mode,
+    "sbp_meds": (
+        tuple(sbp_sel_keys)
+        if mode == "add"
+        else tuple(current_sbp_keys) + tuple(adjusted_sbp_keys)
+    ),
+    "ldl_meds": (
+        tuple(ldl_sel_keys)
+        if mode == "add"
+        else tuple(current_ldl_keys) + tuple(adjusted_ldl_keys)
+    ),
+    "a1c_meds": (
+        tuple(a1c_sel_keys)
+        if mode == "add"
+        else tuple(current_a1c_keys) + tuple(adjusted_a1c_keys)
+    ),
     "use_meds": use_meds,
 }
 params_hash = hashlib.md5(str(sorted(current_params.items())).encode()).hexdigest()
@@ -703,7 +869,31 @@ st.divider()
 
 st.markdown("## 💴 費用と副作用（薬剤選択時）")
 if use_meds and meds_summary is not None:
-    st.metric("年間薬剤費（合計）", f"{annual_cost_yen:,} 円/年")
+    if meds_summary.get("mode") == "adjust":
+        costs = meds_summary["costs"]
+        delta = costs["delta"]
+        delta_sign = "＋" if delta > 0 else ""
+        st.metric("年間薬剤費（現在）", f"{costs['baseline']:,} 円/年")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("変更後", f"{costs['adjusted']:,} 円/年")
+        with col2:
+            st.metric("差分", f"{delta_sign}{delta:,} 円/年")
+        st.markdown("**目標値の変化**")
+        st.write(
+            f"- SBP: {meds_summary['baseline_targets']['sbp_target']:.0f} → "
+            f"{meds_summary['sbp_target']:.0f} mmHg"
+        )
+        st.write(
+            f"- LDL: {meds_summary['baseline_targets']['ldl_target']:.0f} → "
+            f"{meds_summary['ldl_target']:.0f} mg/dL"
+        )
+        st.write(
+            f"- HbA1c: {meds_summary['baseline_targets']['a1c_target']:.1f} → "
+            f"{meds_summary['a1c_target']:.1f} %"
+        )
+    else:
+        st.metric("年間薬剤費（合計）", f"{annual_cost_yen:,} 円/年")
     if side_effects_md.strip():
         st.markdown("**主な副作用（薬剤ごと）**")
         st.markdown(side_effects_md)
@@ -727,7 +917,7 @@ DETAIL_GRAPH_CAPTION = (
 for outcome_key, heading, fig_fn in detail_blocks:
     st.markdown(f"#### {heading} - 将来予測詳細グラフ")
     fig = fig_fn(cumulative_data, age)
-    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+    st.plotly_chart(fig, width="stretch", config={'displayModeBar': False})
     st.markdown(DETAIL_GRAPH_CAPTION, unsafe_allow_html=True)
     st.markdown("---")
 
