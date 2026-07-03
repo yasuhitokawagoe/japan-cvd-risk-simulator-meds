@@ -290,3 +290,184 @@ def apply_meds_to_targets(
         "deltas": {"sbp_mmHg": sbp_delta, "ldl_mult": mult, "a1c_pctpt": a1c_delta},
     }
 
+
+
+# ------------------------------------------------------------------
+# MedicationAdjustment
+# ------------------------------------------------------------------
+# 患者がすでに薬を服用している状態を基準にして、薬を追加・減少・入れ替え
+# した場合の "調整差分" を計算するためのクラス。
+#
+# 従来の `apply_meds_to_targets()` は「薬なし / 未治療状態」からの絶対目標値を
+# 計算するのに対し、本クラスは「現在の服薬状態」からの相対的な変化量を扱う。
+#
+# 計算モデル:
+#   baseline = 現在の測定値（= 現在の服薬状態を反映済み）
+#   target   = 現在の測定値 + 薬剤変更差分
+#
+# SBP / HbA1c: 効果量を単純に足し引きする
+# LDL        : 残存比率（1 - 低下率）の掛け算の比率を取る
+# 費用        : 選択された薬の年間薬価を単純加算する
+# 副作用      : baselineにあって adjusted にない薬 = 中止薬
+#               adjustedにあって baseline にない薬 = 追加薬
+# ------------------------------------------------------------------
+
+class MedicationAdjustment:
+    """
+    現在の服薬状態から変更後の服薬状態への差分を計算する。
+
+    Parameters
+    ----------
+    sbp_now : float
+        現在の収縮期血圧測定値（mmHg）。現在の薬が効いた状態の値。
+    ldl_now_mg : float
+        現在のLDLコレステロール測定値（mg/dL）。
+    a1c_now : float
+        現在のHbA1c測定値（%）。
+    current_meds : dict
+        現在服用中の薬リスト。
+        例: {"sbp": [med1, med2], "ldl": [med3], "hba1c": []}
+    adjusted_meds : dict
+        変更後に残す薬リスト。同じ形式。
+    """
+
+    def __init__(
+        self,
+        sbp_now: float,
+        ldl_now_mg: float,
+        a1c_now: float,
+        current_meds: Dict[str, List[Dict[str, Any]]],
+        adjusted_meds: Dict[str, List[Dict[str, Any]]],
+    ):
+        self.sbp_now = sbp_now
+        self.ldl_now = ldl_now_mg
+        self.a1c_now = a1c_now
+        self.current = current_meds
+        self.adjusted = adjusted_meds
+
+    # ------------------------- 内部計算 -------------------------
+
+    def _effect_sum(self, meds: List[Dict[str, Any]]) -> float:
+        """
+        SBP または HbA1c の効果量を合計する。
+        薬カタログ内の effect["mean"] は負値（低下効果）で格納されている。
+        """
+        return sum(float(m["effect"]["mean"]) for m in meds) if meds else 0.0
+
+    def _ldl_mult(self, meds: List[Dict[str, Any]]) -> float:
+        """
+        LDL の「残存比率」を計算する。
+        例: 低下率 30% の薬なら (1 - 0.30) = 0.70 を掛ける。
+        複数薬があればそれらを順次掛け算する。
+        """
+        mult = 1.0
+        for m in meds:
+            # effect["mean"] は 0〜1 の正の値として格納されている（例: 0.30）
+            r = float(m["effect"]["mean"])
+            mult *= max(0.0, 1.0 - r)
+        return mult
+
+    def _sbp_delta(self) -> float:
+        """
+        SBP の調整差分を計算。
+        adjusted_meds の合計効果から current_meds の合計効果を引く。
+        戻り値が負なら血圧が下がる（改善）、正なら上がる（悪化）。
+        """
+        return (
+            self._effect_sum(self.adjusted.get("sbp", []))
+            - self._effect_sum(self.current.get("sbp", []))
+        )
+
+    def _ldl_ratio(self) -> float:
+        """
+        LDL の調整比率を計算。
+        adjusted_meds の残存比率を current_meds の残存比率で割る。
+        比率 < 1.0 なら LDL が下がる（改善）、> 1.0 なら上がる（悪化）。
+        """
+        cur_mult = self._ldl_mult(self.current.get("ldl", []))
+        adj_mult = self._ldl_mult(self.adjusted.get("ldl", []))
+        # current_meds が空（未服薬）の場合を除くためのガード
+        return adj_mult / cur_mult if cur_mult > 0 else 1.0
+
+    def _a1c_delta(self) -> float:
+        """
+        HbA1c の調整差分を計算。
+        adjusted_meds の合計効果から current_meds の合計効果を引く。
+        戻り値が負なら HbA1c が下がる（改善）、正なら上がる（悪化）。
+        """
+        return (
+            self._effect_sum(self.adjusted.get("hba1c", []))
+            - self._effect_sum(self.current.get("hba1c", []))
+        )
+
+    # ------------------------- 公開メソッド -------------------------
+
+    def baseline_targets(self) -> Dict[str, float]:
+        """
+        baseline 側の目標値を返す。
+        現在の測定値そのままを使う（現在の薬効はすでに反映されていると解釈）。
+        """
+        return {
+            "sbp_target": self.sbp_now,
+            "ldl_target": self.ldl_now,
+            "a1c_target": self.a1c_now,
+        }
+
+    def adjusted_targets(self) -> Dict[str, float]:
+        """
+        変更後（adjusted）側の目標値を返す。
+        現在の測定値に薬剤変更差分を加える。
+        """
+        return {
+            "sbp_target": self.sbp_now + self._sbp_delta(),
+            "ldl_target": self.ldl_now * self._ldl_ratio(),
+            "a1c_target": self.a1c_now + self._a1c_delta(),
+        }
+
+    def costs(self) -> Dict[str, int]:
+        """
+        baseline（現在の服薬）と adjusted（変更後）の年間薬剤費を計算する。
+        戻り値には差分も含める。
+        """
+        def _total(meds_list: List[Dict[str, Any]]) -> int:
+            # annual_cost_yen が None の場合は 0 円として扱う
+            return sum(int(m.get("annual_cost_yen", 0) or 0) for m in meds_list)
+
+        baseline = (
+            _total(self.current.get("sbp", []))
+            + _total(self.current.get("ldl", []))
+            + _total(self.current.get("hba1c", []))
+        )
+        adjusted = (
+            _total(self.adjusted.get("sbp", []))
+            + _total(self.adjusted.get("ldl", []))
+            + _total(self.adjusted.get("hba1c", []))
+        )
+        return {
+            "baseline": baseline,
+            "adjusted": adjusted,
+            "delta": adjusted - baseline,
+        }
+
+    def side_effect_changes(self) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        薬剤変更によって中止される薬と新規追加される薬を特定する。
+
+        Returns
+        -------
+        dict
+            {
+                "stopped":  [baselineにあって adjusted にない薬のリスト],
+                "added":    [adjustedにあって baseline にない薬のリスト],
+            }
+        """
+        # key（薬剤名＋用量）をキーにして辞書化
+        current_keys = {m["key"]: m for domain in self.current.values() for m in domain}
+        adjusted_keys = {m["key"]: m for domain in self.adjusted.values() for m in domain}
+
+        # baseline にあって adjusted にないもの = 中止薬
+        stopped = [current_keys[k] for k in current_keys if k not in adjusted_keys]
+        # adjusted にあって baseline にないもの = 追加薬
+        added = [adjusted_keys[k] for k in adjusted_keys if k not in current_keys]
+
+        return {"stopped": stopped, "added": added}
