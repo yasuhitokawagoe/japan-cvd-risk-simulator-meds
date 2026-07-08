@@ -1,4 +1,5 @@
 import hashlib
+import re
 
 import streamlit as st
 import plotly.graph_objects as go
@@ -33,6 +34,186 @@ try:
     meds_catalog = _cached_catalog(BP_XLSX_PATH, LIPID_GLU_XLSX_PATH)
 except Exception as e:
     catalog_error = str(e)
+
+# ====== 薬増減モード（差分モデル）用ヘルパー ======
+RX_ACTION_NO_CHANGE = "変更なし"
+RX_ACTION_STOP = "中止"
+RX_ACTION_DOWN = "減量"
+RX_ACTION_UP = "増量"
+RX_ACTION_SWITCH = "切替"
+
+
+def _split_med_key(key: str):
+    """'アムロジピン 5 mg' -> ('アムロジピン', 5.0)。用量数値が無ければ (key, None)。"""
+    m = re.match(r"^(.*?)\s*([0-9]+(?:\.[0-9]+)?)", key)
+    if not m:
+        return key.strip(), None
+    return m.group(1).strip(), float(m.group(2))
+
+
+def _dose_ladder_keys(domain_meds, key):
+    """同一薬剤名のエントリのキーを用量昇順で返す"""
+    name, _ = _split_med_key(key)
+    same = [m["key"] for m in domain_meds if _split_med_key(m["key"])[0] == name]
+    return sorted(same, key=lambda k: _split_med_key(k)[1] or 0.0)
+
+
+def _dose_neighbor_key(domain_meds, key, direction: int):
+    """direction=+1 なら一段増量、-1 なら一段減量のキー。無ければ None。"""
+    ladder = _dose_ladder_keys(domain_meds, key)
+    if key not in ladder:
+        return None
+    idx = ladder.index(key) + direction
+    if 0 <= idx < len(ladder):
+        return ladder[idx]
+    return None
+
+
+def _switch_candidates(domain_meds, key, current_keys):
+    """切替先候補：同ドメインのうち別薬剤名で、服用中でないもの"""
+    name, _ = _split_med_key(key)
+    return [
+        m["key"]
+        for m in domain_meds
+        if _split_med_key(m["key"])[0] != name and m["key"] not in current_keys
+    ]
+
+
+def _effect_label(domain: str, med) -> str:
+    """カタログの効果量をドメインごとの単位付きで表示する"""
+    v = float(med["effect"]["mean"])
+    if domain == "sbp":
+        return f"SBP {v:+.1f} mmHg"
+    if domain == "ldl":
+        return f"LDL -{v * 100:.0f}%"
+    return f"HbA1c {v:+.1f}%"
+
+
+def render_rx_change_rows(domain_label, domain, domain_meds, current_keys, state_prefix):
+    """現在薬1剤ごとにカード（枠付きコンテナ）を描画し、
+    (変更後キーのリスト, 変更明細の文字列リスト) を返す。（案B カード型）"""
+    by_key = {m["key"]: m for m in domain_meds}
+    adjusted_keys = []
+    change_lines = []
+    for k in current_keys:
+        med = by_key.get(k)
+        if med is None:
+            continue
+        options = [RX_ACTION_NO_CHANGE, RX_ACTION_STOP]
+        if _dose_neighbor_key(domain_meds, k, -1):
+            options.append(RX_ACTION_DOWN)
+        if _dose_neighbor_key(domain_meds, k, +1):
+            options.append(RX_ACTION_UP)
+        switch_opts = _switch_candidates(domain_meds, k, current_keys)
+        if switch_opts:
+            options.append(RX_ACTION_SWITCH)
+
+        cost = med.get("annual_cost_yen") or 0
+        with st.container(border=True):
+            st.markdown(f"**{k}**")
+            st.caption(
+                f"{domain_label}｜{med.get('category', '')}｜"
+                f"{_effect_label(domain, med)}・{cost:,} 円/年"
+            )
+
+            act_key = f"{state_prefix}_act_{k}"
+            if act_key not in st.session_state:
+                st.session_state[act_key] = RX_ACTION_NO_CHANGE
+            action = st.segmented_control(
+                f"{k} の変更",
+                options,
+                key=act_key,
+                label_visibility="collapsed",
+            ) or RX_ACTION_NO_CHANGE
+
+            result_key = k
+            ladder = _dose_ladder_keys(domain_meds, k)
+            cur_idx = ladder.index(k) if k in ladder else 0
+            if action == RX_ACTION_STOP:
+                result_key = None
+            elif action == RX_ACTION_DOWN:
+                lower = ladder[:cur_idx]  # 現用量より下の用量（昇順）
+                result_key = st.selectbox(
+                    "減量後の用量",
+                    lower,
+                    index=len(lower) - 1,  # 既定は一段下
+                    key=f"{state_prefix}_down_{k}",
+                ) if lower else k
+            elif action == RX_ACTION_UP:
+                higher = ladder[cur_idx + 1:]  # 現用量より上の用量（昇順）
+                result_key = st.selectbox(
+                    "増量後の用量",
+                    higher,
+                    index=0,  # 既定は一段上
+                    key=f"{state_prefix}_up_{k}",
+                ) if higher else k
+            elif action == RX_ACTION_SWITCH:
+                result_key = st.selectbox("切替先", switch_opts, key=f"{state_prefix}_sw_{k}")
+
+            # 変更後プレビュー（効果・費用差分をカード内に表示）
+            if result_key is None:
+                st.markdown(f"🛑 **中止**（費用 {-cost:+,} 円/年）")
+                change_lines.append(f"🛑 中止: {k}")
+            elif result_key != k:
+                new_med = by_key[result_key]
+                new_cost = new_med.get("annual_cost_yen") or 0
+                icon = {RX_ACTION_UP: "🔼", RX_ACTION_DOWN: "🔽"}.get(action, "🔁")
+                st.markdown(f"{icon} **{action} → {result_key}**")
+                st.caption(
+                    f"{_effect_label(domain, new_med)}・費用差 {new_cost - cost:+,} 円/年"
+                )
+                change_lines.append(f"{icon} {action}: {k} → {result_key}")
+        if result_key is not None and result_key not in adjusted_keys:
+            adjusted_keys.append(result_key)
+    return adjusted_keys, change_lines
+
+
+def _se_md_for_changes(stopped, added, continued):
+    """副作用表示用Markdown。同一薬剤名の中止+追加は用量変更として1行にまとめる。"""
+    stopped_by_name = {}
+    for m in stopped:
+        stopped_by_name.setdefault(_split_med_key(m["key"])[0], []).append(m)
+    dose_changed = []
+    pure_added = []
+    for m in added:
+        name = _split_med_key(m["key"])[0]
+        if stopped_by_name.get(name):
+            old = stopped_by_name[name].pop(0)
+            dose_changed.append((old, m))
+        else:
+            pure_added.append(m)
+    pure_stopped = [m for lst in stopped_by_name.values() for m in lst]
+
+    def _items(meds_list):
+        return [
+            f"- {m['key']}: {(m.get('side_effects') or '').strip()}"
+            for m in meds_list
+            if (m.get("side_effects") or "").strip()
+        ]
+
+    sections = []
+    if pure_stopped:
+        items = _items(pure_stopped)
+        if items:
+            sections.append("**中止で消える副作用**\n" + "\n".join(items))
+    if dose_changed:
+        items = [
+            f"- {old['key']} → {new['key']}: {(new.get('side_effects') or '').strip()}"
+            for old, new in dose_changed
+            if (new.get("side_effects") or "").strip()
+        ]
+        if items:
+            sections.append("**用量変更後も続く副作用**\n" + "\n".join(items))
+    if pure_added:
+        items = _items(pure_added)
+        if items:
+            sections.append("**新規で追加される副作用**\n" + "\n".join(items))
+    if continued:
+        items = _items(continued)
+        if items:
+            sections.append("**継続中の副作用**\n" + "\n".join(items))
+    return "\n\n".join(sections)
+
 
 if "calculated" not in st.session_state:
     st.session_state.calculated = False
@@ -581,6 +762,7 @@ with st.expander("💊 薬剤で目標値を自動生成", expanded=True):
                 selected_a1c=selected_a1c_meds,
             )
         else:
+            # 薬増減UI：現在の治療をベースラインに、各薬をワンタップで 中止/減量/増量/切替
             st.markdown("**現在服用中の薬**")
             current_sbp_keys = st.multiselect(
                 "降圧薬（現在）", options=sbp_options, key="mobile_current_sbp"
@@ -592,21 +774,50 @@ with st.expander("💊 薬剤で目標値を自動生成", expanded=True):
                 "糖尿病薬（現在）", options=a1c_options, key="mobile_current_a1c"
             )
 
-            if st.button("現在の薬を変更後に反映", width="stretch"):
-                st.session_state.mobile_adjusted_sbp = list(current_sbp_keys)
-                st.session_state.mobile_adjusted_ldl = list(current_ldl_keys)
-                st.session_state.mobile_adjusted_a1c = list(current_a1c_keys)
+            st.markdown("**各薬の変更（タップで選択）**")
+            if not (current_sbp_keys or current_ldl_keys or current_a1c_keys):
+                st.caption("現在服用中の薬を選ぶと、ここに変更ボタンが表示されます。")
+            adjusted_sbp_keys, sbp_changes = render_rx_change_rows(
+                "降圧薬", "sbp", meds_catalog["sbp"], current_sbp_keys, "m_sbp"
+            )
+            adjusted_ldl_keys, ldl_changes = render_rx_change_rows(
+                "脂質薬", "ldl", meds_catalog["ldl"], current_ldl_keys, "m_ldl"
+            )
+            adjusted_a1c_keys, a1c_changes = render_rx_change_rows(
+                "糖尿病薬", "hba1c", meds_catalog["hba1c"], current_a1c_keys, "m_a1c"
+            )
 
-            st.markdown("**変更後に残す薬**")
-            adjusted_sbp_keys = st.multiselect(
-                "降圧薬（変更後）", options=sbp_options, key="mobile_adjusted_sbp"
+            st.markdown("**➕ 薬を追加する（任意）**")
+            add_sbp_keys = st.multiselect(
+                "降圧薬（追加）",
+                options=[o for o in sbp_options
+                         if o not in current_sbp_keys and o not in adjusted_sbp_keys],
+                key="m_add_sbp",
             )
-            adjusted_ldl_keys = st.multiselect(
-                "脂質薬（変更後）", options=ldl_options, key="mobile_adjusted_ldl"
+            add_ldl_keys = st.multiselect(
+                "脂質薬（追加）",
+                options=[o for o in ldl_options
+                         if o not in current_ldl_keys and o not in adjusted_ldl_keys],
+                key="m_add_ldl",
             )
-            adjusted_a1c_keys = st.multiselect(
-                "糖尿病薬（変更後）", options=a1c_options, key="mobile_adjusted_a1c"
+            add_a1c_keys = st.multiselect(
+                "糖尿病薬（追加）",
+                options=[o for o in a1c_options
+                         if o not in current_a1c_keys and o not in adjusted_a1c_keys],
+                key="m_add_a1c",
             )
+            adjusted_sbp_keys = adjusted_sbp_keys + [k for k in add_sbp_keys if k not in adjusted_sbp_keys]
+            adjusted_ldl_keys = adjusted_ldl_keys + [k for k in add_ldl_keys if k not in adjusted_ldl_keys]
+            adjusted_a1c_keys = adjusted_a1c_keys + [k for k in add_a1c_keys if k not in adjusted_a1c_keys]
+
+            rx_change_lines = (
+                sbp_changes + ldl_changes + a1c_changes
+                + [f"➕ 追加: {k}" for k in list(add_sbp_keys) + list(add_ldl_keys) + list(add_a1c_keys)]
+            )
+            if rx_change_lines:
+                st.markdown("**変更内容**")
+                for line in rx_change_lines:
+                    st.write(line)
 
             current_meds = {
                 "sbp": [m for m in meds_catalog["sbp"] if m["key"] in current_sbp_keys],
@@ -638,34 +849,6 @@ with st.expander("💊 薬剤で目標値を自動生成", expanded=True):
                 for m in domain
                 if m["key"] in current_key_set
             ]
-
-            def _se_md_for_changes(stopped, added, continued):
-                sections = []
-                if stopped:
-                    items = [
-                        f"- {m['key']}: {(m.get('side_effects') or '').strip()}"
-                        for m in stopped
-                        if (m.get("side_effects") or "").strip()
-                    ]
-                    if items:
-                        sections.append("**中止で消える副作用**\n" + "\n".join(items))
-                if added:
-                    items = [
-                        f"- {m['key']}: {(m.get('side_effects') or '').strip()}"
-                        for m in added
-                        if (m.get("side_effects") or "").strip()
-                    ]
-                    if items:
-                        sections.append("**新規で追加される副作用**\n" + "\n".join(items))
-                if continued:
-                    items = [
-                        f"- {m['key']}: {(m.get('side_effects') or '').strip()}"
-                        for m in continued
-                        if (m.get("side_effects") or "").strip()
-                    ]
-                    if items:
-                        sections.append("**継続中の副作用**\n" + "\n".join(items))
-                return "\n\n".join(sections)
 
             side_effects_md = _se_md_for_changes(
                 se_changes["stopped"], se_changes["added"], continued_meds
@@ -719,10 +902,11 @@ with st.expander("💊 薬剤で目標値を自動生成", expanded=True):
                 st.write(f"- HbA1c: **{meds_summary['a1c_target']:.1f} %**")
 
             if meds_summary["side_effects_md"].strip():
-                with st.expander("主な副作用（薬剤ごと）"):
-                    st.markdown(meds_summary["side_effects_md"])
+                # 外側が expander のためネストできない。見出し＋本文で表示する。
+                st.markdown("**主な副作用（薬剤ごと）**")
+                st.markdown(meds_summary["side_effects_md"])
         elif mode == "adjust":
-            st.caption("薬増減モード：現在の薬と変更後の薬を選択してください。")
+            st.caption("薬増減モード：現在服用中の薬を選択してください。")
     else:
         st.caption("薬剤を使わない場合は、上の手動目標値で計算します。")
 
