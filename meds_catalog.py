@@ -101,7 +101,8 @@ def _parse_hba1c_delta_pct(effect_text: Any) -> Tuple[Optional[float], Optional[
     s = _norm(effect_text)
     if not s:
         return None, None, None
-    
+
+    s = re.sub(r"^HbA1c\s*", "", s, flags=re.I)  # 先頭ラベル「HbA1c」を除去（"A1c"の"1"誤検出を防ぐ）
     mean, low, high = _parse_ci_triplet_from_text(s)
     return mean, low, high
 
