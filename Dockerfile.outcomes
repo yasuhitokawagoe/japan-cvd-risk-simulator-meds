@@ -1,0 +1,18 @@
+# PC版（outcomes）アプリ用 Dockerfile
+# Pythonバージョンを完全固定（scipy/numpy等のwheel相性問題を回避）
+# ※開発環境(.venv)が Python 3.12.3 のため、固定した依存バージョンと整合する 3.12-slim を採用
+#   （railway.md では 3.11 だったが、依存を現環境の版に固定するため 3.12 に合わせている）
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# 依存だけ先にコピーしてインストール（レイヤーキャッシュを効かせる）
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# アプリ本体をコピー
+COPY . .
+
+# 起動するアプリ：PC版（outcomes）。$PORT はRailwayが注入
+# ※ shell形式で書くこと。exec形式 CMD ["..."] だと $PORT が展開されない
+CMD streamlit run app_streamlit_outcomes.py --server.address 0.0.0.0 --server.port $PORT
