@@ -205,3 +205,6 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Claude Code（個人設定。チーム共有したい設定は .claude/settings.json に置く）
+.claude/settings.local.json
