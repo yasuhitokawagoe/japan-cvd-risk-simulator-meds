@@ -54,6 +54,16 @@ C_LDL_NOW = "チェックボックス79"
 F_A1C_NOW = "テキスト21"       # 実測HbA1c
 C_A1C_NOW = "チェックボックス13"
 
+# 数値欄 → 連動してONにするチェックボックス。
+# 編集可能な確認画面で「値が入っていればチェックON」を再導出するのに使う。
+FIELD_CONNECTED_CHECK = {
+    F_BP: C_BP,
+    F_BMI: C_BMI,
+    F_A1C_TGT: C_A1C_TGT,
+    F_LDL_NOW: C_LDL_NOW,
+    F_A1C_NOW: C_A1C_NOW,
+}
+
 # 性別コード → 帳票の選択肢文字列（Dropdown9 の options と厳密一致させる）
 _SEX_LABEL = {"male": "（男）", "female": "（女）"}
 
