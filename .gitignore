@@ -208,3 +208,6 @@ __marimo__/
 
 # Claude Code（個人設定。チーム共有したい設定は .claude/settings.json に置く）
 .claude/settings.local.json
+
+# 記入済みPDFの出力先（生成物。ひな型 docs/pdf_forms/*.pdf は入力なので管理対象）
+out/
