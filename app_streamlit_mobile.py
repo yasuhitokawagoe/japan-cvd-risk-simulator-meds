@@ -6,6 +6,7 @@ import plotly.graph_objects as go
 import numpy as np
 from calc_engine_outcomes import OutcomesEngine
 from meds_catalog import load_meds_catalog, apply_meds_to_targets, MedicationAdjustment
+import pdf_plan_ui
 
 st.set_page_config(
     page_title="一次予防リスク（モバイル）",
@@ -682,6 +683,10 @@ with st.expander("検査値", expanded=True):
     a1c_now = st.slider("HbA1c 現在 (%)", 5.0, 12.0, 8.0, step=0.1)
     a1c_tgt = st.slider("HbA1c 目標 (%)", 5.0, 9.0, 7.0, step=0.1)
 
+    # 療養計画書PDF用: 目標スライダーの値を保持（この後 use_meds で上書きされるため）
+    sbp_tgt_manual = int(sbp_tgt)
+    a1c_tgt_manual = float(a1c_tgt)
+
 with st.expander("生活習慣その他", expanded=True):
     smoking_status = st.selectbox(
         "喫煙状況",
@@ -1112,3 +1117,18 @@ with st.expander("簡易注記"):
 - 本画面は BMI・CKD を含みません（`app_streamlit_outcomes.py` の PC 版で入力できます）。
 """
     )
+
+# ============================================================
+# 📄 療養計画書PDF（共通UIヘルパー pdf_plan_ui に委譲）
+#   モバイルはBMI入力を持たないため bmi_target を渡さず、計画書内で手入力させる。
+# ============================================================
+pdf_plan_ui.render_plan_section(
+    sex=sex,
+    age=age,
+    ldl_now=ldl_now,
+    a1c_now=a1c_now,
+    sbp_tgt_manual=sbp_tgt_manual,
+    a1c_tgt_manual=a1c_tgt_manual,
+    bmi_target=None,
+    key_prefix="mobile",
+)

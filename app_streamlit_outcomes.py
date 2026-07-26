@@ -5,11 +5,10 @@ from datetime import date
 import streamlit as st
 import plotly.graph_objects as go
 import numpy as np
-import pandas as pd
 
 from calc_engine_outcomes import OutcomesEngine
 from meds_catalog import load_meds_catalog, apply_meds_to_targets, MedicationAdjustment
-import pdf_fill
+import pdf_plan_ui
 
 st.set_page_config(page_title="JP Outcomes Prevention Simulator (MVP)", layout="wide", page_icon="🫀")
 
@@ -740,185 +739,17 @@ for outcome_config in outcomes_config:
 
 
 # ============================================================
-# 📄 療養計画書PDF（AcroForm記入 / ロードマップ Step 4-A: 自動17項目）
-#   氏名・生年月日・主病名等はサーバーに載せない方針（決定1）で空欄・手書き。
-#   確認画面は pdf_fill に渡す値をそのまま表示する（決定5・再計算しない）。
+# 📄 療養計画書PDF（共通UIヘルパー pdf_plan_ui に委譲）
+#   目標欄は目標スライダーを直接使用（設計判断A）。BMIはPCにあるので渡す。
 # ============================================================
-st.divider()
-st.markdown("## 📄 療養計画書を作成")
-st.caption(
-    "アプリが持つ値を療養計画書（別紙様式9）に記入します。"
-    "氏名・生年月日・主病名などは空欄のまま。印刷後に手書きで補ってください。"
-)
-
-# --- 計画書に固有の入力（アプリ本体にはない項目） ---
-col_v, col_d = st.columns(2)
-with col_v:
-    visit_label = st.radio("区分", ["初回", "継続"], horizontal=True, key="plan_visit")
-with col_d:
-    dbp_tgt_input = st.number_input(
-        "目標拡張期血圧 (mmHg)", min_value=50, max_value=120, value=80, step=1,
-        key="plan_dbp",
-        help="収縮期は自動で入ります。拡張期はここで指定（帳票は 130/80 の形式）",
-    )
-
-# --- 任意項目を載せるか（決定5: 既定値の誤記入を避けるため人が選ぶ） ---
-st.markdown("**計画書に載せる項目**（チェックした値だけ記入されます）")
-c1, c2, c3 = st.columns(3)
-with c1:
-    inc_bp = st.checkbox("目標血圧", value=True, key="plan_inc_bp")
-    inc_bmi = st.checkbox("目標BMI", value=True, key="plan_inc_bmi")
-with c2:
-    inc_a1c_tgt = st.checkbox("目標HbA1c", value=True, key="plan_inc_a1ctgt")
-    inc_ldl = st.checkbox("実測LDL", value=True, key="plan_inc_ldl")
-with c3:
-    inc_a1c_now = st.checkbox("実測HbA1c", value=True, key="plan_inc_a1cnow")
-
-# --- 手入力項目（Step 4-B。アプリが値を持たない欄。空欄なら記入されない） ---
-with st.expander("✍ 手入力項目（主病名・体重・栄養状態・行動目標）"):
-    st.caption("アプリが値を持たない欄です。入力したものだけ記入されます（空欄は手書き）。")
-
-    st.markdown("**主病名**（該当にチェック。自動推定はしません）")
-    dcol1, dcol2, dcol3 = st.columns(3)
-    with dcol1:
-        dx_dm = st.checkbox("糖尿病", key="plan_dx_dm")
-    with dcol2:
-        dx_htn = st.checkbox("高血圧症", key="plan_dx_htn")
-    with dcol3:
-        dx_dl = st.checkbox("脂質異常症", key="plan_dx_dl")
-
-    mcol1, mcol2 = st.columns(2)
-    with mcol1:
-        weight_input = st.number_input(
-            "目標体重 (kg)（0＝記入しない）",
-            min_value=0.0, max_value=200.0, value=0.0, step=0.1, key="plan_weight",
-        )
-    with mcol2:
-        nutrition_input = st.selectbox(
-            "栄養状態",
-            ["（記入しない）", *pdf_fill.NUTRITION_OPTIONS],
-            key="plan_nutrition",
-        )
-
-    plan_freetext = st.text_area(
-        "達成目標・行動目標（自由記述）",
-        key="plan_freetext",
-        placeholder="例）1日8000歩を目標にする／間食を1日1回までにする",
-    )
-    achievement_status = st.text_area(
-        "目標の達成状況（継続の場合のみ）",
-        key="plan_achievement",
-        placeholder="継続受診時、前回目標の達成状況を記入",
-    )
-
-# --- PlanInput を組み立て ---
-# 療養計画書の「目標」は医師が設定する目標そのもの。サイドバーの目標スライダー
-# （sbp_tgt_manual / a1c_tgt_manual）を直接使う。有効目標値 sbp_tgt/a1c_tgt は
-# use_meds ON時に薬剤計算の予測到達値になるため、目標欄には使わない。
-plan = pdf_fill.PlanInput(
+pdf_plan_ui.render_plan_section(
     sex=sex,
-    age=int(age),
-    visit_type="initial" if visit_label == "初回" else "continued",
-    created=date.today(),
-    sbp_tgt=int(round(sbp_tgt_manual)) if inc_bp else None,
-    dbp_tgt=int(dbp_tgt_input) if inc_bp else None,
-    bmi_target=float(bmi_target) if inc_bmi else None,
-    a1c_tgt=float(a1c_tgt_manual) if inc_a1c_tgt else None,
-    ldl_now=int(round(ldl_now)) if inc_ldl else None,
-    a1c_now=float(a1c_now) if inc_a1c_now else None,
+    age=age,
+    ldl_now=ldl_now,
+    a1c_now=a1c_now,
+    sbp_tgt_manual=sbp_tgt_manual,
+    a1c_tgt_manual=a1c_tgt_manual,
+    bmi_target=bmi_target,
+    key_prefix="pc",
 )
-
-if st.button("📄 記入内容を確認する", key="plan_make"):
-    st.session_state.plan_ready = True
-
-if st.session_state.get("plan_ready"):
-    fv = pdf_fill.build_field_values(plan)
-
-    # 確認画面（決定5）: PDFに書き込む値を表示し、ここで最終調整できる。
-    # 空欄にした行はその項目も連動チェックも記入されない。
-    st.markdown("#### 記入内容（この値が印字されます・編集可）")
-    st.caption("数値や内容はここで最終調整できます。空欄にするとその項目は印字されません。")
-    label_map = {
-        pdf_fill.F_SEX: "性別",
-        pdf_fill.F_AGE: "年齢",
-        pdf_fill.F_DATE_Y: "作成日(年)",
-        pdf_fill.F_DATE_M: "作成日(月)",
-        pdf_fill.F_DATE_D: "作成日(日)",
-        pdf_fill.F_BP: "目標血圧(収縮期/拡張期)",
-        pdf_fill.F_BMI: "目標BMI",
-        pdf_fill.F_A1C_TGT: "目標HbA1c",
-        pdf_fill.F_LDL_NOW: "実測LDL",
-        pdf_fill.F_A1C_NOW: "実測HbA1c",
-    }
-    # 編集対象はテキスト/ドロップダウン欄。区分（初回/継続）は上のラジオで指定済み。
-    field_order = list(fv.text.keys())
-    editor_df = pd.DataFrame(
-        {
-            "欄": [label_map.get(f, f) for f in field_order],
-            "値": [fv.text[f] for f in field_order],
-        }
-    )
-    edited = st.data_editor(
-        editor_df,
-        column_config={
-            "欄": st.column_config.TextColumn("欄", disabled=True),
-            "値": st.column_config.TextColumn("値"),
-        },
-        hide_index=True,
-        key="plan_editor",
-    )
-    st.caption(
-        "空欄（手書き）: 氏名・生年月日・主病名・行動目標・食事/運動/喫煙指導・栄養状態"
-    )
-
-    # 編集後の値で FieldValues を再構築（値があれば連動チェックもON）
-    fv_final = pdf_fill.FieldValues()
-    for fname, val in zip(field_order, edited["値"].tolist()):
-        val = "" if val is None else str(val).strip()
-        if not val:
-            continue
-        fv_final.text[fname] = val
-        chk = pdf_fill.FIELD_CONNECTED_CHECK.get(fname)
-        if chk:
-            fv_final.checks[chk] = True
-
-    # --- 手入力項目（Step 4-B）を反映 ---
-    # 主病名（該当のみON）
-    for on, cb in (
-        (dx_dm, pdf_fill.C_DX_DIABETES),
-        (dx_htn, pdf_fill.C_DX_HYPERTENSION),
-        (dx_dl, pdf_fill.C_DX_DYSLIPIDEMIA),
-    ):
-        if on:
-            fv_final.checks[cb] = True
-    # 目標体重（0は未記入）
-    if weight_input and weight_input > 0:
-        fv_final.text[pdf_fill.F_WEIGHT] = f"{weight_input:.1f}"
-        fv_final.checks[pdf_fill.C_WEIGHT] = True
-    # 栄養状態
-    if nutrition_input in pdf_fill.NUTRITION_OPTIONS:
-        fv_final.text[pdf_fill.F_NUTRITION] = nutrition_input
-        fv_final.checks[pdf_fill.C_NUTRITION] = True
-    # 達成目標・行動目標（自由記述）
-    if plan_freetext and plan_freetext.strip():
-        fv_final.text[pdf_fill.F_PLAN_FREETEXT] = plan_freetext.strip()
-    # 目標の達成状況（継続の場合のみ）
-    if achievement_status and achievement_status.strip():
-        fv_final.text[pdf_fill.F_ACHIEVEMENT_STATUS] = achievement_status.strip()
-
-    # 区分（初回/継続）
-    if plan.visit_type == "initial":
-        fv_final.checks[pdf_fill.F_VISIT_FIRST] = True
-    else:
-        fv_final.checks[pdf_fill.F_VISIT_CONT] = True
-
-    pdf_bytes = pdf_fill.fill_pdf(fv_final)
-    st.download_button(
-        "⬇ PDFをダウンロード",
-        data=pdf_bytes,
-        file_name=f"療養計画書_{date.today():%Y%m%d}.pdf",
-        mime="application/pdf",
-        key="plan_dl",
-        type="primary",
-    )
 
