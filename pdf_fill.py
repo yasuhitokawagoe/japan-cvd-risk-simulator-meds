@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Dict, Optional, Union
 
 from pypdf import PdfReader, PdfWriter
-from pypdf.generic import BooleanObject, NameObject
+from pypdf.generic import ArrayObject, BooleanObject, NameObject, TextStringObject
 
 # ひな型PDF（v1.2）。帳票様式は診療報酬改定で変わるためバージョンをパスに含める。
 DEFAULT_TEMPLATE = Path(__file__).resolve().parent / "docs" / "pdf_forms" / "ryoyo_keikakusho_v1.2.pdf"
@@ -54,6 +54,25 @@ C_LDL_NOW = "チェックボックス79"
 F_A1C_NOW = "テキスト21"       # 実測HbA1c
 C_A1C_NOW = "チェックボックス13"
 
+# --- 手入力項目（Step 4-B）。アプリが値を持たないため画面で手入力する欄。 ---
+# 主病名（自動推定しない。CB→病名の対応はラベルx座標で確認済み・2026-07-24）
+C_DX_DIABETES = "チェックボックス119"       # 糖尿病
+C_DX_HYPERTENSION = "チェックボックス121"   # 高血圧症
+C_DX_DYSLIPIDEMIA = "チェックボックス120"   # 脂質異常症
+# 目標: 体重(kg)（BMIは自動17項目側 F_BMI）
+F_WEIGHT = "テキスト8"
+C_WEIGHT = "チェックボックス116"
+# 栄養状態
+F_NUTRITION = "Dropdown29"
+C_NUTRITION = "チェックボックス83"
+NUTRITION_OPTIONS = ("低栄養状態の恐れ", "良好", "肥満")
+# 行動目標・達成目標（自由記述）。上の箱(y≈601)。
+# 帳票上 テキスト111 は「達成目標」と「目標の達成状況」の別セクション2箱に同名で
+# 割り当てられ値を共有してしまうため、fill_pdf で独立フィールドに分割する。
+F_PLAN_FREETEXT = "テキスト111"
+# 目標の達成状況（継続の場合のみ）。下の箱(y≈547)。分割後に付ける独立名。
+F_ACHIEVEMENT_STATUS = "テキスト111_達成状況"
+
 # 数値欄 → 連動してONにするチェックボックス。
 # 編集可能な確認画面で「値が入っていればチェックON」を再導出するのに使う。
 FIELD_CONNECTED_CHECK = {
@@ -62,6 +81,8 @@ FIELD_CONNECTED_CHECK = {
     F_A1C_TGT: C_A1C_TGT,
     F_LDL_NOW: C_LDL_NOW,
     F_A1C_NOW: C_A1C_NOW,
+    F_WEIGHT: C_WEIGHT,
+    F_NUTRITION: C_NUTRITION,
 }
 
 # 性別コード → 帳票の選択肢文字列（Dropdown9 の options と厳密一致させる）
@@ -178,6 +199,50 @@ def _collect_checkbox_on_values(reader: PdfReader) -> Dict[str, str]:
     return result
 
 
+def _split_shared_text111(writer: PdfWriter) -> None:
+    """
+    テキスト111 は帳票上、意味の異なる2箱に同名で割り当てられ値を共有してしまう:
+      上の箱(y≈601) = 【①達成目標／②行動目標】、下の箱(y≈547) = 【目標の達成状況】(継続のみ)。
+    これを2つの独立フィールドに分割し、別々に記入できるようにする。
+      上 → F_PLAN_FREETEXT("テキスト111") / 下 → F_ACHIEVEMENT_STATUS。
+    """
+    fields = writer._root_object["/AcroForm"]["/Fields"]
+    parent_obj = None
+    for ref in fields:
+        o = ref.get_object()
+        if str(o.get("/T")) == "テキスト111" and o.get("/Kids"):
+            parent_obj = o
+            break
+    if parent_obj is None:
+        return  # 構造が違う／既に分割済み
+
+    kids = list(parent_obj["/Kids"])
+    if len(kids) != 2:
+        return
+
+    kids.sort(key=lambda k: float(k.get_object()["/Rect"][1]), reverse=True)  # [0]=上, [1]=下
+    da = parent_obj.get("/DA")
+    ff = parent_obj.get("/Ff")
+
+    for kid, name in zip(kids, ("テキスト111", F_ACHIEVEMENT_STATUS)):
+        ko = kid.get_object()
+        ko[NameObject("/T")] = TextStringObject(name)
+        ko[NameObject("/FT")] = NameObject("/Tx")
+        if da is not None and "/DA" not in ko:
+            ko[NameObject("/DA")] = da
+        if ff is not None and "/Ff" not in ko:
+            ko[NameObject("/Ff")] = ff
+        if "/Parent" in ko:
+            del ko[NameObject("/Parent")]
+
+    # 親を除き、2つの子を独立フィールドとして /Fields に据える
+    new_fields = ArrayObject(
+        [r for r in fields if r.get_object() is not parent_obj]
+    )
+    new_fields.extend(kids)
+    writer._root_object["/AcroForm"][NameObject("/Fields")] = new_fields
+
+
 def fill_pdf(
     field_values: FieldValues,
     template_path: Union[str, Path] = DEFAULT_TEMPLATE,
@@ -200,6 +265,8 @@ def fill_pdf(
             raise KeyError(f"チェックボックスがひな型に無い: {cb_name}")
 
     writer = PdfWriter(clone_from=str(template_path))
+    # 同名2箱の テキスト111 を独立フィールドに分割（達成目標／達成状況を別々に記入可能に）
+    _split_shared_text111(writer)
 
     for page in writer.pages:
         if field_values.text:
@@ -216,6 +283,25 @@ def fill_pdf(
                 on = on_values[name]
                 obj[NameObject("/V")] = NameObject(f"/{on}")
                 obj[NameObject("/AS")] = NameObject(f"/{on}")
+
+    # ひな型に残る作成時のテストデータ（/DV デフォルト値・/V・/I）を掃除する。
+    # 例: Dropdown29 /DV='低栄養状態の恐れ'、Dropdown10 /DV='86'。
+    # 記入しない欄にこれらが残ると NeedAppearances 再生成時に印字され、誤情報になる。
+    fill_names = set(field_values.text) | {
+        name for name, on in field_values.checks.items() if on
+    }
+    for f in writer._root_object["/AcroForm"]["/Fields"]:
+        obj = f.get_object()
+        name = obj.get("/T")
+        # デフォルト値は印字対象ではないので、記入する欄も含め全て除去する。
+        for key in ("/DV",):
+            if key in obj:
+                del obj[NameObject(key)]
+        # 記入しない欄は現在値・選択インデックスも消して空欄にする。
+        if name is None or str(name) not in fill_names:
+            for key in ("/V", "/I"):
+                if key in obj:
+                    del obj[NameObject(key)]
 
     # フォント未埋め込み対策。ビューア側に外観を再生成させる。
     # 注意: update_page_form_field_values(auto_regenerate=False) が NeedAppearances を

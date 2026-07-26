@@ -774,6 +774,43 @@ with c2:
 with c3:
     inc_a1c_now = st.checkbox("実測HbA1c", value=True, key="plan_inc_a1cnow")
 
+# --- 手入力項目（Step 4-B。アプリが値を持たない欄。空欄なら記入されない） ---
+with st.expander("✍ 手入力項目（主病名・体重・栄養状態・行動目標）"):
+    st.caption("アプリが値を持たない欄です。入力したものだけ記入されます（空欄は手書き）。")
+
+    st.markdown("**主病名**（該当にチェック。自動推定はしません）")
+    dcol1, dcol2, dcol3 = st.columns(3)
+    with dcol1:
+        dx_dm = st.checkbox("糖尿病", key="plan_dx_dm")
+    with dcol2:
+        dx_htn = st.checkbox("高血圧症", key="plan_dx_htn")
+    with dcol3:
+        dx_dl = st.checkbox("脂質異常症", key="plan_dx_dl")
+
+    mcol1, mcol2 = st.columns(2)
+    with mcol1:
+        weight_input = st.number_input(
+            "目標体重 (kg)（0＝記入しない）",
+            min_value=0.0, max_value=200.0, value=0.0, step=0.1, key="plan_weight",
+        )
+    with mcol2:
+        nutrition_input = st.selectbox(
+            "栄養状態",
+            ["（記入しない）", *pdf_fill.NUTRITION_OPTIONS],
+            key="plan_nutrition",
+        )
+
+    plan_freetext = st.text_area(
+        "達成目標・行動目標（自由記述）",
+        key="plan_freetext",
+        placeholder="例）1日8000歩を目標にする／間食を1日1回までにする",
+    )
+    achievement_status = st.text_area(
+        "目標の達成状況（継続の場合のみ）",
+        key="plan_achievement",
+        placeholder="継続受診時、前回目標の達成状況を記入",
+    )
+
 # --- PlanInput を組み立て ---
 # 療養計画書の「目標」は医師が設定する目標そのもの。サイドバーの目標スライダー
 # （sbp_tgt_manual / a1c_tgt_manual）を直接使う。有効目標値 sbp_tgt/a1c_tgt は
@@ -844,6 +881,31 @@ if st.session_state.get("plan_ready"):
         chk = pdf_fill.FIELD_CONNECTED_CHECK.get(fname)
         if chk:
             fv_final.checks[chk] = True
+
+    # --- 手入力項目（Step 4-B）を反映 ---
+    # 主病名（該当のみON）
+    for on, cb in (
+        (dx_dm, pdf_fill.C_DX_DIABETES),
+        (dx_htn, pdf_fill.C_DX_HYPERTENSION),
+        (dx_dl, pdf_fill.C_DX_DYSLIPIDEMIA),
+    ):
+        if on:
+            fv_final.checks[cb] = True
+    # 目標体重（0は未記入）
+    if weight_input and weight_input > 0:
+        fv_final.text[pdf_fill.F_WEIGHT] = f"{weight_input:.1f}"
+        fv_final.checks[pdf_fill.C_WEIGHT] = True
+    # 栄養状態
+    if nutrition_input in pdf_fill.NUTRITION_OPTIONS:
+        fv_final.text[pdf_fill.F_NUTRITION] = nutrition_input
+        fv_final.checks[pdf_fill.C_NUTRITION] = True
+    # 達成目標・行動目標（自由記述）
+    if plan_freetext and plan_freetext.strip():
+        fv_final.text[pdf_fill.F_PLAN_FREETEXT] = plan_freetext.strip()
+    # 目標の達成状況（継続の場合のみ）
+    if achievement_status and achievement_status.strip():
+        fv_final.text[pdf_fill.F_ACHIEVEMENT_STATUS] = achievement_status.strip()
+
     # 区分（初回/継続）
     if plan.visit_type == "initial":
         fv_final.checks[pdf_fill.F_VISIT_FIRST] = True
