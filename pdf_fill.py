@@ -6,16 +6,26 @@
 本ファイルは2層に分かれる:
   ① build_field_values(): アプリの状態 → PDFフィールド値への「変換ロジック」（純粋関数）
      ── どの値をどの欄に入れるか。間違えると誤った診療文書になる。PDF不要でテスト可能。
-  ② （C3bで追加予定）fill_pdf(): pypdf で実際にAcroFormへ記入する処理。
+  ② fill_pdf() / generate_ryoyo_pdf(): pypdf で実際にAcroFormへ記入し、PDFバイト列を返す。
+     ── チェックボックスON値は帳型から動的取得、NeedAppearances でフォント未埋め込みに対処。
+        手法は scripts/pdf_smoke_check.py（Step 1で実証済み）と同じ。
 
 フィールド対応は docs/pdf_forms/ryoyo_keikakusho_fields.csv の meaning_TODO 列と
 ロードマップ Step 2（2026-07-24 ユーザー確認により確定）に対応する。
 """
 from __future__ import annotations
 
+import io
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Dict, Optional
+from pathlib import Path
+from typing import Dict, Optional, Union
+
+from pypdf import PdfReader, PdfWriter
+from pypdf.generic import BooleanObject, NameObject
+
+# ひな型PDF（v1.2）。帳票様式は診療報酬改定で変わるためバージョンをパスに含める。
+DEFAULT_TEMPLATE = Path(__file__).resolve().parent / "docs" / "pdf_forms" / "ryoyo_keikakusho_v1.2.pdf"
 
 # ---------------------------------------------------------------------------
 # フィールド名の定数（CSVの field_name と一致）。
@@ -131,3 +141,85 @@ def build_field_values(plan: PlanInput) -> FieldValues:
         fv.checks[C_A1C_NOW] = True
 
     return fv
+
+
+# ---------------------------------------------------------------------------
+# ② 記入処理（pypdf）。実際にAcroFormへ書き込む。
+# ---------------------------------------------------------------------------
+def _collect_checkbox_on_values(reader: PdfReader) -> Dict[str, str]:
+    """
+    各チェックボックスのON値を帳票から動的に読み出す（field_name -> ON値文字列）。
+
+    この帳票のON値は /Yes ではなく「はい」のUTF-16BE表現（/þÿ0o0D）。
+    ハードコードすると帳票の改版で壊れるため、必ず実物から取る。
+    """
+    result: Dict[str, str] = {}
+    for page in reader.pages:
+        for annot in page.get("/Annots") or []:
+            obj = annot.get_object()
+            name = obj.get("/T")
+            if name is None:
+                continue
+            states = (obj.get("/AP") or {}).get("/N") or {}
+            for state in states.keys():
+                if state != "/Off":
+                    result[str(name)] = str(state).lstrip("/")
+                    break
+    return result
+
+
+def fill_pdf(
+    field_values: FieldValues,
+    template_path: Union[str, Path] = DEFAULT_TEMPLATE,
+) -> bytes:
+    """
+    FieldValues をひな型PDFに記入し、PDFのバイト列を返す。
+
+    - テキスト/ドロップダウン: update_page_form_field_values で /V を設定
+    - チェックボックス: /V と /AS の両方に NameObject を入れる
+      （文字列で渡すと pypdf が別型で書き、ビューアが /Off として扱うため）
+    - AcroForm に NeedAppearances=true を立て、ビューア側に外観を再生成させる
+      （日本語フォントが未埋め込みのため）
+    """
+    reader = PdfReader(str(template_path))
+    on_values = _collect_checkbox_on_values(reader)
+
+    # 記入対象のチェックボックスがひな型に存在するか先に検証（対応表ズレを早期検出）
+    for cb_name, on in field_values.checks.items():
+        if on and cb_name not in on_values:
+            raise KeyError(f"チェックボックスがひな型に無い: {cb_name}")
+
+    writer = PdfWriter(clone_from=str(template_path))
+
+    for page in writer.pages:
+        if field_values.text:
+            writer.update_page_form_field_values(
+                page, field_values.text, auto_regenerate=False
+            )
+        for annot in page.get("/Annots") or []:
+            obj = annot.get_object()
+            name = obj.get("/T")
+            if name is None:
+                continue
+            name = str(name)
+            if field_values.checks.get(name):
+                on = on_values[name]
+                obj[NameObject("/V")] = NameObject(f"/{on}")
+                obj[NameObject("/AS")] = NameObject(f"/{on}")
+
+    # フォント未埋め込み対策。ビューア側に外観を再生成させる。
+    # 注意: update_page_form_field_values(auto_regenerate=False) が NeedAppearances を
+    # False に戻すため、必ず記入ループの後に立てる。
+    writer._root_object["/AcroForm"][NameObject("/NeedAppearances")] = BooleanObject(True)
+
+    buf = io.BytesIO()
+    writer.write(buf)
+    return buf.getvalue()
+
+
+def generate_ryoyo_pdf(
+    plan: PlanInput,
+    template_path: Union[str, Path] = DEFAULT_TEMPLATE,
+) -> bytes:
+    """アプリの状態（PlanInput）から記入済み療養計画書PDFのバイト列を返す（①→②の一括）。"""
+    return fill_pdf(build_field_values(plan), template_path)
