@@ -14,14 +14,14 @@ BMIの扱いだけアプリで異なる:
 from __future__ import annotations
 
 from datetime import date
-from typing import Optional
+from typing import Mapping, Optional
 
 import streamlit as st
 
 import pdf_fill
+from patient_report_pdf import generate_patient_report_pdf
 from plan_logic import (
     LIFESTYLE_GOALS,
-    build_patient_handout,
     ideal_weight_kg,
     infer_diagnoses,
     suggested_goals,
@@ -58,6 +58,11 @@ def render_plan_section(
     bp_medications: tuple[str, ...] = (),
     lipid_medications: tuple[str, ...] = (),
     diabetes_medications: tuple[str, ...] = (),
+    risk_curves: Optional[Mapping] = None,
+    risk_horizon_years: Optional[int] = None,
+    sbp_after: Optional[float] = None,
+    ldl_after: Optional[float] = None,
+    a1c_after: Optional[float] = None,
     key_prefix: str = "pc",
 ) -> None:
     """
@@ -304,22 +309,41 @@ def render_plan_section(
 
     if height_cm is not None and weight_kg is not None and sbp_now is not None and dbp_now is not None:
         st.markdown("#### 患者さん向け資料")
-        handout = build_patient_handout(
-            age=int(age),
-            sex_label="男性" if sex == "male" else "女性",
-            height_cm=height_cm,
-            weight_kg=weight_kg,
-            bp=f"{int(round(sbp_now))}/{int(round(dbp_now))}",
-            ldl=ldl_now,
-            a1c=a1c_now,
-            medications=medication_names,
-            goals=[*final_goals, *[f"指導項目: {item}" for item in selected_instructions]],
-        )
-        st.text(handout)
-        st.download_button(
-            "⬇ 患者さん向け資料をダウンロード",
-            data=handout.encode("utf-8-sig"),
-            file_name=f"患者さん向け目標_{date.today():%Y%m%d}.txt",
-            mime="text/plain",
-            key=f"{p}_patient_handout_dl",
-        )
+        if risk_curves and risk_horizon_years:
+            selected_diagnoses = [
+                label for enabled, label in (
+                    (dx_dm, "糖尿病"), (dx_htn, "高血圧症"), (dx_dl, "脂質異常症")
+                ) if enabled
+            ]
+            report_pdf = generate_patient_report_pdf(
+                age=int(age),
+                sex_label="男性" if sex == "male" else "女性",
+                height_cm=height_cm,
+                weight_kg=weight_kg,
+                current_values={"sbp": sbp_now, "ldl": ldl_now, "a1c": a1c_now},
+                target_values={
+                    "sbp": sbp_after if sbp_after is not None else sbp_tgt_manual,
+                    "ldl": ldl_after if ldl_after is not None else ldl_now,
+                    "a1c": a1c_after if a1c_after is not None else a1c_tgt_manual,
+                },
+                diagnoses=selected_diagnoses,
+                medications=medication_names,
+                instructions=selected_instructions,
+                goals=final_goals,
+                risks=risk_curves,
+                horizon_years=risk_horizon_years,
+            )
+            st.success(
+                "現在の状態、介入前後の検査値、全死亡・心筋梗塞・脳卒中の"
+                "リスク差と推移グラフ、相談して決めた目標を2ページにまとめました。"
+            )
+            st.download_button(
+                "⬇ グラフ付き患者さん向け資料（PDF）",
+                data=report_pdf,
+                file_name=f"健康づくりプラン_{date.today():%Y%m%d}.pdf",
+                mime="application/pdf",
+                key=f"{p}_patient_report_dl",
+                type="primary",
+            )
+        else:
+            st.info("リスク計算を実行すると、グラフ付き患者さん向け資料を作成できます。")

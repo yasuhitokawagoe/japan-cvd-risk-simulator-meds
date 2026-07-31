@@ -765,5 +765,10 @@ pdf_plan_ui.render_plan_section(
     bp_medications=tuple(current_sbp_keys or sbp_sel_keys),
     lipid_medications=tuple(current_ldl_keys or ldl_sel_keys),
     diabetes_medications=tuple(current_a1c_keys or a1c_sel_keys),
+    risk_curves=cumulative_data,
+    risk_horizon_years=int(st.session_state.years),
+    sbp_after=sbp_tgt,
+    ldl_after=ldl_tgt,
+    a1c_after=a1c_tgt,
     key_prefix="pc",
 )
