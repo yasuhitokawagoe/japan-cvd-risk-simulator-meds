@@ -244,12 +244,19 @@ with st.sidebar:
     years_since_quit = st.slider("禁煙からの年数（元喫煙者の場合）", 0, 40, 5)
     quit_today = st.checkbox("今日禁煙したと仮定（目標シナリオ）")
 
-    st.subheader("BMI（任意）")
+    st.subheader("体格")
+    height_cm = st.number_input("身長 (cm)", min_value=120.0, max_value=220.0, value=165.0, step=0.1)
+    weight_kg = st.number_input("体重 (kg)", min_value=30.0, max_value=200.0, value=65.0, step=0.1)
+    bmi_now = weight_kg / (height_cm / 100.0) ** 2
+    bmi_target = 22.0
+    st.caption(f"現在BMI: {bmi_now:.1f}／目標BMI: 22.0（目標体重 {22 * (height_cm / 100.0) ** 2:.1f} kg）")
+
+    dbp_now = st.number_input("拡張期血圧 現在 (mmHg)", min_value=40, max_value=130, value=90, step=1)
     col_b1, col_b2 = st.columns(2)
     with col_b1:
-        bmi_now = st.number_input("現在のBMI", min_value=10.0, max_value=50.0, value=24.0, step=0.1)
+        st.metric("現在BMI", f"{bmi_now:.1f}")
     with col_b2:
-        bmi_target = st.number_input("目標BMI（任意）", min_value=10.0, max_value=50.0, value=24.0, step=0.1)
+        st.metric("目標BMI", "22.0")
 
     st.subheader("CKD（任意）")
     egfr_now = st.number_input("eGFR 現在", min_value=5.0, max_value=120.0, value=80.0, step=1.0)
@@ -541,6 +548,7 @@ def calculate_cumulative_risk_curves(years: int):
 import hashlib
 current_params = {
     "sex": sex, "age": age,
+    "height_cm": height_cm, "weight_kg": weight_kg, "dbp_now": dbp_now,
     "sbp_now": sbp_now, "sbp_tgt": sbp_tgt,
     "ldl_now": ldl_now, "ldl_tgt": ldl_tgt,
     "a1c_now": a1c_now, "a1c_tgt": a1c_tgt,
@@ -745,11 +753,17 @@ for outcome_config in outcomes_config:
 pdf_plan_ui.render_plan_section(
     sex=sex,
     age=age,
+    height_cm=height_cm,
+    weight_kg=weight_kg,
+    sbp_now=sbp_now,
+    dbp_now=dbp_now,
     ldl_now=ldl_now,
     a1c_now=a1c_now,
     sbp_tgt_manual=sbp_tgt_manual,
     a1c_tgt_manual=a1c_tgt_manual,
     bmi_target=bmi_target,
+    bp_medications=tuple(current_sbp_keys or sbp_sel_keys),
+    lipid_medications=tuple(current_ldl_keys or ldl_sel_keys),
+    diabetes_medications=tuple(current_a1c_keys or a1c_sel_keys),
     key_prefix="pc",
 )
-

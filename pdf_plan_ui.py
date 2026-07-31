@@ -19,6 +19,14 @@ from typing import Optional
 import streamlit as st
 
 import pdf_fill
+from plan_logic import (
+    LIFESTYLE_GOALS,
+    build_patient_handout,
+    ideal_weight_kg,
+    infer_diagnoses,
+    suggested_goals,
+    suggested_instructions,
+)
 
 _LABEL_MAP = {
     pdf_fill.F_SEX: "性別",
@@ -43,6 +51,13 @@ def render_plan_section(
     sbp_tgt_manual: float,
     a1c_tgt_manual: float,
     bmi_target: Optional[float] = None,
+    height_cm: Optional[float] = None,
+    weight_kg: Optional[float] = None,
+    sbp_now: Optional[float] = None,
+    dbp_now: Optional[float] = None,
+    bp_medications: tuple[str, ...] = (),
+    lipid_medications: tuple[str, ...] = (),
+    diabetes_medications: tuple[str, ...] = (),
     key_prefix: str = "pc",
 ) -> None:
     """
@@ -58,7 +73,8 @@ def render_plan_section(
     st.markdown("## 📄 療養計画書を作成")
     st.caption(
         "アプリが持つ値を療養計画書（別紙様式9）に記入します。"
-        "氏名・生年月日・主病名などは空欄のまま。印刷後に手書きで補ってください。"
+        "一次予防モデルの患者情報・検査値・服薬内容を引き継ぎます。"
+        "主病名は検査値と服薬内容から候補を示すため、必ず確認してください。"
     )
 
     # --- 計画書に固有の入力 ---
@@ -93,11 +109,40 @@ def render_plan_section(
         )
         bmi_value = float(bmi_in) if bmi_in > 0 else None
 
-    # --- 手入力項目（Step 4-B。アプリが値を持たない欄。空欄なら記入されない） ---
-    with st.expander("✍ 手入力項目（主病名・体重・栄養状態・行動目標）"):
-        st.caption("アプリが値を持たない欄です。入力したものだけ記入されます（空欄は手書き）。")
+    diagnoses = infer_diagnoses(
+        sbp=sbp_now or 0, dbp=dbp_now or 0, ldl=ldl_now, a1c=a1c_now,
+        has_bp_meds=bool(bp_medications),
+        has_lipid_meds=bool(lipid_medications),
+        has_diabetes_meds=bool(diabetes_medications),
+    )
+    medication_names = [*bp_medications, *lipid_medications, *diabetes_medications]
 
-        st.markdown("**主病名**（該当にチェック。自動推定はしません）")
+    if height_cm is not None and weight_kg is not None and sbp_now is not None and dbp_now is not None:
+        with st.container(border=True):
+            st.markdown("**一次予防モデルから引き継いだ内容**")
+            st.write(
+                f"{int(age)}歳・{'男性' if sex == 'male' else '女性'}／"
+                f"身長 {height_cm:.1f} cm・体重 {weight_kg:.1f} kg／"
+                f"血圧 {int(round(sbp_now))}/{int(round(dbp_now))} mmHg／"
+                f"LDL {ldl_now:.0f} mg/dL・HbA1c {a1c_now:.1f}%"
+            )
+            st.write("服薬内容: " + ("、".join(medication_names) if medication_names else "なし／未入力"))
+    diagnosis_signature = (
+        round(float(sbp_now or 0), 1), round(float(dbp_now or 0), 1),
+        round(float(ldl_now), 1), round(float(a1c_now), 1), tuple(medication_names),
+    )
+    diagnosis_signature_key = f"{p}_diagnosis_signature"
+    if st.session_state.get(diagnosis_signature_key) != diagnosis_signature:
+        st.session_state[f"{p}_dx_dm"] = diagnoses["diabetes"]
+        st.session_state[f"{p}_dx_htn"] = diagnoses["hypertension"]
+        st.session_state[f"{p}_dx_dl"] = diagnoses["dyslipidemia"]
+        st.session_state[diagnosis_signature_key] = diagnosis_signature
+
+    # --- 計画書の追加項目 ---
+    with st.expander("✍ 手入力項目（主病名・体重・栄養状態・行動目標）"):
+        st.caption("自動入力された候補を確認し、患者さんとの相談内容に合わせて修正してください。")
+
+        st.markdown("**主病名の候補**（検査値または該当薬から自動チェック・確定診断ではありません）")
         dcol1, dcol2, dcol3 = st.columns(3)
         with dcol1:
             dx_dm = st.checkbox("糖尿病", key=f"{p}_dx_dm")
@@ -108,10 +153,18 @@ def render_plan_section(
 
         mcol1, mcol2 = st.columns(2)
         with mcol1:
-            weight_input = st.number_input(
-                "目標体重 (kg)（0＝記入しない）",
-                min_value=0.0, max_value=200.0, value=0.0, step=0.1, key=f"{p}_weight",
-            )
+            if height_cm is not None:
+                weight_input = st.number_input(
+                    "目標体重 (kg)（BMI 22から自動計算）",
+                    min_value=20.0, max_value=200.0, value=ideal_weight_kg(height_cm),
+                    step=0.1, key=f"{p}_weight",
+                )
+            else:
+                weight_input = st.number_input(
+                    "目標体重 (kg)（0＝記入しない）",
+                    min_value=0.0, max_value=200.0, value=0.0,
+                    step=0.1, key=f"{p}_weight",
+                )
         with mcol2:
             nutrition_input = st.selectbox(
                 "栄養状態",
@@ -119,10 +172,35 @@ def render_plan_section(
                 key=f"{p}_nutrition",
             )
 
-        plan_freetext = st.text_area(
-            "達成目標・行動目標（自由記述）",
+        st.markdown("**生活習慣から指導項目・行動目標を選ぶ**")
+        lifestyle_items = st.multiselect(
+            "生活習慣・相談事項",
+            list(LIFESTYLE_GOALS),
+            default=["運動不足"] if not medication_names else [],
+            key=f"{p}_lifestyle",
+        )
+        goal_candidates = suggested_goals(lifestyle_items)
+        instruction_candidates = suggested_instructions(lifestyle_items)
+        lifestyle_signature = tuple(lifestyle_items)
+        lifestyle_signature_key = f"{p}_lifestyle_signature"
+        if st.session_state.get(lifestyle_signature_key) != lifestyle_signature:
+            st.session_state[f"{p}_selected_instructions"] = instruction_candidates
+            st.session_state[f"{p}_selected_goals"] = goal_candidates
+            st.session_state[lifestyle_signature_key] = lifestyle_signature
+        selected_instructions = st.multiselect(
+            "療養計画書にチェックする指導項目",
+            list(pdf_fill.PLAN_INSTRUCTION_FIELDS),
+            key=f"{p}_selected_instructions",
+        )
+        selected_goals = st.multiselect(
+            "療養計画書と患者さん向け資料に反映する目標",
+            goal_candidates,
+            key=f"{p}_selected_goals",
+        )
+        additional_goal = st.text_area(
+            "追加の達成目標・行動目標",
             key=f"{p}_freetext",
-            placeholder="例）1日8000歩を目標にする／間食を1日1回までにする",
+            placeholder="患者さんと相談して決めた内容を追加",
         )
         achievement_status = st.text_area(
             "目標の達成状況（継続の場合のみ）",
@@ -192,14 +270,19 @@ def render_plan_section(
     ):
         if on:
             fv_final.checks[cb] = True
+    for instruction in selected_instructions:
+        fv_final.checks[pdf_fill.PLAN_INSTRUCTION_FIELDS[instruction]] = True
     if weight_input and weight_input > 0:
         fv_final.text[pdf_fill.F_WEIGHT] = f"{weight_input:.1f}"
         fv_final.checks[pdf_fill.C_WEIGHT] = True
     if nutrition_input in pdf_fill.NUTRITION_OPTIONS:
         fv_final.text[pdf_fill.F_NUTRITION] = nutrition_input
         fv_final.checks[pdf_fill.C_NUTRITION] = True
-    if plan_freetext and plan_freetext.strip():
-        fv_final.text[pdf_fill.F_PLAN_FREETEXT] = plan_freetext.strip()
+    final_goals = list(selected_goals)
+    if additional_goal and additional_goal.strip():
+        final_goals.append(additional_goal.strip())
+    if final_goals:
+        fv_final.text[pdf_fill.F_PLAN_FREETEXT] = "／".join(final_goals)
     if achievement_status and achievement_status.strip():
         fv_final.text[pdf_fill.F_ACHIEVEMENT_STATUS] = achievement_status.strip()
 
@@ -218,3 +301,25 @@ def render_plan_section(
         key=f"{p}_plan_dl",
         type="primary",
     )
+
+    if height_cm is not None and weight_kg is not None and sbp_now is not None and dbp_now is not None:
+        st.markdown("#### 患者さん向け資料")
+        handout = build_patient_handout(
+            age=int(age),
+            sex_label="男性" if sex == "male" else "女性",
+            height_cm=height_cm,
+            weight_kg=weight_kg,
+            bp=f"{int(round(sbp_now))}/{int(round(dbp_now))}",
+            ldl=ldl_now,
+            a1c=a1c_now,
+            medications=medication_names,
+            goals=[*final_goals, *[f"指導項目: {item}" for item in selected_instructions]],
+        )
+        st.text(handout)
+        st.download_button(
+            "⬇ 患者さん向け資料をダウンロード",
+            data=handout.encode("utf-8-sig"),
+            file_name=f"患者さん向け目標_{date.today():%Y%m%d}.txt",
+            mime="text/plain",
+            key=f"{p}_patient_handout_dl",
+        )
