@@ -16,7 +16,6 @@ from __future__ import annotations
 from datetime import date
 from typing import Optional
 
-import pandas as pd
 import streamlit as st
 
 import pdf_fill
@@ -158,28 +157,25 @@ def render_plan_section(
     st.markdown("#### 記入内容（この値が印字されます・編集可）")
     st.caption("数値や内容はここで最終調整できます。空欄にするとその項目は印字されません。")
     field_order = list(fv.text.keys())
-    editor_df = pd.DataFrame(
-        {
-            "欄": [_LABEL_MAP.get(f, f) for f in field_order],
-            "値": [fv.text[f] for f in field_order],
-        }
-    )
-    edited = st.data_editor(
-        editor_df,
-        column_config={
-            "欄": st.column_config.TextColumn("欄", disabled=True),
-            "値": st.column_config.TextColumn("値"),
-        },
-        hide_index=True,
-        key=f"{p}_plan_editor",
-    )
+    # st.data_editor は内部で DataFrame を PyArrow に変換する。Railway の
+    # pandas/PyArrow 組み合わせでは、この変換がネイティブ層で segfault して
+    # アプリ全体を再起動させるため、通常のテキスト入力で確認・編集する。
+    edited_values = []
+    for index, fname in enumerate(field_order):
+        edited_values.append(
+            st.text_input(
+                _LABEL_MAP.get(fname, fname),
+                value=fv.text[fname],
+                key=f"{p}_plan_value_{index}",
+            )
+        )
     st.caption(
         "空欄（手書き）: 氏名・生年月日・主病名・行動目標・食事/運動/喫煙指導・栄養状態"
     )
 
     # 編集後の値で FieldValues を再構築（値があれば連動チェックもON）
     fv_final = pdf_fill.FieldValues()
-    for fname, val in zip(field_order, edited["値"].tolist()):
+    for fname, val in zip(field_order, edited_values):
         val = "" if val is None else str(val).strip()
         if not val:
             continue
