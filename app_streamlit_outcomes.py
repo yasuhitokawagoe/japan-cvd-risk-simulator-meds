@@ -272,7 +272,36 @@ with st.sidebar:
     )
 
     st.divider()
-    st.subheader("💊 薬剤（薬品名＝用量）で目標値を自動生成")
+    st.subheader("🥗 まず取り組む食事・運動介入（文献ベース）")
+    st.caption("生活習慣介入を選んだうえで、必要に応じて下の薬剤介入を追加します。")
+    diet_intervention_keys = st.multiselect(
+        "食事介入",
+        list(DIET_EFFECTS),
+        format_func=lambda key: f"{DIET_EFFECTS[key].label}｜{DIET_EFFECTS[key].definition}",
+        key="evidence_diet_interventions",
+    )
+    exercise_intervention_key = st.selectbox(
+        "運動介入",
+        [None, *EXERCISE_EFFECTS],
+        format_func=lambda key: "選択しない" if key is None else (
+            f"{EXERCISE_EFFECTS[key].label}｜{EXERCISE_EFFECTS[key].definition}"
+        ),
+        key="evidence_exercise_intervention",
+    )
+    with st.expander("効果量と根拠を確認"):
+        for key in diet_intervention_keys:
+            effect = DIET_EFFECTS[key]
+            st.markdown(f"**{effect.label}**")
+            st.caption(f"{effect.evidence_summary} {effect.endpoint_evidence}")
+            st.link_button("文献を開く", effect.source_url, key=f"diet_source_{key}")
+        if exercise_intervention_key:
+            effect = EXERCISE_EFFECTS[exercise_intervention_key]
+            st.markdown(f"**{effect.label}**")
+            st.caption(f"{effect.evidence_summary} {effect.endpoint_evidence}")
+            st.link_button("文献を開く", effect.source_url, key=f"exercise_source_{exercise_intervention_key}")
+
+    st.divider()
+    st.subheader("💊 次に検討する薬剤介入（薬品名＝用量）")
 
     # 1. 薬剤オプションを先に定義
     sbp_options = [m["key"] for m in meds_catalog["sbp"]]
@@ -483,34 +512,6 @@ with st.sidebar:
                     st.markdown(meds_summary["side_effects_md"])
         elif mode == "adjust":
             st.caption("薬増減モード：現在服用中の薬を選択してください。")
-
-    st.divider()
-    st.subheader("🥗 食事・運動介入（文献ベース）")
-    diet_intervention_keys = st.multiselect(
-        "食事介入",
-        list(DIET_EFFECTS),
-        format_func=lambda key: f"{DIET_EFFECTS[key].label}｜{DIET_EFFECTS[key].definition}",
-        key="evidence_diet_interventions",
-    )
-    exercise_intervention_key = st.selectbox(
-        "運動介入",
-        [None, *EXERCISE_EFFECTS],
-        format_func=lambda key: "選択しない" if key is None else (
-            f"{EXERCISE_EFFECTS[key].label}｜{EXERCISE_EFFECTS[key].definition}"
-        ),
-        key="evidence_exercise_intervention",
-    )
-    with st.expander("効果量と根拠を確認"):
-        for key in diet_intervention_keys:
-            effect = DIET_EFFECTS[key]
-            st.markdown(f"**{effect.label}**")
-            st.caption(f"{effect.evidence_summary} {effect.endpoint_evidence}")
-            st.link_button("文献を開く", effect.source_url, key=f"diet_source_{key}")
-        if exercise_intervention_key:
-            effect = EXERCISE_EFFECTS[exercise_intervention_key]
-            st.markdown(f"**{effect.label}**")
-            st.caption(f"{effect.evidence_summary} {effect.endpoint_evidence}")
-            st.link_button("文献を開く", effect.source_url, key=f"exercise_source_{exercise_intervention_key}")
 
 # ====== 実際に使う目標値 ======
 if use_meds and meds_summary is not None:
