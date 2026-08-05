@@ -6,6 +6,9 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+# 患者向けPDFへ日本語TrueTypeフォントを埋め込む。
+ADD https://raw.githubusercontent.com/google/fonts/main/ofl/notosansjp/NotoSansJP%5Bwght%5D.ttf /usr/share/fonts/truetype/noto/NotoSansJP.ttf
+
 # 依存だけ先にコピーしてインストール（レイヤーキャッシュを効かせる）
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
