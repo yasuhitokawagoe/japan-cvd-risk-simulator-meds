@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import io
+import os
 from datetime import date
 from typing import Iterable, Mapping
 
@@ -9,10 +10,22 @@ from reportlab.lib.colors import HexColor, white
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
 
-FONT = "HeiseiKakuGo-W5"
-pdfmetrics.registerFont(UnicodeCIDFont(FONT))
+FONT = "NotoSansJP"
+_FONT_CANDIDATES = (
+    os.environ.get("PATIENT_REPORT_JP_FONT", ""),
+    "/usr/share/fonts/truetype/noto/NotoSansJP.ttf",
+)
+for _font_path in _FONT_CANDIDATES:
+    if _font_path and os.path.exists(_font_path):
+        pdfmetrics.registerFont(TTFont(FONT, _font_path, subfontIndex=0))
+        break
+else:
+    # ローカル開発環境向けの後方互換。RailwayではNoto Sans CJKを必ず使用する。
+    FONT = "HeiseiKakuGo-W5"
+    pdfmetrics.registerFont(UnicodeCIDFont(FONT))
 
 NAVY = HexColor("#14324A")
 BLUE = HexColor("#2878B5")
