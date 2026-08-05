@@ -6,6 +6,10 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+# 患者向けPDFへ正しい日本語字形を埋め込む。
+# CFF形式のCJK OTFではなく、ReportLabが埋め込めるTrueType版を使用する。
+ADD https://raw.githubusercontent.com/google/fonts/main/ofl/notosansjp/NotoSansJP%5Bwght%5D.ttf /usr/share/fonts/truetype/noto/NotoSansJP.ttf
+
 # 依存だけ先にコピーしてインストール（レイヤーキャッシュを効かせる）
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
