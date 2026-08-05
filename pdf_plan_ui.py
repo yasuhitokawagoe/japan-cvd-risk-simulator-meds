@@ -63,6 +63,7 @@ def render_plan_section(
     sbp_after: Optional[float] = None,
     ldl_after: Optional[float] = None,
     a1c_after: Optional[float] = None,
+    treatment_benefit: Optional[Mapping] = None,
     key_prefix: str = "pc",
 ) -> None:
     """
@@ -286,6 +287,12 @@ def render_plan_section(
     final_goals = list(selected_goals)
     if additional_goal and additional_goal.strip():
         final_goals.append(additional_goal.strip())
+    if treatment_benefit:
+        years = int(treatment_benefit.get("treatment_years", 0))
+        avoided = float(treatment_benefit.get("mi_stroke_avoided", 0.0))
+        final_goals.append(
+            f"服薬継続{years}年の推定成果：心筋梗塞・脳卒中を100人あたり約{avoided:.1f}件回避。治療を継続する"
+        )
     if final_goals:
         fv_final.text[pdf_fill.F_PLAN_FREETEXT] = "／".join(final_goals)
     if achievement_status and achievement_status.strip():
@@ -332,6 +339,7 @@ def render_plan_section(
                 goals=final_goals,
                 risks=risk_curves,
                 horizon_years=risk_horizon_years,
+                treatment_benefit=treatment_benefit,
             )
             st.success(
                 "現在の状態、介入前後の検査値、全死亡・心筋梗塞・脳卒中の"

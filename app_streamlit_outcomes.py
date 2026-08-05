@@ -225,7 +225,17 @@ def _se_md_for_changes(stopped, added, continued):
 
 
 with st.sidebar:
-    st.subheader("患者プロフィール")
+    st.subheader("⏪ 反実仮想で服薬継続の成果をみる")
+    backcast_enabled = st.checkbox(
+        "薬を飲まなかった場合と、治療を続けた現在を比較する",
+        value=False,
+        key="backcast_enabled",
+    )
+    if backcast_enabled:
+        st.caption("①反実仮想を選択 → ②現在の状態 → ③服用中の薬 → ④治療年数 → 結果")
+
+    st.divider()
+    st.subheader("② 現在の状態" if backcast_enabled else "患者プロフィール")
     sex = st.selectbox("性別", ["male", "female"], format_func=lambda x: "男性" if x == "male" else "女性")
     age = st.number_input("年齢（歳）", 20, 95, 60, step=1)
 
@@ -276,7 +286,7 @@ with st.sidebar:
     )
 
     st.divider()
-    st.subheader("💊 薬剤（薬品名＝用量）で目標値を自動生成")
+    st.subheader("③ 現在飲んでいる薬" if backcast_enabled else "💊 薬剤（薬品名＝用量）で目標値を自動生成")
 
     # 1. 薬剤オプションを先に定義
     sbp_options = [m["key"] for m in meds_catalog["sbp"]]
@@ -284,7 +294,9 @@ with st.sidebar:
     a1c_options = [m["key"] for m in meds_catalog["hba1c"]]
 
     # 2. 薬剤を使うかどうかのチェック
-    use_meds = st.checkbox("薬剤を選んで目標値を自動計算する", value=True)
+    use_meds = True if backcast_enabled else st.checkbox(
+        "薬剤を選んで目標値を自動計算する", value=True
+    )
 
     # 薬剤カタログ読み込み失敗時の警告
     if catalog_error:
@@ -310,14 +322,18 @@ with st.sidebar:
 
     if use_meds and meds_catalog:
         # モード切り替え
-        mode = st.radio(
-            "シミュレーションモード",
-            ["add", "adjust"],
-            format_func=lambda x: (
-                "💊 薬を追加する" if x == "add"
-                else "💊 薬を増減させる"
-            ),
-        )
+        if backcast_enabled:
+            mode = "adjust"
+            st.info("反実仮想では、現在服用中の薬を入力します。")
+        else:
+            mode = st.radio(
+                "シミュレーションモード",
+                ["add", "adjust"],
+                format_func=lambda x: (
+                    "💊 薬を追加する" if x == "add"
+                    else "💊 薬を増減させる"
+                ),
+            )
 
         if mode == "add":
             # 既存の薬追加UI
@@ -489,18 +505,13 @@ with st.sidebar:
             st.caption("薬増減モード：現在服用中の薬を選択してください。")
 
     st.divider()
-    st.subheader("⏪ これまでの治療で得られた利益")
-    backcast_enabled = st.checkbox(
-        "薬を飲まなかった場合と、治療を続けた現在を比較する",
-        value=False,
-        key="backcast_enabled",
-    )
+    st.subheader("④ 治療期間を入力" if backcast_enabled else "⏪ これまでの治療で得られた利益")
     backcast_treatment_years = 1
     backcast_medication_years = {}
     backcast_keys = [*current_sbp_keys, *current_ldl_keys, *current_a1c_keys]
     if backcast_enabled:
-        if mode != "adjust" or not backcast_keys:
-            st.info("「薬を増減させる」を選び、現在服用中の薬を入力してください。")
+        if not backcast_keys:
+            st.info("上で現在服用中の薬を入力すると計算できます。")
         else:
             backcast_treatment_years = st.number_input(
                 "治療を始めてからの年数",
@@ -786,6 +797,7 @@ for outcome_config in outcomes_config:
 # ============================================================
 # ⏪ これまでの治療で得られた利益（反実仮想）
 # ============================================================
+backcast_summary = None
 if backcast_enabled and mode == "adjust" and backcast_keys:
     past_sbp_meds = selected_medications(meds_catalog, "sbp", current_sbp_keys)
     past_ldl_meds = selected_medications(meds_catalog, "ldl", current_ldl_keys)
@@ -823,7 +835,7 @@ if backcast_enabled and mode == "adjust" and backcast_keys:
         }
 
     st.divider()
-    st.markdown("## ⏪ これまでの治療で積み上げた成果")
+    st.markdown("## ⑤ 計算結果：これまでの治療で積み上げた成果")
     st.caption(
         f"{start_age}歳から現在までの{int(backcast_treatment_years)}年間を、"
         "薬を飲まなかった反実仮想と比較します。"
@@ -877,6 +889,15 @@ if backcast_enabled and mode == "adjust" and backcast_keys:
         max(0.0, backcast_curves[o]["untreated"][-1] - backcast_curves[o]["treated"][-1])
         for o in ("mi", "stroke")
     )
+    backcast_summary = {
+        "treatment_years": int(backcast_treatment_years),
+        "start_age": start_age,
+        "medications": [*current_sbp_keys, *current_ldl_keys, *current_a1c_keys],
+        "mortality_avoided": max(0.0, backcast_curves["mortality"]["untreated"][-1] - backcast_curves["mortality"]["treated"][-1]),
+        "mi_avoided": max(0.0, backcast_curves["mi"]["untreated"][-1] - backcast_curves["mi"]["treated"][-1]),
+        "stroke_avoided": max(0.0, backcast_curves["stroke"]["untreated"][-1] - backcast_curves["stroke"]["treated"][-1]),
+        "mi_stroke_avoided": avoided,
+    }
     st.success(
         f"治療を続けたことで、心筋梗塞・脳卒中を合わせて100人あたり約{avoided:.1f}件を"
         f"回避してきた可能性があります。これまでの服薬と通院で積み上げた成果です。"
@@ -911,5 +932,6 @@ pdf_plan_ui.render_plan_section(
     sbp_after=sbp_tgt,
     ldl_after=ldl_tgt,
     a1c_after=a1c_tgt,
+    treatment_benefit=backcast_summary,
     key_prefix="pc",
 )

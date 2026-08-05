@@ -142,6 +142,7 @@ def generate_patient_report_pdf(
     goals: Iterable[str],
     risks: Mapping[str, Mapping[str, Iterable[float]]],
     horizon_years: int,
+    treatment_benefit: Mapping | None = None,
 ) -> bytes:
     """A4 2ページの患者向け説明資料を返す。"""
     buf = io.BytesIO()
@@ -212,10 +213,19 @@ def generate_patient_report_pdf(
         goal_y -= 4
 
     c.setFillColor(PALE_BLUE)
-    c.roundRect(30, 58, 535, 65, 7, fill=1, stroke=0)
-    _text(c, 43, 101, "次回の振り返り", 10, NAVY)
-    _text(c, 43, 82, "できたことを確認し、難しかった目標は無理のない内容へ調整しましょう。", 9)
-    _text(c, 43, 65, "体調の変化や薬の副作用が気になる場合は、自己判断で中止せず医療者へ相談してください。", 8, GRAY)
+    c.roundRect(30, 58, 535, 85 if treatment_benefit else 65, 7, fill=1, stroke=0)
+    if treatment_benefit:
+        years = int(treatment_benefit.get("treatment_years", 0))
+        avoided = float(treatment_benefit.get("mi_stroke_avoided", 0.0))
+        mortality = float(treatment_benefit.get("mortality_avoided", 0.0))
+        _text(c, 43, 121, "これまで薬を続けて積み上げた推定成果", 10, NAVY)
+        _text(c, 43, 102, f"{years}年間で、心筋梗塞・脳卒中を100人あたり約{avoided:.1f}件回避した可能性があります。", 9)
+        _text(c, 43, 84, f"全死亡の推定差は100人あたり約{mortality:.1f}件。現在の治療を継続しましょう。", 9)
+        _text(c, 43, 65, "推定値です。薬を自己判断で中止せず、変更は主治医と相談してください。", 8, GRAY)
+    else:
+        _text(c, 43, 101, "次回の振り返り", 10, NAVY)
+        _text(c, 43, 82, "できたことを確認し、難しかった目標は無理のない内容へ調整しましょう。", 9)
+        _text(c, 43, 65, "体調の変化や薬の副作用が気になる場合は、自己判断で中止せず医療者へ相談してください。", 8, GRAY)
     _text(c, page_w - 30, 27, "教育・共有意思決定用の推定資料（医療機器ではありません）", 7.5, GRAY, "right")
     c.save()
     return buf.getvalue()
