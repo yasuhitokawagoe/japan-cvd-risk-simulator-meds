@@ -9,6 +9,11 @@ import numpy as np
 from calc_engine_outcomes import OutcomesEngine
 from meds_catalog import load_meds_catalog, apply_meds_to_targets, MedicationAdjustment
 import pdf_plan_ui
+from treatment_backcast import (
+    exposure_adjusted_values,
+    reconstruct_untreated_values,
+    selected_medications,
+)
 
 st.set_page_config(page_title="JP Outcomes Prevention Simulator (MVP)", layout="wide", page_icon="🫀")
 
@@ -483,6 +488,38 @@ with st.sidebar:
         elif mode == "adjust":
             st.caption("薬増減モード：現在服用中の薬を選択してください。")
 
+    st.divider()
+    st.subheader("⏪ これまでの治療で得られた利益")
+    backcast_enabled = st.checkbox(
+        "薬を飲まなかった場合と、治療を続けた現在を比較する",
+        value=False,
+        key="backcast_enabled",
+    )
+    backcast_treatment_years = 1
+    backcast_medication_years = {}
+    backcast_keys = [*current_sbp_keys, *current_ldl_keys, *current_a1c_keys]
+    if backcast_enabled:
+        if mode != "adjust" or not backcast_keys:
+            st.info("「薬を増減させる」を選び、現在服用中の薬を入力してください。")
+        else:
+            backcast_treatment_years = st.number_input(
+                "治療を始めてからの年数",
+                min_value=1,
+                max_value=max(1, int(age) - 20),
+                value=min(10, max(1, int(age) - 20)),
+                step=1,
+                key="backcast_treatment_years",
+            )
+            st.caption("各薬を飲み始めてからの年数（途中から追加した薬は短く設定）")
+            for med_key in backcast_keys:
+                backcast_medication_years[med_key] = st.number_input(
+                    med_key,
+                    min_value=0.0,
+                    value=float(backcast_treatment_years),
+                    step=1.0,
+                    key=f"backcast_years_{med_key}",
+                )
+
 # ====== 実際に使う目標値 ======
 if use_meds and meds_summary is not None:
     sbp_tgt = float(meds_summary["sbp_target"])
@@ -744,6 +781,110 @@ for outcome_config in outcomes_config:
     if outcome_config["key"] == "mortality":
         st.caption(MORTALITY_ALL_CAUSE_DEATH_CAPTION)
     st.markdown("---")
+
+
+# ============================================================
+# ⏪ これまでの治療で得られた利益（反実仮想）
+# ============================================================
+if backcast_enabled and mode == "adjust" and backcast_keys:
+    past_sbp_meds = selected_medications(meds_catalog, "sbp", current_sbp_keys)
+    past_ldl_meds = selected_medications(meds_catalog, "ldl", current_ldl_keys)
+    past_a1c_meds = selected_medications(meds_catalog, "hba1c", current_a1c_keys)
+    untreated_values = reconstruct_untreated_values(
+        sbp_now=sbp_now, ldl_now=ldl_now, a1c_now=a1c_now,
+        sbp_meds=past_sbp_meds, ldl_meds=past_ldl_meds, a1c_meds=past_a1c_meds,
+    )
+    treated_average = exposure_adjusted_values(
+        untreated=untreated_values,
+        current={"sbp": sbp_now, "ldl": ldl_now, "a1c": a1c_now},
+        treatment_years=int(backcast_treatment_years),
+        medication_years=backcast_medication_years,
+        sbp_meds=past_sbp_meds, ldl_meds=past_ldl_meds, a1c_meds=past_a1c_meds,
+    )
+    start_age = int(age) - int(backcast_treatment_years)
+    backcast_curves = {}
+    for outcome in OUTCOME_DISPLAY_ORDER:
+        no_treatment, treated = [0.0], [0.0]
+        time_points = [0]
+        for elapsed in range(1, int(backcast_treatment_years) + 1):
+            result = engine.cumulative_incidence(
+                outcome, sex, start_age, elapsed,
+                untreated_values["sbp"], treated_average["sbp"],
+                untreated_values["ldl"], treated_average["ldl"],
+                untreated_values["a1c"], treated_average["a1c"],
+                smoking_status, cigs_per_day, years_smoked, years_since_quit,
+                assume_quit_today_in_target=False,
+            )
+            time_points.append(elapsed)
+            no_treatment.append(result["baseline"] * 100)
+            treated.append(result["target"] * 100)
+        backcast_curves[outcome] = {
+            "time": time_points, "untreated": no_treatment, "treated": treated,
+        }
+
+    st.divider()
+    st.markdown("## ⏪ これまでの治療で積み上げた成果")
+    st.caption(
+        f"{start_age}歳から現在までの{int(backcast_treatment_years)}年間を、"
+        "薬を飲まなかった反実仮想と比較します。"
+    )
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown("**薬を飲まなかった場合の推定値**")
+        st.write(
+            f"SBP {untreated_values['sbp']:.0f} mmHg／LDL {untreated_values['ldl']:.0f} mg/dL／"
+            f"HbA1c {untreated_values['a1c']:.1f}%"
+        )
+    with c2:
+        st.markdown("**服薬年数を考慮した期間平均**")
+        st.write(
+            f"SBP {treated_average['sbp']:.0f} mmHg／LDL {treated_average['ldl']:.0f} mg/dL／"
+            f"HbA1c {treated_average['a1c']:.1f}%"
+        )
+
+    metric_cols = st.columns(3)
+    for col, outcome in zip(metric_cols, OUTCOME_DISPLAY_ORDER):
+        no_tx = backcast_curves[outcome]["untreated"][-1]
+        tx = backcast_curves[outcome]["treated"][-1]
+        arr = max(0.0, no_tx - tx)
+        nnt_text = f"NNT相当 約{100/arr:.0f}人" if arr > 0.05 else "差はごく小さい"
+        with col:
+            st.metric(
+                labels[outcome], f"{arr:.1f}ポイント回避",
+                delta=f"無治療 {no_tx:.1f}% → 治療あり {tx:.1f}%",
+            )
+            st.caption(f"100人あたり約{arr:.1f}件／{nnt_text}")
+
+    fig_backcast = go.Figure()
+    colors = {"mortality": "#6B7280", "mi": "#E45756", "stroke": "#4C78A8"}
+    for outcome in OUTCOME_DISPLAY_ORDER:
+        curve = backcast_curves[outcome]
+        fig_backcast.add_trace(go.Scatter(
+            x=curve["time"], y=curve["untreated"], mode="lines",
+            name=f"{labels[outcome]}：薬なし", line=dict(color=colors[outcome], dash="dash"),
+        ))
+        fig_backcast.add_trace(go.Scatter(
+            x=curve["time"], y=curve["treated"], mode="lines",
+            name=f"{labels[outcome]}：治療継続", line=dict(color=colors[outcome]),
+        ))
+    fig_backcast.update_layout(
+        title="薬を飲まなかった経路 vs 治療を続けた経路",
+        xaxis_title="治療開始からの年数", yaxis_title="累積リスク（%）",
+        height=500, hovermode="x unified",
+    )
+    st.plotly_chart(fig_backcast, width="stretch")
+    avoided = sum(
+        max(0.0, backcast_curves[o]["untreated"][-1] - backcast_curves[o]["treated"][-1])
+        for o in ("mi", "stroke")
+    )
+    st.success(
+        f"治療を続けたことで、心筋梗塞・脳卒中を合わせて100人あたり約{avoided:.1f}件を"
+        f"回避してきた可能性があります。これまでの服薬と通院で積み上げた成果です。"
+    )
+    st.caption(
+        "これは薬剤カタログの平均効果から逆算した反実仮想推定です。"
+        "治療開始前の実測値、服薬遵守、用量変更、生活習慣の変化は完全には再現できません。"
+    )
 
 
 # ============================================================
