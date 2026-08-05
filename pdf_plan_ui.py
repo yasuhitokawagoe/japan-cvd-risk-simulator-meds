@@ -213,6 +213,16 @@ def render_plan_section(
             key=f"{p}_achievement",
             placeholder="継続受診時、前回目標の達成状況を記入",
         )
+        treatment_plan_status = None
+        if treatment_benefit:
+            treatment_plan_status = st.radio(
+                "反実仮想の結果を踏まえた評価・方針",
+                [
+                    "現在の治療で目標は達成できている。治療を継続する",
+                    "一定の成果は得られている。さらに改善を目指す",
+                ],
+                key=f"{p}_backcast_plan_status",
+            )
 
     # --- PlanInput 組み立て ---
     plan = pdf_fill.PlanInput(
@@ -289,14 +299,14 @@ def render_plan_section(
         final_goals.append(additional_goal.strip())
     if treatment_benefit:
         years = int(treatment_benefit.get("treatment_years", 0))
-        avoided = float(treatment_benefit.get("mi_stroke_avoided", 0.0))
-        final_goals.append(
-            f"服薬継続{years}年の推定成果：心筋梗塞・脳卒中を100人あたり約{avoided:.1f}件回避。治療を継続する"
-        )
+        final_goals.append(f"服薬継続{years}年で得られた検査値改善を維持する")
     if final_goals:
         fv_final.text[pdf_fill.F_PLAN_FREETEXT] = "／".join(final_goals)
-    if achievement_status and achievement_status.strip():
-        fv_final.text[pdf_fill.F_ACHIEVEMENT_STATUS] = achievement_status.strip()
+    final_achievement = achievement_status.strip() if achievement_status else ""
+    if not final_achievement and treatment_plan_status:
+        final_achievement = treatment_plan_status
+    if final_achievement:
+        fv_final.text[pdf_fill.F_ACHIEVEMENT_STATUS] = final_achievement
 
     # 区分（初回/継続）
     if plan.visit_type == "initial":
@@ -316,12 +326,15 @@ def render_plan_section(
 
     if height_cm is not None and weight_kg is not None and sbp_now is not None and dbp_now is not None:
         st.markdown("#### 患者さん向け資料")
-        if risk_curves and risk_horizon_years:
+        if (risk_curves and risk_horizon_years) or treatment_benefit:
             selected_diagnoses = [
                 label for enabled, label in (
                     (dx_dm, "糖尿病"), (dx_htn, "高血圧症"), (dx_dl, "脂質異常症")
                 ) if enabled
             ]
+            report_treatment_benefit = dict(treatment_benefit or {})
+            if treatment_plan_status:
+                report_treatment_benefit["plan_status"] = treatment_plan_status
             report_pdf = generate_patient_report_pdf(
                 age=int(age),
                 sex_label="男性" if sex == "male" else "女性",
@@ -339,7 +352,7 @@ def render_plan_section(
                 goals=final_goals,
                 risks=risk_curves,
                 horizon_years=risk_horizon_years,
-                treatment_benefit=treatment_benefit,
+                treatment_benefit=report_treatment_benefit or None,
             )
             st.success(
                 "現在の状態、介入前後の検査値、全死亡・心筋梗塞・脳卒中の"

@@ -239,51 +239,63 @@ with st.sidebar:
     sex = st.selectbox("性別", ["male", "female"], format_func=lambda x: "男性" if x == "male" else "女性")
     age = st.number_input("年齢（歳）", 20, 95, 60, step=1)
 
-    st.subheader("リスク因子（現在 → 目標）")
+    st.subheader("現在の検査値" if backcast_enabled else "リスク因子（現在 → 目標）")
     sbp_now = st.slider("収縮期血圧 現在 (mmHg)", 90, 200, 150)
-    sbp_tgt_manual = st.slider("収縮期血圧 目標 (mmHg)", 90, 160, 130)
-
     ldl_now = st.slider("LDL 現在 (mg/dL)", 50, 250, 160)
-    ldl_tgt_manual = st.slider("LDL 目標 (mg/dL)", 50, 160, 100)
-
     a1c_now = st.slider("HbA1c 現在 (%)", 5.0, 12.0, 8.0, step=0.1)
-    a1c_tgt_manual = st.slider("HbA1c 目標 (%)", 5.0, 9.0, 7.0, step=0.1)
+    if backcast_enabled:
+        sbp_tgt_manual, ldl_tgt_manual, a1c_tgt_manual = sbp_now, ldl_now, a1c_now
+        smoking_status, cigs_per_day = "never", 0
+        years_smoked, years_since_quit, quit_today = 0, 0, False
+    else:
+        sbp_tgt_manual = st.slider("収縮期血圧 目標 (mmHg)", 90, 160, 130)
+        ldl_tgt_manual = st.slider("LDL 目標 (mg/dL)", 50, 160, 100)
+        a1c_tgt_manual = st.slider("HbA1c 目標 (%)", 5.0, 9.0, 7.0, step=0.1)
 
-    st.subheader("喫煙状況")
-    smoking_status = st.selectbox(
-        "状況", ["never", "current", "former"],
-        format_func=lambda x: {"never": "非喫煙者", "current": "現在喫煙者", "former": "元喫煙者"}[x]
-    )
-    cigs_per_day = st.slider("1日あたりの喫煙本数", 0, 40, 20)
-    years_smoked = st.slider("喫煙年数", 0, 60, 20)
-    years_since_quit = st.slider("禁煙からの年数（元喫煙者の場合）", 0, 40, 5)
-    quit_today = st.checkbox("今日禁煙したと仮定（目標シナリオ）")
+        st.subheader("喫煙状況")
+        smoking_status = st.selectbox(
+            "状況", ["never", "current", "former"],
+            format_func=lambda x: {"never": "非喫煙者", "current": "現在喫煙者", "former": "元喫煙者"}[x]
+        )
+        cigs_per_day = st.slider("1日あたりの喫煙本数", 0, 40, 20)
+        years_smoked = st.slider("喫煙年数", 0, 60, 20)
+        years_since_quit = st.slider("禁煙からの年数（元喫煙者の場合）", 0, 40, 5)
+        quit_today = st.checkbox("今日禁煙したと仮定（目標シナリオ）")
 
     st.subheader("体格")
     height_cm = st.number_input("身長 (cm)", min_value=120.0, max_value=220.0, value=165.0, step=0.1)
     weight_kg = st.number_input("体重 (kg)", min_value=30.0, max_value=200.0, value=65.0, step=0.1)
     bmi_now = weight_kg / (height_cm / 100.0) ** 2
     bmi_target = 22.0
-    st.caption(f"現在BMI: {bmi_now:.1f}／目標BMI: 22.0（目標体重 {22 * (height_cm / 100.0) ** 2:.1f} kg）")
+    if backcast_enabled:
+        st.caption(f"現在BMI: {bmi_now:.1f}")
+    else:
+        st.caption(f"現在BMI: {bmi_now:.1f}／目標BMI: 22.0（目標体重 {22 * (height_cm / 100.0) ** 2:.1f} kg）")
 
     dbp_now = st.number_input("拡張期血圧 現在 (mmHg)", min_value=40, max_value=130, value=90, step=1)
     col_b1, col_b2 = st.columns(2)
     with col_b1:
         st.metric("現在BMI", f"{bmi_now:.1f}")
     with col_b2:
-        st.metric("目標BMI", "22.0")
+        if not backcast_enabled:
+            st.metric("目標BMI", "22.0")
 
-    st.subheader("CKD（任意）")
-    egfr_now = st.number_input("eGFR 現在", min_value=5.0, max_value=120.0, value=80.0, step=1.0)
-    egfr_target = st.number_input("eGFR 目標（任意）", min_value=5.0, max_value=120.0, value=80.0, step=1.0)
-    acr_now = st.selectbox("尿アルブミン/蛋白（現在）", ["A1", "A2", "A3"], index=0)
-    acr_target = st.selectbox("尿アルブミン/蛋白（目標・任意）", ["A1", "A2", "A3"], index=0)
+    if backcast_enabled:
+        egfr_now = egfr_target = 80.0
+        acr_now = acr_target = "A1"
+        which = "10-year"
+    else:
+        st.subheader("CKD（任意）")
+        egfr_now = st.number_input("eGFR 現在", min_value=5.0, max_value=120.0, value=80.0, step=1.0)
+        egfr_target = st.number_input("eGFR 目標（任意）", min_value=5.0, max_value=120.0, value=80.0, step=1.0)
+        acr_now = st.selectbox("尿アルブミン/蛋白（現在）", ["A1", "A2", "A3"], index=0)
+        acr_target = st.selectbox("尿アルブミン/蛋白（目標・任意）", ["A1", "A2", "A3"], index=0)
 
-    st.subheader("予測期間")
-    which = st.radio(
-        "期間を選択", ["5-year", "10-year", "20-year", "30-year", "50-year", "Both"], index=2,
-        format_func=lambda x: {"5-year": "5年", "10-year": "10年", "20-year": "20年", "30-year": "30年", "50-year": "50年", "Both": "両方"}[x]
-    )
+        st.subheader("予測期間")
+        which = st.radio(
+            "期間を選択", ["5-year", "10-year", "20-year", "30-year", "50-year", "Both"], index=2,
+            format_func=lambda x: {"5-year": "5年", "10-year": "10年", "20-year": "20年", "30-year": "30年", "50-year": "50年", "Both": "両方"}[x]
+        )
 
     st.divider()
     st.subheader("③ 現在飲んでいる薬" if backcast_enabled else "💊 薬剤（薬品名＝用量）で目標値を自動生成")
@@ -323,8 +335,32 @@ with st.sidebar:
     if use_meds and meds_catalog:
         # モード切り替え
         if backcast_enabled:
-            mode = "adjust"
+            mode = "backcast"
             st.info("反実仮想では、現在服用中の薬を入力します。")
+        elif mode == "backcast":
+            current_sbp_keys = st.multiselect("降圧薬（現在）", options=sbp_options, key="current_sbp")
+            current_ldl_keys = st.multiselect("脂質薬（現在）", options=ldl_options, key="current_ldl")
+            current_a1c_keys = st.multiselect("糖尿病薬（現在）", options=a1c_options, key="current_a1c")
+            adjusted_sbp_keys = list(current_sbp_keys)
+            adjusted_ldl_keys = list(current_ldl_keys)
+            adjusted_a1c_keys = list(current_a1c_keys)
+            current_meds = {
+                "sbp": [m for m in meds_catalog["sbp"] if m["key"] in current_sbp_keys],
+                "ldl": [m for m in meds_catalog["ldl"] if m["key"] in current_ldl_keys],
+                "hba1c": [m for m in meds_catalog["hba1c"] if m["key"] in current_a1c_keys],
+            }
+            adj = MedicationAdjustment(
+                sbp_now=float(sbp_now), ldl_now_mg=float(ldl_now), a1c_now=float(a1c_now),
+                current_meds=current_meds, adjusted_meds=current_meds,
+            )
+            all_current_meds = [m for domain in current_meds.values() for m in domain]
+            costs = adj.costs()
+            meds_summary = {
+                "sbp_target": float(sbp_now), "ldl_target": float(ldl_now), "a1c_target": float(a1c_now),
+                "annual_cost_yen": costs["baseline"],
+                "side_effects_md": _se_md_for_changes([], [], all_current_meds),
+                "mode": "backcast", "costs": costs,
+            }
         else:
             mode = st.radio(
                 "シミュレーションモード",
@@ -464,7 +500,10 @@ with st.sidebar:
         # 結果表示
         st.caption("合成ルール：SBPは足し算 / LDLは%低下を掛け算 / HbA1cは足し算")
         if meds_summary is not None:
-            if meds_summary.get("mode") == "adjust":
+            if meds_summary.get("mode") == "backcast":
+                st.metric("年間薬剤費（概算）", f"{meds_summary['annual_cost_yen']:,} 円/年")
+                st.caption("検査値の反実仮想結果はメイン画面に表示します。")
+            elif meds_summary.get("mode") == "adjust":
                 st.metric("年間薬剤費（変更後）", f"{meds_summary['annual_cost_yen']:,} 円/年")
                 st.markdown("**自動計算された目標値（この値でリスク計算）**")
                 st.write(f"- SBP 目標: **{meds_summary['sbp_target']:.0f} mmHg**")
@@ -521,15 +560,8 @@ with st.sidebar:
                 step=1,
                 key="backcast_treatment_years",
             )
-            st.caption("各薬を飲み始めてからの年数（途中から追加した薬は短く設定）")
             for med_key in backcast_keys:
-                backcast_medication_years[med_key] = st.number_input(
-                    med_key,
-                    min_value=0.0,
-                    value=float(backcast_treatment_years),
-                    step=1.0,
-                    key=f"backcast_years_{med_key}",
-                )
+                backcast_medication_years[med_key] = float(backcast_treatment_years)
 
 # ====== 実際に使う目標値 ======
 if use_meds and meds_summary is not None:
@@ -642,49 +674,85 @@ params_changed = st.session_state.params_hash != params_hash
 should_auto_calculate = params_changed and st.session_state.calculated
 
 # 手動ボタンまたは自動計算
-manual_button_clicked = st.button("🔄 リスク計算を実行", type="primary")
-if manual_button_clicked or should_auto_calculate:
+manual_button_clicked = False if backcast_enabled else st.button("🔄 リスク計算を実行", type="primary")
+if not backcast_enabled and (manual_button_clicked or should_auto_calculate):
     with st.spinner("リスク計算中..."):
         st.session_state.cumulative_data = calculate_cumulative_risk_curves(years_for_curve)
         st.session_state.calculated = True
         st.session_state.years = years_for_curve
         st.session_state.params_hash = params_hash
 
-if not st.session_state.calculated:
+if not backcast_enabled and not st.session_state.calculated:
     st.info("👆 上記のパラメータを設定して「リスク計算を実行」を押してください")
     st.stop()
 
-cumulative_data = st.session_state.cumulative_data
+cumulative_data = st.session_state.cumulative_data or {}
+
+# ---- 反実仮想モード：通常の将来リスク表示を、この結果へ丸ごと差し替える ----
+backcast_summary = None
+if backcast_enabled and backcast_keys:
+    past_sbp_meds = selected_medications(meds_catalog, "sbp", current_sbp_keys)
+    past_ldl_meds = selected_medications(meds_catalog, "ldl", current_ldl_keys)
+    past_a1c_meds = selected_medications(meds_catalog, "hba1c", current_a1c_keys)
+    untreated_values = reconstruct_untreated_values(
+        sbp_now=sbp_now, ldl_now=ldl_now, a1c_now=a1c_now,
+        sbp_meds=past_sbp_meds, ldl_meds=past_ldl_meds, a1c_meds=past_a1c_meds,
+    )
+    backcast_summary = {
+        "treatment_years": int(backcast_treatment_years),
+        "medications": [*current_sbp_keys, *current_ldl_keys, *current_a1c_keys],
+        "current_sbp": float(sbp_now), "current_ldl": float(ldl_now), "current_a1c": float(a1c_now),
+        "untreated_sbp": float(untreated_values["sbp"]),
+        "untreated_ldl": float(untreated_values["ldl"]),
+        "untreated_a1c": float(untreated_values["a1c"]),
+    }
+    st.markdown("## ⑤ 服薬しなかった場合との推定比較")
+    st.caption(f"現在までの{int(backcast_treatment_years)}年間について、薬剤カタログの平均効果から逆算した推定です。")
+    result_cols = st.columns(3)
+    for col, label, untreated, current, unit in (
+        (result_cols[0], "収縮期血圧", untreated_values["sbp"], sbp_now, "mmHg"),
+        (result_cols[1], "LDL", untreated_values["ldl"], ldl_now, "mg/dL"),
+        (result_cols[2], "HbA1c", untreated_values["a1c"], a1c_now, "%"),
+    ):
+        with col:
+            st.metric(label, f"現在 {current:.1f} {unit}", delta=f"薬なし推定 {untreated:.1f} {unit}")
+    st.success("現在の数値は、服薬を続けて得られている成果です。自己判断で中止せず、今後の方針を主治医と相談しましょう。")
+elif backcast_enabled:
+    st.info("現在服用中の薬を選ぶと、服薬しなかった場合の推定値を表示します。")
 
 # ---- サマリー ----
-st.markdown("## 📊 リスク比較サマリー")
 labels = {"mi": "心筋梗塞", "stroke": "脳卒中", "mortality": "全死亡"}
-cols = st.columns(3)
-
-for i, outcome in enumerate(OUTCOME_DISPLAY_ORDER):
-    with cols[i]:
-        st.subheader(labels[outcome])
-        for horizon in horizons:
-            r = engine.cumulative_incidence(
-                outcome, sex, age, horizon,
-                sbp_now, sbp_tgt, ldl_now, ldl_tgt, a1c_now, a1c_tgt,
-                smoking_status, cigs_per_day, years_smoked, years_since_quit,
-                assume_quit_today_in_target=quit_today
-            )
-            arr = (r["baseline"] - r["target"]) * 100.0
-            st.metric(
-                f"{horizon}年 リスク減少（ARR）",
-                f"{arr:.1f}%",
-                delta=f"現在 {r['baseline']*100:.1f}% → 目標 {r['target']*100:.1f}%"
-            )
-        if outcome == "mortality":
-            st.caption(MORTALITY_ALL_CAUSE_DEATH_CAPTION)
+if not backcast_enabled:
+    st.markdown("## 📊 リスク比較サマリー")
+    cols = st.columns(3)
+    for i, outcome in enumerate(OUTCOME_DISPLAY_ORDER):
+        with cols[i]:
+            st.subheader(labels[outcome])
+            for horizon in horizons:
+                r = engine.cumulative_incidence(
+                    outcome, sex, age, horizon,
+                    sbp_now, sbp_tgt, ldl_now, ldl_tgt, a1c_now, a1c_tgt,
+                    smoking_status, cigs_per_day, years_smoked, years_since_quit,
+                    assume_quit_today_in_target=quit_today
+                )
+                arr = (r["baseline"] - r["target"]) * 100.0
+                st.metric(f"{horizon}年 リスク減少（ARR）", f"{arr:.1f}%", delta=f"現在 {r['baseline']*100:.1f}% → 目標 {r['target']*100:.1f}%")
+            if outcome == "mortality":
+                st.caption(MORTALITY_ALL_CAUSE_DEATH_CAPTION)
 
 st.divider()
 
 st.markdown("## 💴 費用と副作用（薬剤選択時）")
 if use_meds and meds_summary is not None:
-    if meds_summary.get("mode") == "adjust":
+    if meds_summary.get("mode") == "backcast":
+        annual_cost = int(meds_summary["annual_cost_yen"])
+        st.metric("年間薬剤費（現在）", f"{annual_cost:,} 円/年")
+        st.metric(
+            f"治療{int(backcast_treatment_years)}年間に支払った薬剤費の概算",
+            f"{annual_cost * int(backcast_treatment_years):,} 円",
+        )
+        st.caption("現在の薬価を治療期間に単純乗算した概算です。過去の薬価・処方変更・自己負担割合は反映していません。")
+    elif meds_summary.get("mode") == "adjust":
         costs = meds_summary["costs"]
         delta = costs["delta"]
         delta_sign = "＋" if delta > 0 else ""
@@ -718,7 +786,8 @@ else:
 st.divider()
 
 # ---- 曲線（MI / Stroke / Mortality すべて表示） ----
-st.markdown("## 📈 累積リスク曲線（95%CI）")
+if not backcast_enabled:
+    st.markdown("## 📈 累積リスク曲線（95%CI）")
 
 _OUTCOME_DETAIL_META = {
     "mortality": {"title": "💀 全死亡", "icon": "💀"},
@@ -785,20 +854,20 @@ def plot_risk_curve(outcome_key: str, title: str):
 
     return fig
 
-for outcome_config in outcomes_config:
-    st.markdown(f"### {outcome_config['title']}")
-    fig = plot_risk_curve(outcome_config["key"], outcome_config["title"])
-    st.plotly_chart(fig, width="stretch")
-    if outcome_config["key"] == "mortality":
-        st.caption(MORTALITY_ALL_CAUSE_DEATH_CAPTION)
-    st.markdown("---")
+if not backcast_enabled:
+    for outcome_config in outcomes_config:
+        st.markdown(f"### {outcome_config['title']}")
+        fig = plot_risk_curve(outcome_config["key"], outcome_config["title"])
+        st.plotly_chart(fig, width="stretch")
+        if outcome_config["key"] == "mortality":
+            st.caption(MORTALITY_ALL_CAUSE_DEATH_CAPTION)
+        st.markdown("---")
 
 
 # ============================================================
 # ⏪ これまでの治療で得られた利益（反実仮想）
 # ============================================================
-backcast_summary = None
-if backcast_enabled and mode == "adjust" and backcast_keys:
+if False:  # 旧イベント推定表示は、上の検査値比較へ置き換え済み
     past_sbp_meds = selected_medications(meds_catalog, "sbp", current_sbp_keys)
     past_ldl_meds = selected_medications(meds_catalog, "ldl", current_ldl_keys)
     past_a1c_meds = selected_medications(meds_catalog, "hba1c", current_a1c_keys)
@@ -927,8 +996,8 @@ pdf_plan_ui.render_plan_section(
     bp_medications=tuple(current_sbp_keys or sbp_sel_keys),
     lipid_medications=tuple(current_ldl_keys or ldl_sel_keys),
     diabetes_medications=tuple(current_a1c_keys or a1c_sel_keys),
-    risk_curves=cumulative_data,
-    risk_horizon_years=int(st.session_state.years),
+    risk_curves=None if backcast_enabled else cumulative_data,
+    risk_horizon_years=int(st.session_state.years) if st.session_state.years else None,
     sbp_after=sbp_tgt,
     ldl_after=ldl_tgt,
     a1c_after=a1c_tgt,

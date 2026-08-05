@@ -149,6 +149,45 @@ def generate_patient_report_pdf(
     c = canvas.Canvas(buf, pagesize=A4)
     page_w, page_h = A4
 
+    if treatment_benefit:
+        years = int(treatment_benefit.get("treatment_years", 0))
+        c.setFillColor(NAVY)
+        c.rect(0, page_h - 92, page_w, 92, fill=1, stroke=0)
+        _text(c, 30, page_h - 43, "お薬を続けて得られている成果", 20, white)
+        _text(c, 30, page_h - 68, f"現在までの{years}年間を、薬を飲まなかった場合と比べた推定", 10, white)
+        _text(c, page_w - 30, page_h - 68, date.today().strftime("%Y.%m.%d"), 8, white, "right")
+
+        y = page_h - 120
+        y = _section_title(c, y, "1. 現在の状態と服薬")
+        _text(c, 42, y, f"{age}歳・{sex_label}　身長 {height_cm:.1f} cm　体重 {weight_kg:.1f} kg", 10)
+        _text(c, 42, y - 22, "現在服用中: " + ("、".join(medications) if list(medications) else "なし／未入力"), 9, GRAY)
+
+        y -= 66
+        y = _section_title(c, y, "2. 薬を飲まなかった場合との推定比較")
+        card_y = y - 62
+        _metric_card(c, 30, card_y, 170, "収縮期血圧（薬なし推定→現在）", float(treatment_benefit["untreated_sbp"]), float(treatment_benefit["current_sbp"]), "mmHg")
+        _metric_card(c, 212, card_y, 170, "LDL（薬なし推定→現在）", float(treatment_benefit["untreated_ldl"]), float(treatment_benefit["current_ldl"]), "mg/dL")
+        _metric_card(c, 394, card_y, 171, "HbA1c（薬なし推定→現在）", float(treatment_benefit["untreated_a1c"]), float(treatment_benefit["current_a1c"]), "%")
+
+        y = card_y - 42
+        y = _section_title(c, y, "3. この結果の受け止め方")
+        c.setFillColor(PALE_TEAL)
+        c.roundRect(30, y - 122, 535, 112, 7, fill=1, stroke=0)
+        _text(c, 44, y - 34, "現在の血圧・LDL・HbA1cには、服薬を続けてきた効果が含まれています。", 10, NAVY)
+        _text(c, 44, y - 58, "薬を飲まなかった場合の数値は、薬剤の平均効果から逆算した推定値です。", 9)
+        _text(c, 44, y - 82, "これまで続けてきた治療を、自己判断で中止しないことが大切です。", 9)
+        _text(c, 44, y - 104, "副作用や負担が気になる場合は、主治医と相談して調整しましょう。", 9)
+
+        y -= 162
+        y = _section_title(c, y, "4. 今後の方針")
+        status = str(treatment_benefit.get("plan_status", "現在の治療を継続する"))
+        for index, line in enumerate(_wrap(status, 45)):
+            _text(c, 44, y - index * 18, "□ " + line if index == 0 else line, 11, NAVY)
+        _text(c, 30, 42, "推定値には不確実性があります。治療変更は主治医と相談してください。", 8, GRAY)
+        _text(c, page_w - 30, 27, "患者教育・共有意思決定用（医療機器ではありません）", 7.5, GRAY, "right")
+        c.save()
+        return buf.getvalue()
+
     # 1ページ目: 現状・介入・メリット
     c.setFillColor(NAVY)
     c.rect(0, page_h - 92, page_w, 92, fill=1, stroke=0)
