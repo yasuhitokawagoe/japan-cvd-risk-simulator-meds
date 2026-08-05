@@ -26,6 +26,7 @@ def test_patient_report_is_two_page_pdf():
         current_values={"sbp": 150, "ldl": 160, "a1c": 8.0},
         target_values={"sbp": 130, "ldl": 100, "a1c": 7.0},
         diagnoses=["糖尿病", "高血圧症"], medications=["薬A"],
+        lifestyle_interventions=["減塩", "中強度有酸素運動"],
         instructions=["食塩・調味料を控える"], goals=["毎日歩く"],
         risks=_risks(), horizon_years=20,
     )

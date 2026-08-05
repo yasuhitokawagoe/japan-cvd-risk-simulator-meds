@@ -9,6 +9,7 @@ import numpy as np
 from calc_engine_outcomes import OutcomesEngine
 from meds_catalog import load_meds_catalog, apply_meds_to_targets, MedicationAdjustment
 import pdf_plan_ui
+from lifestyle_interventions import DIET_EFFECTS, EXERCISE_EFFECTS, apply_lifestyle_effects
 
 st.set_page_config(page_title="JP Outcomes Prevention Simulator (MVP)", layout="wide", page_icon="🫀")
 
@@ -483,6 +484,34 @@ with st.sidebar:
         elif mode == "adjust":
             st.caption("薬増減モード：現在服用中の薬を選択してください。")
 
+    st.divider()
+    st.subheader("🥗 食事・運動介入（文献ベース）")
+    diet_intervention_keys = st.multiselect(
+        "食事介入",
+        list(DIET_EFFECTS),
+        format_func=lambda key: f"{DIET_EFFECTS[key].label}｜{DIET_EFFECTS[key].definition}",
+        key="evidence_diet_interventions",
+    )
+    exercise_intervention_key = st.selectbox(
+        "運動介入",
+        [None, *EXERCISE_EFFECTS],
+        format_func=lambda key: "選択しない" if key is None else (
+            f"{EXERCISE_EFFECTS[key].label}｜{EXERCISE_EFFECTS[key].definition}"
+        ),
+        key="evidence_exercise_intervention",
+    )
+    with st.expander("効果量と根拠を確認"):
+        for key in diet_intervention_keys:
+            effect = DIET_EFFECTS[key]
+            st.markdown(f"**{effect.label}**")
+            st.caption(f"{effect.evidence_summary} {effect.endpoint_evidence}")
+            st.link_button("文献を開く", effect.source_url, key=f"diet_source_{key}")
+        if exercise_intervention_key:
+            effect = EXERCISE_EFFECTS[exercise_intervention_key]
+            st.markdown(f"**{effect.label}**")
+            st.caption(f"{effect.evidence_summary} {effect.endpoint_evidence}")
+            st.link_button("文献を開く", effect.source_url, key=f"exercise_source_{exercise_intervention_key}")
+
 # ====== 実際に使う目標値 ======
 if use_meds and meds_summary is not None:
     sbp_tgt = float(meds_summary["sbp_target"])
@@ -496,6 +525,30 @@ else:
     a1c_tgt = float(a1c_tgt_manual)
     annual_cost_yen = 0
     side_effects_md = ""
+
+diabetes_context = bool(
+    a1c_now >= 6.5 or current_a1c_keys or a1c_sel_keys or adjusted_a1c_keys
+)
+lifestyle_result = apply_lifestyle_effects(
+    sbp=sbp_tgt,
+    ldl=ldl_tgt,
+    a1c=a1c_tgt,
+    diet_keys=diet_intervention_keys,
+    exercise_key=exercise_intervention_key,
+    diabetes_context=diabetes_context,
+)
+sbp_tgt = lifestyle_result["sbp"]
+ldl_tgt = lifestyle_result["ldl"]
+a1c_tgt = lifestyle_result["a1c"]
+
+with st.sidebar:
+    if lifestyle_result["applied"]:
+        st.markdown("**食事・運動を加えた予測到達値**")
+        st.write(f"- SBP: **{sbp_tgt:.1f} mmHg**")
+        st.write(f"- LDL: **{ldl_tgt:.1f} mg/dL**")
+        st.write(f"- HbA1c: **{a1c_tgt:.2f}%**")
+    for effect in lifestyle_result["skipped"]:
+        st.warning(f"{effect.label}の効果量は{effect.population}の根拠のため、現在の入力には適用していません。")
 
 def _years_from_choice(choice: str) -> int:
     return {"5-year": 5, "10-year": 10, "20-year": 20, "30-year": 30, "50-year": 50}.get(choice, 10)
@@ -576,6 +629,8 @@ current_params = {
         else tuple(current_a1c_keys) + tuple(adjusted_a1c_keys)
     ),
     "use_meds": use_meds,
+    "diet_interventions": tuple(diet_intervention_keys),
+    "exercise_intervention": exercise_intervention_key,
 }
 params_hash = hashlib.md5(str(sorted(current_params.items())).encode()).hexdigest()
 
@@ -765,6 +820,7 @@ pdf_plan_ui.render_plan_section(
     bp_medications=tuple(current_sbp_keys or sbp_sel_keys),
     lipid_medications=tuple(current_ldl_keys or ldl_sel_keys),
     diabetes_medications=tuple(current_a1c_keys or a1c_sel_keys),
+    lifestyle_interventions=tuple(effect.label for effect in lifestyle_result["applied"]),
     risk_curves=cumulative_data,
     risk_horizon_years=int(st.session_state.years),
     sbp_after=sbp_tgt,

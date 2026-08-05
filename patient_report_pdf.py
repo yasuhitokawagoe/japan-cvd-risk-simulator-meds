@@ -138,6 +138,7 @@ def generate_patient_report_pdf(
     target_values: Mapping[str, float],
     diagnoses: Iterable[str],
     medications: Iterable[str],
+    lifestyle_interventions: Iterable[str],
     instructions: Iterable[str],
     goals: Iterable[str],
     risks: Mapping[str, Mapping[str, Iterable[float]]],
@@ -160,8 +161,9 @@ def generate_patient_report_pdf(
     _text(c, 42, y, f"{age}歳・{sex_label}　身長 {height_cm:.1f} cm　体重 {weight_kg:.1f} kg（BMI {weight_kg/(height_cm/100)**2:.1f}）", 10)
     _text(c, 42, y - 18, "現在考えられる病気・管理対象: " + ("、".join(diagnoses) if list(diagnoses) else "該当なし／確認中"), 10)
     _text(c, 42, y - 36, "入力された服薬: " + ("、".join(medications) if list(medications) else "なし／未入力"), 9, GRAY)
+    _text(c, 42, y - 52, "食事・運動介入: " + ("、".join(lifestyle_interventions) if list(lifestyle_interventions) else "選択なし"), 9, GRAY)
 
-    y -= 72
+    y -= 88
     y = _section_title(c, y, "2. 介入で目指す変化")
     card_y = y - 58
     _metric_card(c, 30, card_y, 170, "血圧", current_values["sbp"], target_values["sbp"], "mmHg")
