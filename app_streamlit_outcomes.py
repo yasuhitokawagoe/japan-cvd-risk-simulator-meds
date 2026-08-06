@@ -21,6 +21,7 @@ st.set_page_config(page_title="生活習慣病ケアナビ", layout="wide", page
 st.markdown("""
 <style>
   .stApp { background: #f5f8f6; }
+  .stMainBlockContainer { max-width: 1120px; padding-left: 2rem; padding-right: 2rem; }
   [data-testid="stSidebar"] { background: #ffffff; border-right: 1px solid #dce7df; }
   .care-hero { padding: 1.5rem 1.7rem; border-radius: 22px; color: white;
     background: linear-gradient(125deg,#176b5b 0%,#23856f 58%,#62aa73 100%);
@@ -36,6 +37,9 @@ st.markdown("""
     border-radius:16px !important; background:#fff; }
   .stButton > button[kind="primary"] { border-radius:12px; min-height:3rem;
     background:#176b5b; border-color:#176b5b; font-weight:800; }
+  @media (max-width: 900px) {
+    .stMainBlockContainer { max-width: 100%; padding-left: 1rem; padding-right: 1rem; }
+  }
 </style>
 <div class="care-hero">
   <h1>🌿 生活習慣病ケアナビ</h1>
