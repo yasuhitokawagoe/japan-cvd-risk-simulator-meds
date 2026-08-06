@@ -938,18 +938,15 @@ if "backcast_params_hash" not in st.session_state:
 horizons = [5, 10] if which == "Both" else [_years_from_choice(which)]
 years_for_curve = max(horizons)
 
-st.markdown("## 📍 今日の現在地と介入プラン")
-status_cols = st.columns(4)
-status_cols[0].metric("血圧", f"{sbp_now:.0f} mmHg", delta=f"予測 {sbp_tgt:.0f}")
-status_cols[1].metric("LDL", f"{ldl_now:.0f} mg/dL", delta=f"予測 {ldl_tgt:.0f}")
-status_cols[2].metric("HbA1c", f"{a1c_now:.1f}%", delta=f"予測 {a1c_tgt:.1f}")
-status_cols[3].metric("BMI", f"{bmi_now:.1f}", delta=f"目標 {bmi_target:.1f}")
 selected_intervention_labels = [effect.label for effect in lifestyle_result["applied"]]
 selected_medication_labels = list(current_sbp_keys or sbp_sel_keys) + list(current_ldl_keys or ldl_sel_keys) + list(current_a1c_keys or a1c_sel_keys)
 with st.container(border=True):
-    st.markdown("**選択中の介入**")
-    st.write("🥗 食事・運動：" + ("、".join(selected_intervention_labels) if selected_intervention_labels else "まだ選択されていません"))
-    st.write("💊 お薬：" + ("、".join(selected_medication_labels) if selected_medication_labels else "なし／まだ選択されていません"))
+    st.markdown(
+        f"**予測値**　血圧 {sbp_now:.0f}→**{sbp_tgt:.0f}**　"
+        f"LDL {ldl_now:.0f}→**{ldl_tgt:.0f}**　HbA1c {a1c_now:.1f}→**{a1c_tgt:.1f}%**  \n"
+        f"🥗 {('、'.join(selected_intervention_labels) if selected_intervention_labels else '未選択')}　／　"
+        f"💊 {('、'.join(selected_medication_labels) if selected_medication_labels else '未選択')}"
+    )
 
 if diabetes_diagnosed or ckd_diagnosed:
     st.markdown("### 🩺 疾患別の評価")
