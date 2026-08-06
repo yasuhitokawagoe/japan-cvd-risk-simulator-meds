@@ -6,6 +6,14 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+# Railway上でウィジェット再実行時にBLASが過剰にスレッドを生成するのを防ぐ。
+# ネイティブライブラリの障害時はPythonスタックもログに残す。
+ENV OPENBLAS_NUM_THREADS=1 \
+    OMP_NUM_THREADS=1 \
+    MKL_NUM_THREADS=1 \
+    NUMEXPR_NUM_THREADS=1 \
+    PYTHONFAULTHANDLER=1
+
 # 患者向けPDFへ正しい日本語字形を埋め込む。
 # CFF形式のCJK OTFではなく、ReportLabが埋め込めるTrueType版を使用する。
 ADD https://raw.githubusercontent.com/google/fonts/main/ofl/notosansjp/NotoSansJP%5Bwght%5D.ttf /usr/share/fonts/truetype/noto/NotoSansJP.ttf
