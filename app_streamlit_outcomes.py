@@ -20,7 +20,13 @@ st.set_page_config(page_title="JP Outcomes Prevention Simulator (MVP)", layout="
 st.title("🫀📈 アウトカムベース一次予防シミュレーター（MVP）")
 st.caption("教育・共有意思決定のため。医療機器ではありません。")
 
-engine = OutcomesEngine("config.yaml")
+@st.cache_resource(show_spinner=False)
+def _cached_outcomes_engine(config_path: str):
+    """CSV基準データを各ウィジェット再実行で読み直さない。"""
+    return OutcomesEngine(config_path)
+
+
+engine = _cached_outcomes_engine("config.yaml")
 
 MORTALITY_ALL_CAUSE_DEATH_CAPTION = (
     "※全死亡は、心血管疾患に限らず、がんや他の病気を含むすべての死亡を対象としています。"

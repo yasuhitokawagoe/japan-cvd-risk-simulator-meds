@@ -64,7 +64,10 @@ class OutcomesEngine:
                 alt = os.path.basename(path)
                 if os.path.exists(alt):
                     load_path = alt
-            df = pd.read_csv(load_path)
+            # Pandas 3のArrow文字列実装は、Streamlitの複数セッションが
+            # 同時にCSVを読むとネイティブ層で落ちる場合がある。
+            # sex列はPython objectとして読み、Arrow変換を回避する。
+            df = pd.read_csv(load_path, dtype={"sex": object})
             if df is None or len(df) == 0:
                 return None
             if 'sex' in df.columns:

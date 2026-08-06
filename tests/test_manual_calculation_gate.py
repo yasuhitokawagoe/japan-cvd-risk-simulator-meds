@@ -19,3 +19,8 @@ def test_backcast_requires_its_calculation_button():
 def test_calculation_button_is_rendered_in_sidebar_slot():
     assert "calculation_button_slot = st.empty()" in APP_SOURCE
     assert "calculation_button_slot.button(" in APP_SOURCE
+
+
+def test_outcomes_engine_is_cached_across_widget_reruns():
+    assert "@st.cache_resource(show_spinner=False)" in APP_SOURCE
+    assert 'engine = _cached_outcomes_engine("config.yaml")' in APP_SOURCE
