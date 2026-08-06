@@ -37,8 +37,15 @@ st.markdown("""
     border-radius:16px !important; background:#fff; }
   .stButton > button[kind="primary"] { border-radius:12px; min-height:3rem;
     background:#176b5b; border-color:#176b5b; font-weight:800; }
+  .prediction-strip { display:grid; grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:.65rem; margin:.55rem 0 .35rem; }
+  .prediction-item { background:#eef7f2; border:1px solid #cfe3d7; border-radius:12px;
+    padding:.65rem .8rem; min-width:0; }
+  .prediction-label { color:#547066; font-size:.78rem; font-weight:700; margin-bottom:.12rem; }
+  .prediction-value { color:#143f35; font-size:1.28rem; font-weight:850; white-space:nowrap; }
   @media (max-width: 900px) {
     .stMainBlockContainer { max-width: 100%; padding-left: 1rem; padding-right: 1rem; }
+    .prediction-strip { grid-template-columns:repeat(2,minmax(0,1fr)); }
   }
 </style>
 <div class="care-hero">
@@ -761,11 +768,15 @@ with st.container(border=True):
                     f"{meds_summary['a1c_target']:.1f} %"
                 )
             else:
-                st.caption(
-                    f"薬剤介入後：血圧 **{meds_summary['sbp_target']:.0f}**　"
-                    f"LDL **{meds_summary['ldl_target']:.0f}**　"
-                    f"HbA1c **{meds_summary['a1c_target']:.1f}%**　"
-                    f"概算 **{meds_summary['annual_cost_yen']:,}円/年**"
+                st.markdown("**薬剤介入後の予測**")
+                st.markdown(
+                    f'<div class="prediction-strip">'
+                    f'<div class="prediction-item"><div class="prediction-label">収縮期血圧</div><div class="prediction-value">{meds_summary["sbp_target"]:.0f} <small>mmHg</small></div></div>'
+                    f'<div class="prediction-item"><div class="prediction-label">LDL</div><div class="prediction-value">{meds_summary["ldl_target"]:.0f} <small>mg/dL</small></div></div>'
+                    f'<div class="prediction-item"><div class="prediction-label">HbA1c</div><div class="prediction-value">{meds_summary["a1c_target"]:.1f}<small>%</small></div></div>'
+                    f'<div class="prediction-item"><div class="prediction-label">年間薬剤費（概算）</div><div class="prediction-value">{meds_summary["annual_cost_yen"]:,}<small>円/年</small></div></div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
                 )
 
             if meds_summary["side_effects_md"].strip():
