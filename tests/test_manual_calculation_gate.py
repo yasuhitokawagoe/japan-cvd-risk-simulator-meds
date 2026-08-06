@@ -12,5 +12,10 @@ def test_risk_calculation_is_not_triggered_automatically():
 
 
 def test_backcast_requires_its_calculation_button():
-    assert 'st.button("🔄 反実仮想を計算"' in APP_SOURCE
+    assert '"🔄 反実仮想を計算"' in APP_SOURCE
     assert "backcast_enabled and backcast_keys and backcast_ready" in APP_SOURCE
+
+
+def test_calculation_button_is_rendered_in_sidebar_slot():
+    assert "calculation_button_slot = st.empty()" in APP_SOURCE
+    assert "calculation_button_slot.button(" in APP_SOURCE

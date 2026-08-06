@@ -605,6 +605,9 @@ with st.sidebar:
             for med_key in backcast_keys:
                 backcast_medication_years[med_key] = float(backcast_treatment_years)
 
+    st.divider()
+    calculation_button_slot = st.empty()
+
 # ====== 実際に使う目標値 ======
 if use_meds and meds_summary is not None:
     sbp_tgt = float(meds_summary["sbp_target"])
@@ -724,7 +727,11 @@ if not backcast_enabled and params_changed and st.session_state.calculated:
 # 通常モデルはボタンを押したときだけ重い計算を実行する。
 manual_button_clicked = False
 if not backcast_enabled:
-    manual_button_clicked = st.button("🔄 リスク計算を実行", type="primary")
+    manual_button_clicked = calculation_button_slot.button(
+        "🔄 リスク計算を実行",
+        type="primary",
+        use_container_width=True,
+    )
 if not backcast_enabled and manual_button_clicked:
     with st.spinner("リスク計算中..."):
         st.session_state.cumulative_data = calculate_cumulative_risk_curves(years_for_curve)
@@ -735,7 +742,11 @@ if not backcast_enabled and manual_button_clicked:
 # 反実仮想も薬剤名・用量の選択中は計算せず、専用ボタンで確定する。
 backcast_ready = False
 if backcast_enabled and backcast_keys:
-    backcast_button_clicked = st.button("🔄 反実仮想を計算", type="primary")
+    backcast_button_clicked = calculation_button_slot.button(
+        "🔄 反実仮想を計算",
+        type="primary",
+        use_container_width=True,
+    )
     if backcast_button_clicked:
         st.session_state.backcast_params_hash = params_hash
     backcast_ready = st.session_state.backcast_params_hash == params_hash
