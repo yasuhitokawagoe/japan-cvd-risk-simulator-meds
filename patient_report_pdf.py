@@ -141,6 +141,46 @@ def _line_chart(c: canvas.Canvas, x: float, y: float, w: float, h: float,
     _text(c, right, y + 8, f"{max(times):.0f}年", 6.5, GRAY, "right")
 
 
+def _backcast_line_chart(c: canvas.Canvas, x: float, y: float, w: float, h: float,
+                         title: str, curve: Mapping[str, Iterable[float]]) -> None:
+    times = [float(v) for v in curve["time"]]
+    untreated = [float(v) for v in curve["untreated"]]
+    treated = [float(v) for v in curve["treated"]]
+    min_t, max_t = min(times), max(times)
+    max_y = max(untreated + treated + [1.0]) * 1.15
+    left, bottom, right, top = x + 42, y + 28, x + w - 14, y + h - 28
+    c.setFillColor(white)
+    c.roundRect(x, y, w, h, 7, fill=1, stroke=0)
+    _text(c, x + 12, y + h - 18, title, 10, NAVY)
+    for i in range(4):
+        gy = bottom + (top - bottom) * i / 3
+        c.setStrokeColor(LIGHT)
+        c.line(left, gy, right, gy)
+        _text(c, left - 5, gy - 2, f"{max_y*i/3:.0f}%", 6.5, GRAY, "right")
+    span = max(max_t - min_t, 1.0)
+    def point(t: float, v: float) -> tuple[float, float]:
+        return left + (right-left)*(t-min_t)/span, bottom + (top-bottom)*v/max_y
+    for values, color, dashed in ((untreated, RED, True), (treated, TEAL, False)):
+        c.setStrokeColor(color)
+        c.setLineWidth(2)
+        if dashed:
+            c.setDash(5, 3)
+        else:
+            c.setDash()
+        pts = [point(t, v) for t, v in zip(times, values)]
+        for a, b in zip(pts, pts[1:]):
+            c.line(a[0], a[1], b[0], b[1])
+    c.setDash()
+    now_x, _ = point(0, 0)
+    c.setStrokeColor(GRAY)
+    c.setDash(2, 2)
+    c.line(now_x, bottom, now_x, top)
+    c.setDash()
+    _text(c, left, y + 10, f"{min_t:.0f}年", 6.5, GRAY)
+    _text(c, now_x, y + 10, "現在", 6.5, NAVY, "center")
+    _text(c, right, y + 10, f"+{max_t:.0f}年", 6.5, GRAY, "right")
+
+
 def generate_patient_report_pdf(
     *,
     age: int,
@@ -213,6 +253,20 @@ def generate_patient_report_pdf(
             _text(c, 44, y - index * 18, "□ " + line if index == 0 else line, 11, NAVY)
         _text(c, 30, 42, "推定値には不確実性があります。治療変更は主治医と相談してください。", 8, GRAY)
         _text(c, page_w - 30, 27, "患者教育・共有意思決定用（医療機器ではありません）", 7.5, GRAY, "right")
+
+        event_curves = treatment_benefit.get("event_curves", {})
+        if event_curves:
+            c.showPage()
+            c.setFillColor(NAVY)
+            c.rect(0, page_h - 72, page_w, 72, fill=1, stroke=0)
+            _text(c, 30, page_h - 40, "これまでの利益と、これからの見通し", 18, white)
+            _text(c, 30, page_h - 58, "赤点線: 薬なし推定　緑実線: 服薬継続　縦点線: 現在", 8.5, white)
+            for index, key in enumerate(("mortality", "mi", "stroke")):
+                _backcast_line_chart(
+                    c, 30, page_h - 285 - index * 235, 535, 205,
+                    OUTCOME_LABELS[key], event_curves[key],
+                )
+            _text(c, 30, 27, "過去と将来はいずれも薬剤の平均効果を用いた推定です。", 7.5, GRAY)
         c.save()
         return buf.getvalue()
 

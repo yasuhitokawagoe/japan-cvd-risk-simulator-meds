@@ -708,21 +708,54 @@ if backcast_enabled and backcast_keys:
     )
     start_age = int(age) - int(backcast_treatment_years)
     event_effects = {}
+    event_curves = {}
+    future_years = min(10, max(1, 110 - int(age)))
     for outcome in OUTCOME_DISPLAY_ORDER:
-        event_result = engine.cumulative_incidence(
-            outcome, sex, start_age, int(backcast_treatment_years),
-            untreated_values["sbp"], treated_average["sbp"],
-            untreated_values["ldl"], treated_average["ldl"],
-            untreated_values["a1c"], treated_average["a1c"],
-            smoking_status, cigs_per_day, years_smoked, years_since_quit,
-            assume_quit_today_in_target=False,
-        )
-        untreated_risk = event_result["baseline"] * 100.0
-        treated_risk = event_result["target"] * 100.0
+        timeline = []
+        untreated_curve = []
+        treated_curve = []
+        for elapsed in range(0, int(backcast_treatment_years) + 1):
+            if elapsed == 0:
+                untreated_risk = treated_risk = 0.0
+            else:
+                past_result = engine.cumulative_incidence(
+                    outcome, sex, start_age, elapsed,
+                    untreated_values["sbp"], treated_average["sbp"],
+                    untreated_values["ldl"], treated_average["ldl"],
+                    untreated_values["a1c"], treated_average["a1c"],
+                    smoking_status, cigs_per_day, years_smoked, years_since_quit,
+                    assume_quit_today_in_target=False,
+                )
+                untreated_risk = past_result["baseline"] * 100.0
+                treated_risk = past_result["target"] * 100.0
+            timeline.append(elapsed - int(backcast_treatment_years))
+            untreated_curve.append(untreated_risk)
+            treated_curve.append(treated_risk)
+
+        past_untreated = untreated_curve[-1] / 100.0
+        past_treated = treated_curve[-1] / 100.0
+        for future in range(1, future_years + 1):
+            future_result = engine.cumulative_incidence(
+                outcome, sex, int(age), future,
+                untreated_values["sbp"], float(sbp_now),
+                untreated_values["ldl"], float(ldl_now),
+                untreated_values["a1c"], float(a1c_now),
+                smoking_status, cigs_per_day, years_smoked, years_since_quit,
+                assume_quit_today_in_target=False,
+            )
+            timeline.append(future)
+            untreated_curve.append((1.0 - (1.0 - past_untreated) * (1.0 - future_result["baseline"])) * 100.0)
+            treated_curve.append((1.0 - (1.0 - past_treated) * (1.0 - future_result["target"])) * 100.0)
+
+        untreated_risk = untreated_curve[int(backcast_treatment_years)]
+        treated_risk = treated_curve[int(backcast_treatment_years)]
         event_effects[outcome] = {
             "untreated": untreated_risk,
             "treated": treated_risk,
             "avoided": max(0.0, untreated_risk - treated_risk),
+        }
+        event_curves[outcome] = {
+            "time": timeline, "untreated": untreated_curve, "treated": treated_curve,
         }
     backcast_summary = {
         "treatment_years": int(backcast_treatment_years),
@@ -732,6 +765,8 @@ if backcast_enabled and backcast_keys:
         "untreated_ldl": float(untreated_values["ldl"]),
         "untreated_a1c": float(untreated_values["a1c"]),
         "event_effects": event_effects,
+        "event_curves": event_curves,
+        "future_years": future_years,
     }
     st.markdown("## ⑤ 服薬しなかった場合との推定比較")
     st.caption(f"現在までの{int(backcast_treatment_years)}年間について、薬剤カタログの平均効果から逆算した推定です。")
@@ -757,6 +792,26 @@ if backcast_enabled and backcast_keys:
                 st.caption(f"100人あたり約{effect['avoided']:.1f}件／NNT相当 約{100/effect['avoided']:.0f}人")
             else:
                 st.caption("推定差はごく小さい")
+    st.markdown(f"### これまでの利益と今後{future_years}年間の見通し")
+    st.caption("横軸の0年が現在です。左側がこれまで、右側が今後の推定です。")
+    colors = {"mortality": "#6B7280", "mi": "#E45756", "stroke": "#4C78A8"}
+    for outcome in OUTCOME_DISPLAY_ORDER:
+        curve = event_curves[outcome]
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=curve["time"], y=curve["untreated"], mode="lines",
+            name="薬を飲まなかった場合", line=dict(color=colors[outcome], dash="dash", width=2),
+        ))
+        fig.add_trace(go.Scatter(
+            x=curve["time"], y=curve["treated"], mode="lines",
+            name="服薬を続ける場合", line=dict(color=colors[outcome], width=3),
+        ))
+        fig.add_vline(x=0, line_dash="dot", line_color="#111827", annotation_text="現在")
+        fig.update_layout(
+            title=labels[outcome], xaxis_title="現在を0とした年数", yaxis_title="累積イベントリスク（%）",
+            height=420, hovermode="x unified", legend=dict(orientation="h", y=1.12),
+        )
+        st.plotly_chart(fig, width="stretch")
     st.success("現在の数値は、服薬を続けて得られている成果です。自己判断で中止せず、今後の方針を主治医と相談しましょう。")
 elif backcast_enabled:
     st.info("現在服用中の薬を選ぶと、服薬しなかった場合の推定値を表示します。")
