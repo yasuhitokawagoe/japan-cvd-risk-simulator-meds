@@ -14,11 +14,41 @@ from treatment_backcast import (
     reconstruct_untreated_values,
     selected_medications,
 )
+from lifestyle_interventions import DIET_EFFECTS, EXERCISE_EFFECTS, apply_lifestyle_effects
 
-st.set_page_config(page_title="JP Outcomes Prevention Simulator (MVP)", layout="wide", page_icon="🫀")
+st.set_page_config(page_title="生活習慣病ケアナビ", layout="wide", page_icon="🌿")
 
-st.title("🫀📈 アウトカムベース一次予防シミュレーター（MVP）")
-st.caption("教育・共有意思決定のため。医療機器ではありません。")
+st.markdown("""
+<style>
+  .stApp { background: #f5f8f6; }
+  [data-testid="stSidebar"] { background: #ffffff; border-right: 1px solid #dce7df; }
+  .care-hero { padding: 1.5rem 1.7rem; border-radius: 22px; color: white;
+    background: linear-gradient(125deg,#176b5b 0%,#23856f 58%,#62aa73 100%);
+    box-shadow: 0 12px 30px rgba(23,107,91,.18); margin-bottom: 1rem; }
+  .care-hero h1 { margin: 0 0 .35rem; font-size: 2rem; }
+  .care-hero p { margin: 0; opacity: .92; font-size: 1rem; }
+  .step-strip { display:flex; gap:.45rem; flex-wrap:wrap; margin:.6rem 0 1.1rem; }
+  .step-pill { background:#e7f2ec; color:#215c4e; padding:.42rem .72rem;
+    border-radius:999px; font-size:.82rem; font-weight:700; }
+  div[data-testid="stMetric"] { background:white; border:1px solid #dce7df;
+    padding: .85rem 1rem; border-radius:16px; box-shadow:0 5px 16px rgba(31,74,61,.06); }
+  div[data-testid="stVerticalBlockBorderWrapper"] { border-color:#dce7df !important;
+    border-radius:16px !important; background:#fff; }
+  .stButton > button[kind="primary"] { border-radius:12px; min-height:3rem;
+    background:#176b5b; border-color:#176b5b; font-weight:800; }
+</style>
+<div class="care-hero">
+  <h1>🌿 生活習慣病ケアナビ</h1>
+  <p>これまでの努力を確かめ、食事・運動・お薬を一緒に比べて、次の一歩を決めます。</p>
+</div>
+<div class="step-strip">
+  <span class="step-pill">1 現在地</span><span class="step-pill">2 これまでの成果</span>
+  <span class="step-pill">3 介入を選ぶ</span><span class="step-pill">4 将来を比べる</span>
+  <span class="step-pill">5 書類を作る</span>
+</div>
+""", unsafe_allow_html=True)
+
+st.caption("診療と共有意思決定の支援用です。個人の結果を保証する医療機器ではありません。")
 
 @st.cache_resource(show_spinner=False)
 def _cached_outcomes_engine(config_path: str):
@@ -263,14 +293,25 @@ def _se_md_for_changes(stopped, added, continued):
 
 
 with st.sidebar:
-    st.subheader("⏪ 反実仮想で服薬継続の成果をみる")
-    backcast_enabled = st.checkbox(
-        "薬を飲まなかった場合と、治療を続けた現在を比較する",
-        value=False,
-        key="backcast_enabled",
-    )
+    st.subheader("🩺 今日の診療")
+    care_path = st.segmented_control(
+        "診療の目的",
+        ["initial", "adjust", "continue"],
+        default="initial",
+        format_func=lambda value: {
+            "initial": "治療を始める",
+            "adjust": "治療を見直す",
+            "continue": "現在の治療を続ける",
+        }[value],
+        key="care_path",
+    ) or "initial"
+    backcast_enabled = care_path == "continue"
     if backcast_enabled:
-        st.caption("①反実仮想を選択 → ②現在の状態 → ③服用中の薬 → ④治療年数 → 結果")
+        st.caption("現在のお薬を入力すると、飲まなかった場合と比べてこれまでの成果を表示します。")
+    elif care_path == "adjust":
+        st.caption("現在のお薬と変更後を比べます。")
+    else:
+        st.caption("食事・運動・お薬の介入案を比べます。")
 
     st.divider()
     st.subheader("② 現在の状態" if backcast_enabled else "患者プロフィール")
@@ -336,7 +377,37 @@ with st.sidebar:
         )
 
     st.divider()
-    st.subheader("③ 現在飲んでいる薬" if backcast_enabled else "💊 薬剤（薬品名＝用量）で目標値を自動生成")
+    st.subheader("🥗 介入1：食事と運動")
+    st.caption("お薬と同じように、実行する介入として選びます。")
+    diet_intervention_keys = st.multiselect(
+        "食事介入",
+        list(DIET_EFFECTS),
+        format_func=lambda key: f"{DIET_EFFECTS[key].label}｜{DIET_EFFECTS[key].definition}",
+        key="unified_diet_interventions",
+    )
+    exercise_intervention_key = st.selectbox(
+        "運動介入",
+        [None, *EXERCISE_EFFECTS],
+        format_func=lambda key: "選択しない" if key is None else (
+            f"{EXERCISE_EFFECTS[key].label}｜{EXERCISE_EFFECTS[key].definition}"
+        ),
+        key="unified_exercise_intervention",
+    )
+    with st.expander("効果量と文献を確認"):
+        selected_lifestyle_keys = [
+            *(DIET_EFFECTS[key] for key in diet_intervention_keys),
+            *([EXERCISE_EFFECTS[exercise_intervention_key]] if exercise_intervention_key else []),
+        ]
+        if not selected_lifestyle_keys:
+            st.caption("介入を選ぶと、ここに定義・効果量・根拠が表示されます。")
+        for effect in selected_lifestyle_keys:
+            st.markdown(f"**{effect.label}** — {effect.definition}")
+            st.caption(f"{effect.evidence_summary} {effect.endpoint_evidence}")
+            st.link_button("根拠文献", effect.source_url, key=f"lifestyle_source_{effect.key}")
+
+    st.divider()
+    st.subheader("💊 介入2：お薬" if not backcast_enabled else "③ 現在飲んでいるお薬")
+    st.caption("食事・運動に加えて、継続・追加・変更するお薬を選びます。")
 
     # 1. 薬剤オプションを先に定義
     sbp_options = [m["key"] for m in meds_catalog["sbp"]]
@@ -405,14 +476,7 @@ with st.sidebar:
                 "mode": "backcast", "costs": costs,
             }
         else:
-            mode = st.radio(
-                "シミュレーションモード",
-                ["add", "adjust"],
-                format_func=lambda x: (
-                    "💊 薬を追加する" if x == "add"
-                    else "💊 薬を増減させる"
-                ),
-            )
+            mode = "adjust" if care_path == "adjust" else "add"
 
         if mode == "add":
             sbp_sel_keys = render_two_stage_med_picker(
@@ -628,6 +692,33 @@ else:
     annual_cost_yen = 0
     side_effects_md = ""
 
+# 食事・運動も薬剤と同列の介入として、最終的な予測値に重ねる。
+diabetes_context = bool(
+    a1c_now >= 6.5 or current_a1c_keys or a1c_sel_keys or adjusted_a1c_keys
+)
+lifestyle_result = apply_lifestyle_effects(
+    sbp=sbp_tgt,
+    ldl=ldl_tgt,
+    a1c=a1c_tgt,
+    diet_keys=diet_intervention_keys,
+    exercise_key=exercise_intervention_key,
+    diabetes_context=diabetes_context,
+)
+sbp_tgt = lifestyle_result["sbp"]
+ldl_tgt = lifestyle_result["ldl"]
+a1c_tgt = lifestyle_result["a1c"]
+
+with st.sidebar:
+    if lifestyle_result["applied"]:
+        with st.container(border=True):
+            st.markdown("**🎯 選択した介入による予測値**")
+            preview_cols = st.columns(3)
+            preview_cols[0].metric("血圧", f"{sbp_tgt:.0f}")
+            preview_cols[1].metric("LDL", f"{ldl_tgt:.0f}")
+            preview_cols[2].metric("HbA1c", f"{a1c_tgt:.1f}")
+    for effect in lifestyle_result["skipped"]:
+        st.warning(f"{effect.label}は{effect.population}の根拠のため、現在の入力には効果量を適用していません。")
+
 def _years_from_choice(choice: str) -> int:
     return {"5-year": 5, "10-year": 10, "20-year": 20, "30-year": 30, "50-year": 50}.get(choice, 10)
 
@@ -708,6 +799,8 @@ current_params = {
     ),
     "use_meds": use_meds,
     "backcast_treatment_years": int(backcast_treatment_years),
+    "diet_interventions": tuple(diet_intervention_keys),
+    "exercise_intervention": exercise_intervention_key,
 }
 params_hash = hashlib.md5(str(sorted(current_params.items())).encode()).hexdigest()
 
@@ -722,6 +815,19 @@ if "backcast_params_hash" not in st.session_state:
 
 horizons = [5, 10] if which == "Both" else [_years_from_choice(which)]
 years_for_curve = max(horizons)
+
+st.markdown("## 📍 今日の現在地と介入プラン")
+status_cols = st.columns(4)
+status_cols[0].metric("血圧", f"{sbp_now:.0f} mmHg", delta=f"予測 {sbp_tgt:.0f}")
+status_cols[1].metric("LDL", f"{ldl_now:.0f} mg/dL", delta=f"予測 {ldl_tgt:.0f}")
+status_cols[2].metric("HbA1c", f"{a1c_now:.1f}%", delta=f"予測 {a1c_tgt:.1f}")
+status_cols[3].metric("BMI", f"{bmi_now:.1f}", delta=f"目標 {bmi_target:.1f}")
+selected_intervention_labels = [effect.label for effect in lifestyle_result["applied"]]
+selected_medication_labels = list(current_sbp_keys or sbp_sel_keys) + list(current_ldl_keys or ldl_sel_keys) + list(current_a1c_keys or a1c_sel_keys)
+with st.container(border=True):
+    st.markdown("**選択中の介入**")
+    st.write("🥗 食事・運動：" + ("、".join(selected_intervention_labels) if selected_intervention_labels else "まだ選択されていません"))
+    st.write("💊 お薬：" + ("、".join(selected_medication_labels) if selected_medication_labels else "なし／まだ選択されていません"))
 
 # 入力が変わったら古い結果を無効化するが、自動再計算はしない。
 params_changed = st.session_state.params_hash != params_hash
@@ -1184,6 +1290,7 @@ pdf_plan_ui.render_plan_section(
     bp_medications=tuple(current_sbp_keys or sbp_sel_keys),
     lipid_medications=tuple(current_ldl_keys or ldl_sel_keys),
     diabetes_medications=tuple(current_a1c_keys or a1c_sel_keys),
+    lifestyle_interventions=tuple(effect.label for effect in lifestyle_result["applied"]),
     risk_curves=None if backcast_enabled else cumulative_data,
     risk_horizon_years=int(st.session_state.years) if st.session_state.years else None,
     sbp_after=sbp_tgt,

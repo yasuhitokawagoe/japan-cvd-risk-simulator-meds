@@ -41,6 +41,24 @@ _LABEL_MAP = {
     pdf_fill.F_A1C_NOW: "実測HbA1c",
 }
 
+_INTERVENTION_PLAN_ITEMS = {
+    "減塩": (["食塩・調味料を控える"], ["1日食塩6g未満を目指す"]),
+    "糖質制限": (["食事摂取量を適正にする", "間食を減らす"], ["糖質量と甘い飲料を見直す"]),
+    "飽和脂肪制限": (["油を使った料理の摂取を減らす"], ["飽和脂肪を減らし不飽和脂肪へ置き換える"]),
+    "中強度有酸素運動": (["運動処方", "日常生活の活動量を増やす"], ["中強度の有酸素運動を週150分以上行う"]),
+    "有酸素＋筋力トレーニング": (["運動処方", "日常生活の活動量を増やす"], ["有酸素運動に週2〜3回の筋力トレーニングを加える"]),
+    "高強度インターバル運動": (["運動処方", "運動時の注意事項を確認する"], ["医療者と安全性を確認して高強度運動に取り組む"]),
+}
+
+
+def _plan_items_for_interventions(labels: tuple[str, ...]) -> tuple[list[str], list[str]]:
+    instructions, goals = [], []
+    for label in labels:
+        mapped_instructions, mapped_goals = _INTERVENTION_PLAN_ITEMS.get(label, ([], []))
+        instructions.extend(item for item in mapped_instructions if item not in instructions)
+        goals.extend(item for item in mapped_goals if item not in goals)
+    return instructions, goals
+
 
 def render_plan_section(
     *,
@@ -58,6 +76,7 @@ def render_plan_section(
     bp_medications: tuple[str, ...] = (),
     lipid_medications: tuple[str, ...] = (),
     diabetes_medications: tuple[str, ...] = (),
+    lifestyle_interventions: tuple[str, ...] = (),
     risk_curves: Optional[Mapping] = None,
     risk_horizon_years: Optional[int] = None,
     sbp_after: Optional[float] = None,
@@ -185,9 +204,10 @@ def render_plan_section(
             default=["運動不足"] if not medication_names else [],
             key=f"{p}_lifestyle",
         )
-        goal_candidates = suggested_goals(lifestyle_items)
-        instruction_candidates = suggested_instructions(lifestyle_items)
-        lifestyle_signature = tuple(lifestyle_items)
+        intervention_instructions, intervention_goals = _plan_items_for_interventions(lifestyle_interventions)
+        goal_candidates = list(dict.fromkeys([*suggested_goals(lifestyle_items), *intervention_goals]))
+        instruction_candidates = list(dict.fromkeys([*suggested_instructions(lifestyle_items), *intervention_instructions]))
+        lifestyle_signature = (tuple(lifestyle_items), tuple(lifestyle_interventions))
         lifestyle_signature_key = f"{p}_lifestyle_signature"
         if st.session_state.get(lifestyle_signature_key) != lifestyle_signature:
             st.session_state[f"{p}_selected_instructions"] = instruction_candidates
@@ -355,6 +375,7 @@ def render_plan_section(
                 },
                 diagnoses=selected_diagnoses,
                 medications=medication_names,
+                lifestyle_interventions=lifestyle_interventions,
                 instructions=selected_instructions,
                 goals=final_goals,
                 risks=risk_curves,

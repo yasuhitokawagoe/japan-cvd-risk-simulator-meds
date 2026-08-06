@@ -195,6 +195,7 @@ def generate_patient_report_pdf(
     goals: Iterable[str],
     risks: Mapping[str, Mapping[str, Iterable[float]]],
     horizon_years: int,
+    lifestyle_interventions: Iterable[str] = (),
     treatment_benefit: Mapping | None = None,
 ) -> bytes:
     """A4 2ページの患者向け説明資料を返す。"""
@@ -202,6 +203,7 @@ def generate_patient_report_pdf(
     c = canvas.Canvas(buf, pagesize=A4)
     page_w, page_h = A4
 
+    lifestyle_interventions = tuple(lifestyle_interventions)
     if treatment_benefit:
         years = int(treatment_benefit.get("treatment_years", 0))
         c.setFillColor(NAVY)
@@ -214,6 +216,7 @@ def generate_patient_report_pdf(
         y = _section_title(c, y, "1. 現在の状態と服薬")
         _text(c, 42, y, f"{age}歳・{sex_label}　身長 {height_cm:.1f} cm　体重 {weight_kg:.1f} kg", 10)
         _text(c, 42, y - 22, "現在服用中: " + ("、".join(medications) if list(medications) else "なし／未入力"), 9, GRAY)
+        _text(c, 42, y - 38, "食事・運動: " + ("、".join(lifestyle_interventions) if lifestyle_interventions else "選択なし"), 9, GRAY)
 
         y -= 66
         y = _section_title(c, y, "2. 薬を飲まなかった場合との推定比較")
@@ -282,6 +285,7 @@ def generate_patient_report_pdf(
     _text(c, 42, y, f"{age}歳・{sex_label}　身長 {height_cm:.1f} cm　体重 {weight_kg:.1f} kg（BMI {weight_kg/(height_cm/100)**2:.1f}）", 10)
     _text(c, 42, y - 18, "現在考えられる病気・管理対象: " + ("、".join(diagnoses) if list(diagnoses) else "該当なし／確認中"), 10)
     _text(c, 42, y - 36, "入力された服薬: " + ("、".join(medications) if list(medications) else "なし／未入力"), 9, GRAY)
+    _text(c, 42, y - 52, "選択した食事・運動: " + ("、".join(lifestyle_interventions) if lifestyle_interventions else "選択なし"), 9, GRAY)
 
     y -= 72
     y = _section_title(c, y, "2. 介入で目指す変化")
