@@ -316,20 +316,6 @@ with st.container(border=True):
         st.caption("現在のお薬を入力すると、飲まなかった場合と比べてこれまでの成果を表示します。")
     elif care_path == "adjust":
         st.caption("現在のお薬と変更後を比べます。")
-    elif care_path == "initial" and not initial_risk_reviewed:
-        sbp_tgt_manual, ldl_tgt_manual, a1c_tgt_manual = sbp_now, ldl_now, a1c_now
-        smoking_status = st.selectbox(
-            "喫煙", ["never", "current", "former"],
-            format_func=lambda x: {"never": "吸わない", "current": "現在吸っている", "former": "過去に吸っていた"}[x],
-            key="smoking_status_compact",
-        )
-        smoke_col1, smoke_col2 = st.columns(2)
-        with smoke_col1:
-            cigs_per_day = st.number_input("1日の本数", 0, 80, 20, step=5, key="cigs_compact") if smoking_status == "current" else 0
-        with smoke_col2:
-            years_smoked = st.number_input("喫煙年数", 0, 80, 20, step=5, key="years_smoked_compact") if smoking_status != "never" else 0
-        years_since_quit = st.number_input("禁煙してからの年数", 0, 80, 5, step=1, key="quit_years_compact") if smoking_status == "former" else 0
-        quit_today = False
     else:
         st.caption("食事・運動・お薬の介入案を比べます。")
 
@@ -365,6 +351,20 @@ with st.container(border=True):
         sbp_tgt_manual, ldl_tgt_manual, a1c_tgt_manual = sbp_now, ldl_now, a1c_now
         smoking_status, cigs_per_day = "never", 0
         years_smoked, years_since_quit, quit_today = 0, 0, False
+    elif care_path == "initial" and not initial_risk_reviewed:
+        sbp_tgt_manual, ldl_tgt_manual, a1c_tgt_manual = sbp_now, ldl_now, a1c_now
+        smoking_status = st.selectbox(
+            "喫煙", ["never", "current", "former"],
+            format_func=lambda x: {"never": "吸わない", "current": "現在吸っている", "former": "過去に吸っていた"}[x],
+            key="smoking_status_compact",
+        )
+        smoke_col1, smoke_col2 = st.columns(2)
+        with smoke_col1:
+            cigs_per_day = st.number_input("1日の本数", 0, 80, 20, step=5, key="cigs_compact") if smoking_status == "current" else 0
+        with smoke_col2:
+            years_smoked = st.number_input("喫煙年数", 0, 80, 20, step=5, key="years_smoked_compact") if smoking_status != "never" else 0
+        years_since_quit = st.number_input("禁煙してからの年数", 0, 80, 5, step=1, key="quit_years_compact") if smoking_status == "former" else 0
+        quit_today = False
     else:
         st.markdown("**目標値**")
         target_col1, target_col2, target_col3 = st.columns(3)
