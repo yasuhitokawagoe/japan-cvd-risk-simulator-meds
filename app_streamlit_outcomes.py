@@ -505,22 +505,23 @@ with st.container(border=True):
         st.stop()
 
     st.divider()
-    st.subheader("🥗 介入1：食事と運動")
-    st.caption("お薬と同じように、実行する介入として選びます。")
-    diet_intervention_keys = st.multiselect(
-        "食事介入",
-        list(DIET_EFFECTS),
-        format_func=lambda key: f"{DIET_EFFECTS[key].label}｜{DIET_EFFECTS[key].definition}",
-        key="unified_diet_interventions",
-    )
-    exercise_intervention_key = st.selectbox(
-        "運動介入",
-        [None, *EXERCISE_EFFECTS],
-        format_func=lambda key: "選択しない" if key is None else (
-            f"{EXERCISE_EFFECTS[key].label}｜{EXERCISE_EFFECTS[key].definition}"
-        ),
-        key="unified_exercise_intervention",
-    )
+    st.subheader("治療を選ぶ")
+    lifestyle_col1, lifestyle_col2 = st.columns(2)
+    with lifestyle_col1:
+        diet_intervention_keys = st.multiselect(
+            "🥗 食事",
+            list(DIET_EFFECTS),
+            format_func=lambda key: DIET_EFFECTS[key].label,
+            key="unified_diet_interventions",
+            placeholder="食事介入を選択",
+        )
+    with lifestyle_col2:
+        exercise_intervention_key = st.selectbox(
+            "🏃 運動",
+            [None, *EXERCISE_EFFECTS],
+            format_func=lambda key: "選択しない" if key is None else EXERCISE_EFFECTS[key].label,
+            key="unified_exercise_intervention",
+        )
     with st.expander("効果量と文献を確認"):
         selected_lifestyle_keys = [
             *(DIET_EFFECTS[key] for key in diet_intervention_keys),
@@ -533,9 +534,7 @@ with st.container(border=True):
             st.caption(f"{effect.evidence_summary} {effect.endpoint_evidence}")
             st.link_button("根拠文献", effect.source_url, key=f"lifestyle_source_{effect.key}")
 
-    st.divider()
-    st.subheader("💊 介入2：お薬" if not backcast_enabled else "③ 現在飲んでいるお薬")
-    st.caption("食事・運動に加えて、継続・追加・変更するお薬を選びます。")
+    st.markdown("**💊 お薬**")
 
     # 1. 薬剤オプションを先に定義
     sbp_options = [m["key"] for m in meds_catalog["sbp"]]
@@ -573,16 +572,13 @@ with st.container(border=True):
         # モード切り替え
         if backcast_enabled:
             mode = "backcast"
-            st.info("反実仮想では、現在服用中の薬を入力します。")
-            current_sbp_keys = render_two_stage_med_picker(
-                "降圧薬（現在）", sbp_options, "backcast_current_sbp"
-            )
-            current_ldl_keys = render_two_stage_med_picker(
-                "脂質薬（現在）", ldl_options, "backcast_current_ldl"
-            )
-            current_a1c_keys = render_two_stage_med_picker(
-                "糖尿病薬（現在）", a1c_options, "backcast_current_a1c"
-            )
+            med_cols = st.columns(3)
+            with med_cols[0]:
+                current_sbp_keys = render_two_stage_med_picker("降圧薬", sbp_options, "backcast_current_sbp")
+            with med_cols[1]:
+                current_ldl_keys = render_two_stage_med_picker("脂質薬", ldl_options, "backcast_current_ldl")
+            with med_cols[2]:
+                current_a1c_keys = render_two_stage_med_picker("糖尿病薬", a1c_options, "backcast_current_a1c")
             adjusted_sbp_keys = list(current_sbp_keys)
             adjusted_ldl_keys = list(current_ldl_keys)
             adjusted_a1c_keys = list(current_a1c_keys)
@@ -607,19 +603,15 @@ with st.container(border=True):
             mode = "adjust" if care_path == "adjust" else "add"
 
         if mode == "add":
-            sbp_sel_keys = render_two_stage_med_picker(
-                "降圧薬（SBPに反映）", sbp_options, "add_sbp"
-            )
+            med_cols = st.columns(3)
+            with med_cols[0]:
+                sbp_sel_keys = render_two_stage_med_picker("降圧薬", sbp_options, "add_sbp")
             selected_sbp_meds = [m for m in meds_catalog["sbp"] if m["key"] in sbp_sel_keys]
-
-            ldl_sel_keys = render_two_stage_med_picker(
-                "脂質薬（LDLに反映）", ldl_options, "add_ldl"
-            )
+            with med_cols[1]:
+                ldl_sel_keys = render_two_stage_med_picker("脂質薬", ldl_options, "add_ldl")
             selected_ldl_meds = [m for m in meds_catalog["ldl"] if m["key"] in ldl_sel_keys]
-
-            a1c_sel_keys = render_two_stage_med_picker(
-                "糖尿病薬（HbA1cに反映）", a1c_options, "add_a1c"
-            )
+            with med_cols[2]:
+                a1c_sel_keys = render_two_stage_med_picker("糖尿病薬", a1c_options, "add_a1c")
             selected_a1c_meds = [m for m in meds_catalog["hba1c"] if m["key"] in a1c_sel_keys]
 
             meds_summary = apply_meds_to_targets(
@@ -634,15 +626,13 @@ with st.container(border=True):
         elif mode == "adjust":
             # 薬増減UI：現在の治療をベースラインに、各薬をワンタップで 中止/減量/増量/切替
             st.markdown("**現在服用中の薬**")
-            current_sbp_keys = render_two_stage_med_picker(
-                "降圧薬（現在）", sbp_options, "adjust_current_sbp"
-            )
-            current_ldl_keys = render_two_stage_med_picker(
-                "脂質薬（現在）", ldl_options, "adjust_current_ldl"
-            )
-            current_a1c_keys = render_two_stage_med_picker(
-                "糖尿病薬（現在）", a1c_options, "adjust_current_a1c"
-            )
+            med_cols = st.columns(3)
+            with med_cols[0]:
+                current_sbp_keys = render_two_stage_med_picker("降圧薬", sbp_options, "adjust_current_sbp")
+            with med_cols[1]:
+                current_ldl_keys = render_two_stage_med_picker("脂質薬", ldl_options, "adjust_current_ldl")
+            with med_cols[2]:
+                current_a1c_keys = render_two_stage_med_picker("糖尿病薬", a1c_options, "adjust_current_a1c")
 
             st.markdown("**各薬の変更（タップで選択）**")
             if not (current_sbp_keys or current_ldl_keys or current_a1c_keys):
@@ -771,11 +761,12 @@ with st.container(border=True):
                     f"{meds_summary['a1c_target']:.1f} %"
                 )
             else:
-                st.metric("年間薬剤費（合計）", f"{meds_summary['annual_cost_yen']:,} 円/年")
-                st.markdown("**自動計算された目標値（この値でリスク計算）**")
-                st.write(f"- SBP 目標: **{meds_summary['sbp_target']:.0f} mmHg**")
-                st.write(f"- LDL 目標: **{meds_summary['ldl_target']:.0f} mg/dL**")
-                st.write(f"- HbA1c 目標: **{meds_summary['a1c_target']:.1f} %**")
+                st.caption(
+                    f"薬剤介入後：血圧 **{meds_summary['sbp_target']:.0f}**　"
+                    f"LDL **{meds_summary['ldl_target']:.0f}**　"
+                    f"HbA1c **{meds_summary['a1c_target']:.1f}%**　"
+                    f"概算 **{meds_summary['annual_cost_yen']:,}円/年**"
+                )
 
             if meds_summary["side_effects_md"].strip():
                 with st.expander("主な副作用（薬剤ごと）"):
@@ -783,12 +774,11 @@ with st.container(border=True):
         elif mode == "adjust":
             st.caption("薬増減モード：現在服用中の薬を選択してください。")
 
-    st.divider()
-    st.subheader("④ 治療期間を入力" if backcast_enabled else "⏪ これまでの治療で得られた利益")
     backcast_treatment_years = 1
     backcast_medication_years = {}
     backcast_keys = [*current_sbp_keys, *current_ldl_keys, *current_a1c_keys]
     if backcast_enabled:
+        st.markdown("**治療期間**")
         if not backcast_keys:
             st.info("上で現在服用中の薬を入力すると計算できます。")
         else:
