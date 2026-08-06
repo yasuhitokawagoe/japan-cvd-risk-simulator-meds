@@ -320,21 +320,23 @@ with st.container(border=True):
         st.caption("食事・運動・お薬の介入案を比べます。")
 
     st.divider()
-    st.subheader("② 現在の状態" if backcast_enabled else "患者プロフィール")
-    sex = st.selectbox("性別", ["male", "female"], format_func=lambda x: "男性" if x == "male" else "女性")
-    age = st.number_input("年齢（歳）", 20, 95, 60, step=1)
-
-    st.markdown("**診断済みの病気**")
-    diagnosis_flags = st.multiselect(
-        "該当するもの",
-        ["diabetes", "hypertension", "dyslipidemia", "ckd"],
-        format_func=lambda value: {
-            "diabetes": "糖尿病", "hypertension": "高血圧症",
-            "dyslipidemia": "脂質異常症", "ckd": "慢性腎臓病（CKD）",
-        }[value],
-        key="diagnosis_flags",
-        placeholder="診断済みの病気を選択",
-    )
+    st.markdown("**患者プロフィール**")
+    profile_col1, profile_col2, profile_col3 = st.columns([1, 1, 2.4])
+    with profile_col1:
+        sex = st.selectbox("性別", ["male", "female"], format_func=lambda x: "男性" if x == "male" else "女性")
+    with profile_col2:
+        age = st.number_input("年齢", 20, 95, 60, step=1)
+    with profile_col3:
+        diagnosis_flags = st.multiselect(
+            "診断済み",
+            ["diabetes", "hypertension", "dyslipidemia", "ckd"],
+            format_func=lambda value: {
+                "diabetes": "糖尿病", "hypertension": "高血圧症",
+                "dyslipidemia": "脂質異常症", "ckd": "CKD",
+            }[value],
+            key="diagnosis_flags",
+            placeholder="該当する病気",
+        )
     diabetes_diagnosed = "diabetes" in diagnosis_flags
     ckd_diagnosed = "ckd" in diagnosis_flags
 
@@ -444,26 +446,56 @@ with st.container(border=True):
         if st.session_state.get("initial_baseline_signature") != baseline_signature:
             st.session_state["initial_baseline_result"] = None
             st.session_state["initial_baseline_signature"] = baseline_signature
-        if st.button("現在のリスクを計算", type="primary", use_container_width=True, key="calculate_initial_baseline"):
+        reference_values = {"sbp": 120.0, "ldl": 100.0, "a1c": 5.7, "bmi": 22.0}
+        deviation_cols = st.columns(4)
+        deviation_cols[0].metric("収縮期血圧", f"{sbp_now:.0f}", delta=f"基準より {sbp_now-reference_values['sbp']:+.0f} mmHg", delta_color="inverse")
+        deviation_cols[1].metric("LDL", f"{ldl_now:.0f}", delta=f"基準より {ldl_now-reference_values['ldl']:+.0f} mg/dL", delta_color="inverse")
+        deviation_cols[2].metric("HbA1c", f"{a1c_now:.1f}%", delta=f"基準より {a1c_now-reference_values['a1c']:+.1f}%", delta_color="inverse")
+        deviation_cols[3].metric("BMI", f"{bmi_now:.1f}", delta=f"基準より {bmi_now-reference_values['bmi']:+.1f}", delta_color="inverse")
+        st.caption("比較基準: 収縮期血圧120 mmHg・LDL 100 mg/dL・HbA1c 5.7%・BMI 22・非喫煙。個別の治療目標とは異なります。")
+        if st.button("現在値と基準値の将来リスクを比較", type="primary", use_container_width=True, key="calculate_initial_baseline"):
             baseline_result = {}
-            with st.spinner("現在のリスクを計算中..."):
+            with st.spinner("累積リスクと予測幅を計算中..."):
                 for outcome in OUTCOME_DISPLAY_ORDER:
-                    result = engine.cumulative_incidence_with_ci(
-                        outcome, sex, int(age), baseline_horizon,
-                        sbp_now, sbp_now, ldl_now, ldl_now, a1c_now, a1c_now,
-                        smoking_status, cigs_per_day, years_smoked, years_since_quit, False,
-                        bmi_now=bmi_now, bmi_target=bmi_now,
-                        egfr_now=egfr_now, egfr_target=egfr_now,
-                        acr_now=acr_now, acr_target=acr_now,
-                    )
-                    baseline_result[outcome] = result["point"]["baseline"] * 100.0
+                    curve = {key: [0.0] for key in ("time", "current", "reference", "current_low", "current_high", "reference_low", "reference_high")}
+                    for year in range(1, baseline_horizon + 1):
+                        result = engine.cumulative_incidence_with_ci(
+                            outcome, sex, int(age), year,
+                            sbp_now, reference_values["sbp"], ldl_now, reference_values["ldl"], a1c_now, reference_values["a1c"],
+                            smoking_status, cigs_per_day, years_smoked, years_since_quit,
+                            smoking_status == "current",
+                            bmi_now=bmi_now, bmi_target=reference_values["bmi"],
+                            egfr_now=egfr_now, egfr_target=egfr_now,
+                            acr_now=acr_now, acr_target="A1" if ckd_diagnosed else acr_now,
+                        )
+                        curve["time"].append(float(year))
+                        curve["current"].append(result["point"]["baseline"] * 100.0)
+                        curve["reference"].append(result["point"]["target"] * 100.0)
+                        curve["current_low"].append(result["lower"]["baseline"] * 100.0)
+                        curve["current_high"].append(result["upper"]["baseline"] * 100.0)
+                        curve["reference_low"].append(result["lower"]["target"] * 100.0)
+                        curve["reference_high"].append(result["upper"]["target"] * 100.0)
+                    baseline_result[outcome] = curve
             st.session_state["initial_baseline_result"] = baseline_result
         baseline_result = st.session_state.get("initial_baseline_result")
         if baseline_result:
-            st.success(f"現在の{baseline_horizon}年リスクです。これを確認してから介入を選びます。")
+            st.success(f"現在値のままと、比較基準を達成した場合の{baseline_horizon}年間の差です。")
             baseline_cols = st.columns(3)
             for col, outcome, label in zip(baseline_cols, OUTCOME_DISPLAY_ORDER, ["全死亡", "心筋梗塞", "脳卒中"]):
-                col.metric(label, f"{baseline_result[outcome]:.1f}%")
+                curve = baseline_result[outcome]
+                col.metric(label, f"{curve['current'][-1]:.1f}%", delta=f"基準値なら {curve['reference'][-1]:.1f}%", delta_color="inverse")
+            outcome_tabs = st.tabs(["全死亡", "心筋梗塞", "脳卒中"])
+            for tab, outcome, label in zip(outcome_tabs, OUTCOME_DISPLAY_ORDER, ["全死亡", "心筋梗塞", "脳卒中"]):
+                curve = baseline_result[outcome]
+                with tab:
+                    fig = go.Figure()
+                    fig.add_trace(go.Scatter(x=curve["time"], y=curve["current_high"], line=dict(width=0), showlegend=False, hoverinfo="skip"))
+                    fig.add_trace(go.Scatter(x=curve["time"], y=curve["current_low"], line=dict(width=0), fill="tonexty", fillcolor="rgba(220,79,68,.14)", name="現在値の95%予測幅", hoverinfo="skip"))
+                    fig.add_trace(go.Scatter(x=curve["time"], y=curve["current"], mode="lines", name="現在値のまま", line=dict(color="#d94f45", width=3)))
+                    fig.add_trace(go.Scatter(x=curve["time"], y=curve["reference"], mode="lines", name="基準値を達成", line=dict(color="#16846b", width=3)))
+                    fig.update_layout(title=f"{label}の累積リスク", xaxis_title="今からの年数", yaxis_title="累積リスク（%）", height=360, hovermode="x unified", margin=dict(l=20, r=20, t=55, b=20))
+                    st.plotly_chart(fig, width="stretch")
+                    st.caption("薄い赤色の範囲は現在値に基づく95%予測幅です。個人の発症を断定するものではありません。")
             if st.button("次へ：食事・運動・お薬を選ぶ", type="primary", use_container_width=True, key="open_initial_interventions"):
                 st.session_state["initial_risk_reviewed"] = True
                 st.rerun()
