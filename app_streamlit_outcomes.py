@@ -306,11 +306,30 @@ with st.container(border=True):
         }[value],
         key="care_path",
     ) or "initial"
+    if st.session_state.get("last_care_path") != care_path:
+        st.session_state["initial_risk_reviewed"] = False
+        st.session_state["initial_baseline_result"] = None
+        st.session_state["last_care_path"] = care_path
     backcast_enabled = care_path == "continue"
+    initial_risk_reviewed = bool(st.session_state.get("initial_risk_reviewed", False))
     if backcast_enabled:
         st.caption("現在のお薬を入力すると、飲まなかった場合と比べてこれまでの成果を表示します。")
     elif care_path == "adjust":
         st.caption("現在のお薬と変更後を比べます。")
+    elif care_path == "initial" and not initial_risk_reviewed:
+        sbp_tgt_manual, ldl_tgt_manual, a1c_tgt_manual = sbp_now, ldl_now, a1c_now
+        smoking_status = st.selectbox(
+            "喫煙", ["never", "current", "former"],
+            format_func=lambda x: {"never": "吸わない", "current": "現在吸っている", "former": "過去に吸っていた"}[x],
+            key="smoking_status_compact",
+        )
+        smoke_col1, smoke_col2 = st.columns(2)
+        with smoke_col1:
+            cigs_per_day = st.number_input("1日の本数", 0, 80, 20, step=5, key="cigs_compact") if smoking_status == "current" else 0
+        with smoke_col2:
+            years_smoked = st.number_input("喫煙年数", 0, 80, 20, step=5, key="years_smoked_compact") if smoking_status != "never" else 0
+        years_since_quit = st.number_input("禁煙してからの年数", 0, 80, 5, step=1, key="quit_years_compact") if smoking_status == "former" else 0
+        quit_today = False
     else:
         st.caption("食事・運動・お薬の介入案を比べます。")
 
@@ -356,19 +375,31 @@ with st.container(border=True):
         with target_col3:
             a1c_tgt_manual = st.number_input("目標HbA1c", 4.0, 12.0, 7.0, step=0.5, format="%.1f", key="a1c_target_input")
 
-        st.subheader("喫煙状況")
+        st.markdown("**喫煙**")
         smoking_status = st.selectbox(
             "状況", ["never", "current", "former"],
-            format_func=lambda x: {"never": "非喫煙者", "current": "現在喫煙者", "former": "元喫煙者"}[x]
+            format_func=lambda x: {"never": "吸わない", "current": "現在吸っている", "former": "過去に吸っていた"}[x],
+            key="smoking_status_compact",
         )
-        cigs_per_day = st.slider("1日あたりの喫煙本数", 0, 40, 20)
-        years_smoked = st.slider("喫煙年数", 0, 60, 20)
-        years_since_quit = st.slider("禁煙からの年数（元喫煙者の場合）", 0, 40, 5)
-        quit_today = st.checkbox("今日禁煙したと仮定（目標シナリオ）")
+        smoke_col1, smoke_col2 = st.columns(2)
+        with smoke_col1:
+            cigs_per_day = st.number_input("1日の本数", 0, 80, 20, step=5, key="cigs_compact") if smoking_status == "current" else 0
+        with smoke_col2:
+            years_smoked = st.number_input("喫煙年数", 0, 80, 20, step=5, key="years_smoked_compact") if smoking_status != "never" else 0
+        years_since_quit = st.number_input("禁煙してからの年数", 0, 80, 5, step=1, key="quit_years_compact") if smoking_status == "former" else 0
+        quit_today = st.checkbox("今日から禁煙する場合も比較", key="quit_today_compact") if smoking_status == "current" else False
 
-    st.subheader("体格")
-    height_cm = st.number_input("身長 (cm)", min_value=120.0, max_value=220.0, value=165.0, step=0.1)
-    weight_kg = st.number_input("体重 (kg)", min_value=30.0, max_value=200.0, value=65.0, step=0.1)
+    st.markdown("**体格（未入力なら性別の標準値を使用）**")
+    default_height, default_weight = ((170.0, 65.0) if sex == "male" else (160.0, 55.0))
+    body_col1, body_col2, body_col3 = st.columns(3)
+    with body_col1:
+        height_input = st.number_input("身長 (cm)", min_value=120.0, max_value=220.0, value=None, step=1.0, placeholder=f"自動 {default_height:.0f}")
+    with body_col2:
+        weight_input = st.number_input("体重 (kg)", min_value=30.0, max_value=200.0, value=None, step=1.0, placeholder=f"自動 {default_weight:.0f}")
+    with body_col3:
+        dbp_now = st.number_input("拡張期血圧", min_value=40, max_value=130, value=90, step=5)
+    height_cm = float(height_input if height_input is not None else default_height)
+    weight_kg = float(weight_input if weight_input is not None else default_weight)
     bmi_now = weight_kg / (height_cm / 100.0) ** 2
     bmi_target = 22.0
     if backcast_enabled:
@@ -376,32 +407,67 @@ with st.container(border=True):
     else:
         st.caption(f"現在BMI: {bmi_now:.1f}／目標BMI: 22.0（目標体重 {22 * (height_cm / 100.0) ** 2:.1f} kg）")
 
-    dbp_now = st.number_input("拡張期血圧 現在 (mmHg)", min_value=40, max_value=130, value=90, step=1)
-    col_b1, col_b2 = st.columns(2)
-    with col_b1:
-        st.metric("現在BMI", f"{bmi_now:.1f}")
-    with col_b2:
-        if not backcast_enabled:
-            st.metric("目標BMI", "22.0")
+    st.caption(f"計算に使用: {height_cm:.0f} cm・{weight_kg:.0f} kg・BMI {bmi_now:.1f}")
 
     if backcast_enabled:
         egfr_now = egfr_target = 80.0
         acr_now = acr_target = "A1"
         which = "10-year"
     else:
-        st.subheader("🫀 CKDの評価" if ckd_diagnosed else "腎機能（任意）")
         if ckd_diagnosed:
-            st.info("CKDの診断があるため、eGFRと尿アルブミン／蛋白をリスク計算に組み込みます。")
-        egfr_now = st.number_input("eGFR 現在", min_value=5.0, max_value=120.0, value=80.0, step=1.0)
-        egfr_target = st.number_input("eGFR 目標（任意）", min_value=5.0, max_value=120.0, value=80.0, step=1.0)
-        acr_now = st.selectbox("尿アルブミン/蛋白（現在）", ["A1", "A2", "A3"], index=0)
-        acr_target = st.selectbox("尿アルブミン/蛋白（目標・任意）", ["A1", "A2", "A3"], index=0)
+            st.markdown("**🫀 CKD**")
+            kidney_col1, kidney_col2 = st.columns(2)
+            with kidney_col1:
+                egfr_now = st.number_input("eGFR", min_value=5.0, max_value=120.0, value=45.0, step=5.0)
+            with kidney_col2:
+                acr_now = st.selectbox("尿アルブミン／蛋白", ["A1", "A2", "A3"], index=1)
+            egfr_target, acr_target = egfr_now, acr_now
+        else:
+            egfr_now = egfr_target = 80.0
+            acr_now = acr_target = "A1"
 
         st.subheader("予測期間")
         which = st.radio(
             "期間を選択", ["5-year", "10-year", "20-year", "30-year", "50-year", "Both"], index=2,
             format_func=lambda x: {"5-year": "5年", "10-year": "10年", "20-year": "20年", "30-year": "30年", "50-year": "50年", "Both": "両方"}[x]
         )
+
+    # 初診は「現在リスクの確認」を終えるまで介入選択を表示しない。
+    if care_path == "initial" and not initial_risk_reviewed:
+        st.divider()
+        st.markdown("### 1. まず現在のリスクを確認")
+        baseline_horizon = {"5-year": 5, "10-year": 10, "20-year": 20, "30-year": 30, "50-year": 50, "Both": 10}[which]
+        baseline_signature = (
+            sex, age, sbp_now, ldl_now, a1c_now, smoking_status, cigs_per_day,
+            years_smoked, years_since_quit, bmi_now, egfr_now, acr_now, baseline_horizon,
+        )
+        if st.session_state.get("initial_baseline_signature") != baseline_signature:
+            st.session_state["initial_baseline_result"] = None
+            st.session_state["initial_baseline_signature"] = baseline_signature
+        if st.button("現在のリスクを計算", type="primary", use_container_width=True, key="calculate_initial_baseline"):
+            baseline_result = {}
+            with st.spinner("現在のリスクを計算中..."):
+                for outcome in OUTCOME_DISPLAY_ORDER:
+                    result = engine.cumulative_incidence_with_ci(
+                        outcome, sex, int(age), baseline_horizon,
+                        sbp_now, sbp_now, ldl_now, ldl_now, a1c_now, a1c_now,
+                        smoking_status, cigs_per_day, years_smoked, years_since_quit, False,
+                        bmi_now=bmi_now, bmi_target=bmi_now,
+                        egfr_now=egfr_now, egfr_target=egfr_now,
+                        acr_now=acr_now, acr_target=acr_now,
+                    )
+                    baseline_result[outcome] = result["point"]["baseline"] * 100.0
+            st.session_state["initial_baseline_result"] = baseline_result
+        baseline_result = st.session_state.get("initial_baseline_result")
+        if baseline_result:
+            st.success(f"現在の{baseline_horizon}年リスクです。これを確認してから介入を選びます。")
+            baseline_cols = st.columns(3)
+            for col, outcome, label in zip(baseline_cols, OUTCOME_DISPLAY_ORDER, ["全死亡", "心筋梗塞", "脳卒中"]):
+                col.metric(label, f"{baseline_result[outcome]:.1f}%")
+            if st.button("次へ：食事・運動・お薬を選ぶ", type="primary", use_container_width=True, key="open_initial_interventions"):
+                st.session_state["initial_risk_reviewed"] = True
+                st.rerun()
+        st.stop()
 
     st.divider()
     st.subheader("🥗 介入1：食事と運動")
