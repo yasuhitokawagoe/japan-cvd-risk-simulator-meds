@@ -1,4 +1,4 @@
-import math, yaml, numpy as np, pandas as pd, os
+import csv, math, yaml, numpy as np, os
 from typing import Dict, List, Any
 from meds_catalog import MedicationAdjustment
 
@@ -64,15 +64,26 @@ class OutcomesEngine:
                 alt = os.path.basename(path)
                 if os.path.exists(alt):
                     load_path = alt
-            # Pandas 3のArrow文字列実装は、Streamlitの複数セッションが
-            # 同時にCSVを読むとネイティブ層で落ちる場合がある。
-            # sex列はPython objectとして読み、Arrow変換を回避する。
-            df = pd.read_csv(load_path, dtype={"sex": object})
-            if df is None or len(df) == 0:
-                return None
-            if 'sex' in df.columns:
-                df['sex'] = df['sex'].astype(str).str.lower().str.strip()
-            return df
+            # RailwayでPandas 3の文字列比較がネイティブクラッシュしたため、
+            # 小さな基準発生率CSVは標準ライブラリで読み、性別ごとのNumPy配列にする。
+            points = {}
+            with open(load_path, newline="", encoding="utf-8-sig") as handle:
+                for row in csv.DictReader(handle):
+                    sex = str(row.get("sex", "")).strip().lower()
+                    if not sex or not row.get("age"):
+                        continue
+                    value_key = "qx" if row.get("qx") not in (None, "") else "incidence_per_100k"
+                    if row.get(value_key) in (None, ""):
+                        continue
+                    bucket = points.setdefault(sex, {"age": [], "value": [], "is_qx": value_key == "qx"})
+                    bucket["age"].append(float(row["age"]))
+                    bucket["value"].append(float(row[value_key]))
+            for bucket in points.values():
+                order = np.argsort(np.asarray(bucket["age"], dtype=float))
+                bucket["age"] = np.asarray(bucket["age"], dtype=float)[order]
+                values = np.asarray(bucket["value"], dtype=float)[order]
+                bucket["value"] = values if bucket["is_qx"] else values / 100000.0
+            return points or None
         except Exception:
             return None
 
@@ -82,24 +93,13 @@ class OutcomesEngine:
         
         pts = {'mi': self.mi_points, 'stroke': self.stroke_points, 'mortality': self.mort_points}[outcome]
         # CSV がある場合は優先して使用
-        if pts is not None and len(pts) > 0:
-            # 性別列がある前提でサブセット。無ければそのまま使う
-            sub = pts
-            if 'sex' in pts.columns:
-                sub = pts[pts['sex'] == sex.lower()]
-            if len(sub) >= 2 and 'age' in sub.columns:
-                xs = sub['age'].values
-                # 優先順: qx (生命表の年次発生確率) → incidence_per_100k（年率の近似）
-                if 'qx' in sub.columns:
-                    ys = sub['qx'].values  # すでに確率なので そのまま q として扱う
-                elif 'incidence_per_100k' in sub.columns:
-                    ys = sub['incidence_per_100k'].values / 100000.0  # 10万人あたりの発生率を確率に変換
-                else:
-                    ys = None
-                if ys is not None:
-                    if age <= xs.min(): return ys[xs.argmin()]
-                    if age >= xs.max(): return ys[xs.argmax()]
-                    return float(np.interp(age, xs, ys))
+        if pts:
+            sub = pts.get(sex.lower())
+            if sub and len(sub["age"]) >= 2:
+                xs, ys = sub["age"], sub["value"]
+                if age <= xs[0]: return float(ys[0])
+                if age >= xs[-1]: return float(ys[-1])
+                return float(np.interp(age, xs, ys))
 
         # フォールバック: キーが存在しない場合の処理
         data_by_sex = self.cfg['baseline_incidence'][outcome]
