@@ -24,3 +24,9 @@ def test_calculation_button_is_rendered_in_sidebar_slot():
 def test_outcomes_engine_is_cached_across_widget_reruns():
     assert "@st.cache_resource(show_spinner=False)" in APP_SOURCE
     assert 'engine = _cached_outcomes_engine("config.yaml")' in APP_SOURCE
+
+
+def test_backcast_does_not_render_adjustment_picker_twice():
+    assert 'elif mode == "adjust":' in APP_SOURCE
+    assert 'key="backcast_calculate_main"' in APP_SOURCE
+    assert 'key="backcast_calculate_sidebar"' in APP_SOURCE

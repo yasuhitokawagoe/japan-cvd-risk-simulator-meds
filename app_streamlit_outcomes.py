@@ -439,7 +439,7 @@ with st.sidebar:
                 selected_a1c=selected_a1c_meds,
             )
 
-        else:
+        elif mode == "adjust":
             # 薬増減UI：現在の治療をベースラインに、各薬をワンタップで 中止/減量/増量/切替
             st.markdown("**現在服用中の薬**")
             current_sbp_keys = render_two_stage_med_picker(
@@ -733,11 +733,19 @@ if not backcast_enabled and params_changed and st.session_state.calculated:
 # 通常モデルはボタンを押したときだけ重い計算を実行する。
 manual_button_clicked = False
 if not backcast_enabled:
-    manual_button_clicked = calculation_button_slot.button(
+    sidebar_calculate_clicked = calculation_button_slot.button(
         "🔄 リスク計算を実行",
         type="primary",
         use_container_width=True,
+        key="risk_calculate_sidebar",
     )
+    main_calculate_clicked = st.button(
+        "🔄 リスク計算を実行",
+        type="primary",
+        use_container_width=True,
+        key="risk_calculate_main",
+    )
+    manual_button_clicked = sidebar_calculate_clicked or main_calculate_clicked
 if not backcast_enabled and manual_button_clicked:
     with st.spinner("リスク計算中..."):
         st.session_state.cumulative_data = calculate_cumulative_risk_curves(years_for_curve)
@@ -748,11 +756,19 @@ if not backcast_enabled and manual_button_clicked:
 # 反実仮想も薬剤名・用量の選択中は計算せず、専用ボタンで確定する。
 backcast_ready = False
 if backcast_enabled and backcast_keys:
-    backcast_button_clicked = calculation_button_slot.button(
+    sidebar_backcast_clicked = calculation_button_slot.button(
         "🔄 反実仮想を計算",
         type="primary",
         use_container_width=True,
+        key="backcast_calculate_sidebar",
     )
+    main_backcast_clicked = st.button(
+        "🔄 反実仮想を計算",
+        type="primary",
+        use_container_width=True,
+        key="backcast_calculate_main",
+    )
+    backcast_button_clicked = sidebar_backcast_clicked or main_backcast_clicked
     if backcast_button_clicked:
         st.session_state.backcast_params_hash = params_hash
     backcast_ready = st.session_state.backcast_params_hash == params_hash
