@@ -60,6 +60,38 @@ def _split_med_key(key: str):
     return m.group(1).strip(), float(m.group(2))
 
 
+def _medication_options_by_name(options):
+    """用量付きカタログを「薬剤名 → 用量」の2段階選択用にまとめる。"""
+    grouped = {}
+    for key in options:
+        name, dose = _split_med_key(key)
+        grouped.setdefault(name, []).append((dose, key))
+    return {
+        name: [key for _, key in sorted(entries, key=lambda item: item[0] or 0.0)]
+        for name, entries in grouped.items()
+    }
+
+
+def render_two_stage_med_picker(label, options, key_prefix):
+    """第1段階で薬剤名、第2段階で各薬剤の用量を選び、カタログキーを返す。"""
+    grouped = _medication_options_by_name(options)
+    selected_names = st.multiselect(
+        f"{label}：① 薬剤を選択",
+        options=list(grouped),
+        key=f"{key_prefix}_names",
+    )
+    selected_keys = []
+    for name in selected_names:
+        dose_options = grouped[name]
+        selected_keys.append(st.selectbox(
+            f"{name}：② 用量を選択",
+            options=dose_options,
+            format_func=lambda key: key[len(name):].strip() or key,
+            key=f"{key_prefix}_dose_{name}",
+        ))
+    return selected_keys
+
+
 def _dose_ladder_keys(domain_meds, key):
     """同一薬剤名のエントリのキーを用量昇順で返す"""
     name, _ = _split_med_key(key)
@@ -337,10 +369,15 @@ with st.sidebar:
         if backcast_enabled:
             mode = "backcast"
             st.info("反実仮想では、現在服用中の薬を入力します。")
-        elif mode == "backcast":
-            current_sbp_keys = st.multiselect("降圧薬（現在）", options=sbp_options, key="current_sbp")
-            current_ldl_keys = st.multiselect("脂質薬（現在）", options=ldl_options, key="current_ldl")
-            current_a1c_keys = st.multiselect("糖尿病薬（現在）", options=a1c_options, key="current_a1c")
+            current_sbp_keys = render_two_stage_med_picker(
+                "降圧薬（現在）", sbp_options, "backcast_current_sbp"
+            )
+            current_ldl_keys = render_two_stage_med_picker(
+                "脂質薬（現在）", ldl_options, "backcast_current_ldl"
+            )
+            current_a1c_keys = render_two_stage_med_picker(
+                "糖尿病薬（現在）", a1c_options, "backcast_current_a1c"
+            )
             adjusted_sbp_keys = list(current_sbp_keys)
             adjusted_ldl_keys = list(current_ldl_keys)
             adjusted_a1c_keys = list(current_a1c_keys)
@@ -372,14 +409,19 @@ with st.sidebar:
             )
 
         if mode == "add":
-            # 既存の薬追加UI
-            sbp_sel_keys = st.multiselect("降圧薬（SBPに反映）", options=sbp_options)
+            sbp_sel_keys = render_two_stage_med_picker(
+                "降圧薬（SBPに反映）", sbp_options, "add_sbp"
+            )
             selected_sbp_meds = [m for m in meds_catalog["sbp"] if m["key"] in sbp_sel_keys]
 
-            ldl_sel_keys = st.multiselect("脂質薬（LDLに反映）", options=ldl_options)
+            ldl_sel_keys = render_two_stage_med_picker(
+                "脂質薬（LDLに反映）", ldl_options, "add_ldl"
+            )
             selected_ldl_meds = [m for m in meds_catalog["ldl"] if m["key"] in ldl_sel_keys]
 
-            a1c_sel_keys = st.multiselect("糖尿病薬（HbA1cに反映）", options=a1c_options)
+            a1c_sel_keys = render_two_stage_med_picker(
+                "糖尿病薬（HbA1cに反映）", a1c_options, "add_a1c"
+            )
             selected_a1c_meds = [m for m in meds_catalog["hba1c"] if m["key"] in a1c_sel_keys]
 
             meds_summary = apply_meds_to_targets(
@@ -394,14 +436,14 @@ with st.sidebar:
         else:
             # 薬増減UI：現在の治療をベースラインに、各薬をワンタップで 中止/減量/増量/切替
             st.markdown("**現在服用中の薬**")
-            current_sbp_keys = st.multiselect(
-                "降圧薬（現在）", options=sbp_options, key="current_sbp"
+            current_sbp_keys = render_two_stage_med_picker(
+                "降圧薬（現在）", sbp_options, "adjust_current_sbp"
             )
-            current_ldl_keys = st.multiselect(
-                "脂質薬（現在）", options=ldl_options, key="current_ldl"
+            current_ldl_keys = render_two_stage_med_picker(
+                "脂質薬（現在）", ldl_options, "adjust_current_ldl"
             )
-            current_a1c_keys = st.multiselect(
-                "糖尿病薬（現在）", options=a1c_options, key="current_a1c"
+            current_a1c_keys = render_two_stage_med_picker(
+                "糖尿病薬（現在）", a1c_options, "adjust_current_a1c"
             )
 
             st.markdown("**各薬の変更（タップで選択）**")
@@ -418,23 +460,23 @@ with st.sidebar:
             )
 
             with st.expander("➕ 薬を追加する（任意）"):
-                add_sbp_keys = st.multiselect(
+                add_sbp_keys = render_two_stage_med_picker(
                     "降圧薬（追加）",
-                    options=[o for o in sbp_options
-                             if o not in current_sbp_keys and o not in adjusted_sbp_keys],
-                    key="pc_add_sbp",
+                    [o for o in sbp_options
+                     if o not in current_sbp_keys and o not in adjusted_sbp_keys],
+                    "pc_add_sbp",
                 )
-                add_ldl_keys = st.multiselect(
+                add_ldl_keys = render_two_stage_med_picker(
                     "脂質薬（追加）",
-                    options=[o for o in ldl_options
-                             if o not in current_ldl_keys and o not in adjusted_ldl_keys],
-                    key="pc_add_ldl",
+                    [o for o in ldl_options
+                     if o not in current_ldl_keys and o not in adjusted_ldl_keys],
+                    "pc_add_ldl",
                 )
-                add_a1c_keys = st.multiselect(
+                add_a1c_keys = render_two_stage_med_picker(
                     "糖尿病薬（追加）",
-                    options=[o for o in a1c_options
-                             if o not in current_a1c_keys and o not in adjusted_a1c_keys],
-                    key="pc_add_a1c",
+                    [o for o in a1c_options
+                     if o not in current_a1c_keys and o not in adjusted_a1c_keys],
+                    "pc_add_a1c",
                 )
             adjusted_sbp_keys = adjusted_sbp_keys + [k for k in add_sbp_keys if k not in adjusted_sbp_keys]
             adjusted_ldl_keys = adjusted_ldl_keys + [k for k in add_ldl_keys if k not in adjusted_ldl_keys]

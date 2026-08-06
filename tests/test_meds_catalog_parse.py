@@ -58,8 +58,28 @@ def test_sbp_ldl_unaffected():
     assert all(0 < v < 1 for v in ldl.values()), "LDL は 0〜1 の低下割合のはず"
 
 
+def test_adalat_and_renivace_dose_ladders_are_available():
+    """アダラートCRとレニベースが用量別に読み込まれ、高用量ほど降圧量が大きいこと。"""
+    cat = load_meds_catalog(XLSX_BP, XLSX_LDL_A1C)
+    sbp = {m["key"]: m["effect"]["mean"] for m in cat["sbp"]}
+
+    adalat = [
+        sbp["アダラートCR（ニフェジピン） 20 mg/日"],
+        sbp["アダラートCR（ニフェジピン） 40 mg/日"],
+        sbp["アダラートCR（ニフェジピン） 80 mg/日（40 mg 1日2回）"],
+    ]
+    renivace = [
+        sbp["レニベース（エナラプリル） 2.5 mg/日"],
+        sbp["レニベース（エナラプリル） 5 mg/日"],
+        sbp["レニベース（エナラプリル） 10 mg/日"],
+    ]
+    assert adalat == sorted(adalat, reverse=True)
+    assert renivace == sorted(renivace, reverse=True)
+
+
 if __name__ == "__main__":
     test_hba1c_label_not_parsed_as_value()
     test_catalog_hba1c_means_are_negative()
     test_sbp_ldl_unaffected()
+    test_adalat_and_renivace_dose_ladders_are_available()
     print("OK: 全テスト通過")
