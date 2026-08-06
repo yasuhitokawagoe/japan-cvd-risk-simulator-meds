@@ -665,7 +665,7 @@ def calculate_cumulative_risk_curves(years: int):
 
     return cumulative_data
 
-# ---- パラメータ変更検知と自動計算 ----
+# ---- パラメータ変更検知と手動計算 ----
 # 現在のパラメータを文字列化してハッシュ化（変更検知用）
 import hashlib
 current_params = {
@@ -698,6 +698,7 @@ current_params = {
         else tuple(current_a1c_keys) + tuple(adjusted_a1c_keys)
     ),
     "use_meds": use_meds,
+    "backcast_treatment_years": int(backcast_treatment_years),
 }
 params_hash = hashlib.md5(str(sorted(current_params.items())).encode()).hexdigest()
 
@@ -707,22 +708,39 @@ if "params_hash" not in st.session_state:
     st.session_state.calculated = False
     st.session_state.cumulative_data = None
     st.session_state.years = None
+if "backcast_params_hash" not in st.session_state:
+    st.session_state.backcast_params_hash = None
 
 horizons = [5, 10] if which == "Both" else [_years_from_choice(which)]
 years_for_curve = max(horizons)
 
-# パラメータが変更されたか、または初回実行か
+# 入力が変わったら古い結果を無効化するが、自動再計算はしない。
 params_changed = st.session_state.params_hash != params_hash
-should_auto_calculate = params_changed and st.session_state.calculated
+if not backcast_enabled and params_changed and st.session_state.calculated:
+    st.session_state.calculated = False
+    st.session_state.cumulative_data = None
+    st.session_state.years = None
 
-# 手動ボタンまたは自動計算
-manual_button_clicked = False if backcast_enabled else st.button("🔄 リスク計算を実行", type="primary")
-if not backcast_enabled and (manual_button_clicked or should_auto_calculate):
+# 通常モデルはボタンを押したときだけ重い計算を実行する。
+manual_button_clicked = False
+if not backcast_enabled:
+    manual_button_clicked = st.button("🔄 リスク計算を実行", type="primary")
+if not backcast_enabled and manual_button_clicked:
     with st.spinner("リスク計算中..."):
         st.session_state.cumulative_data = calculate_cumulative_risk_curves(years_for_curve)
         st.session_state.calculated = True
         st.session_state.years = years_for_curve
         st.session_state.params_hash = params_hash
+
+# 反実仮想も薬剤名・用量の選択中は計算せず、専用ボタンで確定する。
+backcast_ready = False
+if backcast_enabled and backcast_keys:
+    backcast_button_clicked = st.button("🔄 反実仮想を計算", type="primary")
+    if backcast_button_clicked:
+        st.session_state.backcast_params_hash = params_hash
+    backcast_ready = st.session_state.backcast_params_hash == params_hash
+    if not backcast_ready:
+        st.info("👆 薬剤と用量を確認し「反実仮想を計算」を押してください")
 
 if not backcast_enabled and not st.session_state.calculated:
     st.info("👆 上記のパラメータを設定して「リスク計算を実行」を押してください")
@@ -733,7 +751,7 @@ labels = {"mi": "心筋梗塞", "stroke": "脳卒中", "mortality": "全死亡"}
 
 # ---- 反実仮想モード：通常の将来リスク表示を、この結果へ丸ごと差し替える ----
 backcast_summary = None
-if backcast_enabled and backcast_keys:
+if backcast_enabled and backcast_keys and backcast_ready:
     past_sbp_meds = selected_medications(meds_catalog, "sbp", current_sbp_keys)
     past_ldl_meds = selected_medications(meds_catalog, "ldl", current_ldl_keys)
     past_a1c_meds = selected_medications(meds_catalog, "hba1c", current_a1c_keys)
@@ -855,7 +873,7 @@ if backcast_enabled and backcast_keys:
         )
         st.plotly_chart(fig, width="stretch")
     st.success("現在の数値は、服薬を続けて得られている成果です。自己判断で中止せず、今後の方針を主治医と相談しましょう。")
-elif backcast_enabled:
+elif backcast_enabled and not backcast_keys:
     st.info("現在服用中の薬を選ぶと、服薬しなかった場合の推定値を表示します。")
 
 # ---- サマリー ----
