@@ -488,10 +488,9 @@ with st.container(border=True):
             for col, outcome, label in zip(baseline_cols, OUTCOME_DISPLAY_ORDER, ["全死亡", "心筋梗塞", "脳卒中"]):
                 curve = baseline_result[outcome]
                 col.metric(label, f"{curve['current'][-1]:.1f}%", delta=f"基準値なら {curve['reference'][-1]:.1f}%", delta_color="inverse")
-            outcome_tabs = st.tabs(["全死亡", "心筋梗塞", "脳卒中"])
-            for tab, outcome, label in zip(outcome_tabs, OUTCOME_DISPLAY_ORDER, ["全死亡", "心筋梗塞", "脳卒中"]):
+            for outcome, label in zip(OUTCOME_DISPLAY_ORDER, ["全死亡", "心筋梗塞", "脳卒中"]):
                 curve = baseline_result[outcome]
-                with tab:
+                with st.container(border=True):
                     fig = go.Figure()
                     fig.add_trace(go.Scatter(x=curve["time"], y=curve["current_high"], line=dict(width=0), showlegend=False, hoverinfo="skip"))
                     fig.add_trace(go.Scatter(x=curve["time"], y=curve["current_low"], line=dict(width=0), fill="tonexty", fillcolor="rgba(220,79,68,.14)", name="現在値の95%予測幅", hoverinfo="skip"))
