@@ -842,10 +842,11 @@ with st.sidebar:
     if lifestyle_result["applied"]:
         with st.container(border=True):
             st.markdown("**🎯 選択した介入による予測値**")
-            preview_cols = st.columns(3)
-            preview_cols[0].metric("血圧", f"{sbp_tgt:.0f}")
-            preview_cols[1].metric("LDL", f"{ldl_tgt:.0f}")
-            preview_cols[2].metric("HbA1c", f"{a1c_tgt:.1f}")
+            st.markdown(
+                f"🩸 血圧　**{sbp_tgt:.0f} mmHg**  \n"
+                f"🧪 LDL　**{ldl_tgt:.0f} mg/dL**  \n"
+                f"🍬 HbA1c　**{a1c_tgt:.1f}%**"
+            )
     for effect in lifestyle_result["skipped"]:
         st.warning(f"{effect.label}は{effect.population}の根拠のため、現在の入力には効果量を適用していません。")
 
