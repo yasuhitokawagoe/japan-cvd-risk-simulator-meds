@@ -292,7 +292,8 @@ def _se_md_for_changes(stopped, added, continued):
     return "\n\n".join(sections)
 
 
-with st.sidebar:
+with st.container(border=True):
+    st.markdown("## 入力")
     st.subheader("🩺 今日の診療")
     care_path = st.segmented_control(
         "診療の目的",
@@ -318,18 +319,42 @@ with st.sidebar:
     sex = st.selectbox("性別", ["male", "female"], format_func=lambda x: "男性" if x == "male" else "女性")
     age = st.number_input("年齢（歳）", 20, 95, 60, step=1)
 
+    st.markdown("**診断済みの病気**")
+    diagnosis_flags = st.multiselect(
+        "該当するもの",
+        ["diabetes", "hypertension", "dyslipidemia", "ckd"],
+        format_func=lambda value: {
+            "diabetes": "糖尿病", "hypertension": "高血圧症",
+            "dyslipidemia": "脂質異常症", "ckd": "慢性腎臓病（CKD）",
+        }[value],
+        key="diagnosis_flags",
+        placeholder="診断済みの病気を選択",
+    )
+    diabetes_diagnosed = "diabetes" in diagnosis_flags
+    ckd_diagnosed = "ckd" in diagnosis_flags
+
     st.subheader("現在の検査値" if backcast_enabled else "リスク因子（現在 → 目標）")
-    sbp_now = st.slider("収縮期血圧 現在 (mmHg)", 90, 200, 150)
-    ldl_now = st.slider("LDL 現在 (mg/dL)", 50, 250, 160)
-    a1c_now = st.slider("HbA1c 現在 (%)", 5.0, 12.0, 8.0, step=0.1)
+    st.caption("数値を直接入力、または −／＋ で調整できます。")
+    now_col1, now_col2, now_col3 = st.columns(3)
+    with now_col1:
+        sbp_now = st.number_input("収縮期血圧", 90, 250, 150, step=10, key="sbp_now_input")
+    with now_col2:
+        ldl_now = st.number_input("LDL", 20, 300, 160, step=10, key="ldl_now_input")
+    with now_col3:
+        a1c_now = st.number_input("HbA1c", 4.0, 15.0, 8.0, step=0.5, format="%.1f", key="a1c_now_input")
     if backcast_enabled:
         sbp_tgt_manual, ldl_tgt_manual, a1c_tgt_manual = sbp_now, ldl_now, a1c_now
         smoking_status, cigs_per_day = "never", 0
         years_smoked, years_since_quit, quit_today = 0, 0, False
     else:
-        sbp_tgt_manual = st.slider("収縮期血圧 目標 (mmHg)", 90, 160, 130)
-        ldl_tgt_manual = st.slider("LDL 目標 (mg/dL)", 50, 160, 100)
-        a1c_tgt_manual = st.slider("HbA1c 目標 (%)", 5.0, 9.0, 7.0, step=0.1)
+        st.markdown("**目標値**")
+        target_col1, target_col2, target_col3 = st.columns(3)
+        with target_col1:
+            sbp_tgt_manual = st.number_input("目標血圧", 90, 200, 130, step=10, key="sbp_target_input")
+        with target_col2:
+            ldl_tgt_manual = st.number_input("目標LDL", 20, 250, 100, step=10, key="ldl_target_input")
+        with target_col3:
+            a1c_tgt_manual = st.number_input("目標HbA1c", 4.0, 12.0, 7.0, step=0.5, format="%.1f", key="a1c_target_input")
 
         st.subheader("喫煙状況")
         smoking_status = st.selectbox(
@@ -364,7 +389,9 @@ with st.sidebar:
         acr_now = acr_target = "A1"
         which = "10-year"
     else:
-        st.subheader("CKD（任意）")
+        st.subheader("🫀 CKDの評価" if ckd_diagnosed else "腎機能（任意）")
+        if ckd_diagnosed:
+            st.info("CKDの診断があるため、eGFRと尿アルブミン／蛋白をリスク計算に組み込みます。")
         egfr_now = st.number_input("eGFR 現在", min_value=5.0, max_value=120.0, value=80.0, step=1.0)
         egfr_target = st.number_input("eGFR 目標（任意）", min_value=5.0, max_value=120.0, value=80.0, step=1.0)
         acr_now = st.selectbox("尿アルブミン/蛋白（現在）", ["A1", "A2", "A3"], index=0)
@@ -675,7 +702,9 @@ with st.sidebar:
             for med_key in backcast_keys:
                 backcast_medication_years[med_key] = float(backcast_treatment_years)
 
-    st.divider()
+with st.sidebar:
+    st.markdown("### 🌿 今日のナビ")
+    st.caption("入力はメイン画面で行います。ここには実行ボタンと要約だけを表示します。")
     calculation_button_slot = st.empty()
 
 # ====== 実際に使う目標値 ======
@@ -694,7 +723,7 @@ else:
 
 # 食事・運動も薬剤と同列の介入として、最終的な予測値に重ねる。
 diabetes_context = bool(
-    a1c_now >= 6.5 or current_a1c_keys or a1c_sel_keys or adjusted_a1c_keys
+    diabetes_diagnosed or a1c_now >= 6.5 or current_a1c_keys or a1c_sel_keys or adjusted_a1c_keys
 )
 lifestyle_result = apply_lifestyle_effects(
     sbp=sbp_tgt,
@@ -798,6 +827,7 @@ current_params = {
         else tuple(current_a1c_keys) + tuple(adjusted_a1c_keys)
     ),
     "use_meds": use_meds,
+    "diagnoses": tuple(diagnosis_flags),
     "backcast_treatment_years": int(backcast_treatment_years),
     "diet_interventions": tuple(diet_intervention_keys),
     "exercise_intervention": exercise_intervention_key,
@@ -828,6 +858,23 @@ with st.container(border=True):
     st.markdown("**選択中の介入**")
     st.write("🥗 食事・運動：" + ("、".join(selected_intervention_labels) if selected_intervention_labels else "まだ選択されていません"))
     st.write("💊 お薬：" + ("、".join(selected_medication_labels) if selected_medication_labels else "なし／まだ選択されていません"))
+
+if diabetes_diagnosed or ckd_diagnosed:
+    st.markdown("### 🩺 疾患別の評価")
+    disease_cols = st.columns(int(diabetes_diagnosed) + int(ckd_diagnosed))
+    disease_index = 0
+    if diabetes_diagnosed:
+        with disease_cols[disease_index].container(border=True):
+            st.markdown("**糖尿病モジュール**")
+            st.metric("現在のHbA1c", f"{a1c_now:.1f}%", delta=f"介入後予測 {a1c_tgt:.1f}%")
+            st.caption("HbA1cによる心筋梗塞・脳卒中・死亡リスク補正を共通モデルへ統合しています。")
+        disease_index += 1
+    if ckd_diagnosed:
+        g_stage = "G1" if egfr_now >= 90 else "G2" if egfr_now >= 60 else "G3a" if egfr_now >= 45 else "G3b" if egfr_now >= 30 else "G4" if egfr_now >= 15 else "G5"
+        with disease_cols[disease_index].container(border=True):
+            st.markdown("**CKDモジュール**")
+            st.metric("eGFR区分", g_stage, delta=f"尿蛋白 {acr_now}")
+            st.caption("eGFRと尿アルブミン／蛋白による心筋梗塞・脳卒中・死亡リスク補正を共通モデルへ統合しています。")
 
 # 入力が変わったら古い結果を無効化するが、自動再計算はしない。
 params_changed = st.session_state.params_hash != params_hash
