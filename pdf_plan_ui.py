@@ -299,7 +299,14 @@ def render_plan_section(
         final_goals.append(additional_goal.strip())
     if treatment_benefit:
         years = int(treatment_benefit.get("treatment_years", 0))
-        final_goals.append(f"服薬継続{years}年で得られた検査値改善を維持する")
+        events = treatment_benefit.get("event_effects", {})
+        mi_stroke = float(events.get("mi", {}).get("avoided", 0.0)) + float(
+            events.get("stroke", {}).get("avoided", 0.0)
+        )
+        final_goals.append(
+            f"服薬継続{years}年で得られた検査値改善と、心筋梗塞・脳卒中の推定回避効果"
+            f"（100人あたり約{mi_stroke:.1f}件）を維持する"
+        )
     if final_goals:
         fv_final.text[pdf_fill.F_PLAN_FREETEXT] = "／".join(final_goals)
     final_achievement = achievement_status.strip() if achievement_status else ""

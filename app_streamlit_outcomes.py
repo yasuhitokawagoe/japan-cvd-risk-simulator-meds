@@ -687,6 +687,7 @@ if not backcast_enabled and not st.session_state.calculated:
     st.stop()
 
 cumulative_data = st.session_state.cumulative_data or {}
+labels = {"mi": "心筋梗塞", "stroke": "脳卒中", "mortality": "全死亡"}
 
 # ---- 反実仮想モード：通常の将来リスク表示を、この結果へ丸ごと差し替える ----
 backcast_summary = None
@@ -698,6 +699,31 @@ if backcast_enabled and backcast_keys:
         sbp_now=sbp_now, ldl_now=ldl_now, a1c_now=a1c_now,
         sbp_meds=past_sbp_meds, ldl_meds=past_ldl_meds, a1c_meds=past_a1c_meds,
     )
+    treated_average = exposure_adjusted_values(
+        untreated=untreated_values,
+        current={"sbp": sbp_now, "ldl": ldl_now, "a1c": a1c_now},
+        treatment_years=int(backcast_treatment_years),
+        medication_years=backcast_medication_years,
+        sbp_meds=past_sbp_meds, ldl_meds=past_ldl_meds, a1c_meds=past_a1c_meds,
+    )
+    start_age = int(age) - int(backcast_treatment_years)
+    event_effects = {}
+    for outcome in OUTCOME_DISPLAY_ORDER:
+        event_result = engine.cumulative_incidence(
+            outcome, sex, start_age, int(backcast_treatment_years),
+            untreated_values["sbp"], treated_average["sbp"],
+            untreated_values["ldl"], treated_average["ldl"],
+            untreated_values["a1c"], treated_average["a1c"],
+            smoking_status, cigs_per_day, years_smoked, years_since_quit,
+            assume_quit_today_in_target=False,
+        )
+        untreated_risk = event_result["baseline"] * 100.0
+        treated_risk = event_result["target"] * 100.0
+        event_effects[outcome] = {
+            "untreated": untreated_risk,
+            "treated": treated_risk,
+            "avoided": max(0.0, untreated_risk - treated_risk),
+        }
     backcast_summary = {
         "treatment_years": int(backcast_treatment_years),
         "medications": [*current_sbp_keys, *current_ldl_keys, *current_a1c_keys],
@@ -705,6 +731,7 @@ if backcast_enabled and backcast_keys:
         "untreated_sbp": float(untreated_values["sbp"]),
         "untreated_ldl": float(untreated_values["ldl"]),
         "untreated_a1c": float(untreated_values["a1c"]),
+        "event_effects": event_effects,
     }
     st.markdown("## ⑤ 服薬しなかった場合との推定比較")
     st.caption(f"現在までの{int(backcast_treatment_years)}年間について、薬剤カタログの平均効果から逆算した推定です。")
@@ -716,12 +743,25 @@ if backcast_enabled and backcast_keys:
     ):
         with col:
             st.metric(label, f"現在 {current:.1f} {unit}", delta=f"薬なし推定 {untreated:.1f} {unit}")
+    st.markdown(f"### この{int(backcast_treatment_years)}年間に回避できた可能性があるイベント")
+    event_cols = st.columns(3)
+    for col, outcome in zip(event_cols, OUTCOME_DISPLAY_ORDER):
+        effect = event_effects[outcome]
+        with col:
+            st.metric(
+                labels[outcome],
+                f"{effect['avoided']:.1f}ポイント回避",
+                delta=f"薬なし {effect['untreated']:.1f}% → 服薬あり {effect['treated']:.1f}%",
+            )
+            if effect["avoided"] > 0.05:
+                st.caption(f"100人あたり約{effect['avoided']:.1f}件／NNT相当 約{100/effect['avoided']:.0f}人")
+            else:
+                st.caption("推定差はごく小さい")
     st.success("現在の数値は、服薬を続けて得られている成果です。自己判断で中止せず、今後の方針を主治医と相談しましょう。")
 elif backcast_enabled:
     st.info("現在服用中の薬を選ぶと、服薬しなかった場合の推定値を表示します。")
 
 # ---- サマリー ----
-labels = {"mi": "心筋梗塞", "stroke": "脳卒中", "mortality": "全死亡"}
 if not backcast_enabled:
     st.markdown("## 📊 リスク比較サマリー")
     cols = st.columns(3)

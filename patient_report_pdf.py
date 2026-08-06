@@ -183,16 +183,31 @@ def generate_patient_report_pdf(
         _metric_card(c, 394, card_y, 171, "HbA1c（薬なし推定→現在）", float(treatment_benefit["untreated_a1c"]), float(treatment_benefit["current_a1c"]), "%")
 
         y = card_y - 42
-        y = _section_title(c, y, "3. この結果の受け止め方")
-        c.setFillColor(PALE_TEAL)
-        c.roundRect(30, y - 122, 535, 112, 7, fill=1, stroke=0)
-        _text(c, 44, y - 34, "現在の血圧・LDL・HbA1cには、服薬を続けてきた効果が含まれています。", 10, NAVY)
-        _text(c, 44, y - 58, "薬を飲まなかった場合の数値は、薬剤の平均効果から逆算した推定値です。", 9)
-        _text(c, 44, y - 82, "これまで続けてきた治療を、自己判断で中止しないことが大切です。", 9)
-        _text(c, 44, y - 104, "副作用や負担が気になる場合は、主治医と相談して調整しましょう。", 9)
+        y = _section_title(c, y, f"3. この{years}年間に回避できた可能性があるイベント")
+        event_card_y = y - 68
+        event_effects = treatment_benefit.get("event_effects", {})
+        for index, key in enumerate(("mortality", "mi", "stroke")):
+            effect = event_effects.get(key, {})
+            x = 30 + index * 182
+            avoided = float(effect.get("avoided", 0.0))
+            untreated = float(effect.get("untreated", 0.0))
+            treated = float(effect.get("treated", 0.0))
+            c.setFillColor(PALE_TEAL if avoided > 0 else LIGHT)
+            c.roundRect(x, event_card_y, 170, 62, 7, fill=1, stroke=0)
+            _text(c, x + 10, event_card_y + 44, OUTCOME_LABELS[key], 9, NAVY)
+            _text(c, x + 10, event_card_y + 25, f"{avoided:.1f}ポイント回避", 12, TEAL)
+            _text(c, x + 10, event_card_y + 9, f"薬なし {untreated:.1f}% → 服薬 {treated:.1f}%", 7.5, GRAY)
 
-        y -= 162
-        y = _section_title(c, y, "4. 今後の方針")
+        y = event_card_y - 38
+        y = _section_title(c, y, "4. この結果の受け止め方")
+        c.setFillColor(PALE_TEAL)
+        c.roundRect(30, y - 92, 535, 82, 7, fill=1, stroke=0)
+        _text(c, 44, y - 32, "現在の検査値とイベント回避効果には、服薬を続けてきた成果が含まれています。", 9.5, NAVY)
+        _text(c, 44, y - 54, "薬なしの数値は平均効果からの推定です。自己判断で中止しないことが大切です。", 8.5)
+        _text(c, 44, y - 75, "副作用や負担が気になる場合は、主治医と相談して調整しましょう。", 8.5)
+
+        y -= 128
+        y = _section_title(c, y, "5. 今後の方針")
         status = str(treatment_benefit.get("plan_status", "現在の治療を継続する"))
         for index, line in enumerate(_wrap(status, 45)):
             _text(c, 44, y - index * 18, "□ " + line if index == 0 else line, 11, NAVY)
