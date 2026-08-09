@@ -15,10 +15,218 @@ st.set_page_config(
     page_icon="🫀",
 )
 
-st.title("🫀 一次予防リスクシミュレーター")
-st.subheader("（モバイル版）")
-st.caption("将来の心血管リスクと、改善した場合の変化を簡単に確認できます。")
-st.link_button("💻 詳細版（PC版）はこちら", "https://japan-cvd-risk-simulator.streamlit.app/")
+# Visual theme: calm clinical slate + sea-glass teal (avoid purple / cream-serif clichés).
+_THEME = {
+    "ink": "#10233f",
+    "ink_soft": "#3a4d66",
+    "paper": "#edf2f5",
+    "paper_deep": "#d9e3ea",
+    "card": "rgba(255,255,255,0.88)",
+    "line": "rgba(16,35,63,0.12)",
+    "now": "#c45c4a",
+    "goal": "#1f7a6b",
+    "delta": "#b7791f",
+    "accent": "#1f7a6b",
+}
+
+
+def _inject_mobile_theme() -> None:
+    ink, ink_soft = _THEME["ink"], _THEME["ink_soft"]
+    paper, paper_deep = _THEME["paper"], _THEME["paper_deep"]
+    card, line = _THEME["card"], _THEME["line"]
+    accent, now, goal, delta = _THEME["accent"], _THEME["now"], _THEME["goal"], _THEME["delta"]
+    st.markdown(
+        f"""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600;700&family=Shippori+Mincho:wght@500;600;700&display=swap');
+
+html, body, [class*="css"] {{
+  font-family: "IBM Plex Sans JP", "Hiragino Sans", sans-serif;
+}}
+.stApp {{
+  background:
+    radial-gradient(1200px 520px at 12% -10%, rgba(31,122,107,0.16), transparent 55%),
+    radial-gradient(900px 480px at 100% 0%, rgba(196,92,74,0.10), transparent 50%),
+    linear-gradient(180deg, {paper} 0%, {paper_deep} 100%);
+  color: {ink};
+}}
+.block-container {{
+  padding-top: 1.1rem !important;
+  padding-bottom: 2.4rem !important;
+  max-width: 440px;
+}}
+[data-testid="stHeader"] {{
+  background: transparent;
+}}
+.hero {{
+  position: relative;
+  overflow: hidden;
+  border: 1px solid {line};
+  border-radius: 22px;
+  padding: 1.35rem 1.2rem 1.2rem;
+  margin: 0 0 1rem;
+  background:
+    linear-gradient(145deg, rgba(255,255,255,0.92) 0%, rgba(237,245,247,0.82) 100%);
+  box-shadow: 0 18px 40px rgba(16,35,63,0.08);
+}}
+.hero::before {{
+  content: "";
+  position: absolute;
+  inset: auto -20% -55% 35%;
+  height: 180px;
+  background: radial-gradient(closest-side, rgba(31,122,107,0.22), transparent 70%);
+  pointer-events: none;
+}}
+.hero-kicker {{
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: {accent};
+  font-weight: 600;
+  margin: 0 0 0.45rem;
+}}
+.hero-brand {{
+  font-family: "Shippori Mincho", "Hiragino Mincho ProN", serif;
+  font-size: 1.72rem;
+  line-height: 1.25;
+  font-weight: 700;
+  color: {ink};
+  margin: 0 0 0.45rem;
+}}
+.hero-copy {{
+  margin: 0;
+  color: {ink_soft};
+  font-size: 0.92rem;
+  line-height: 1.55;
+}}
+.section-label {{
+  margin: 1.15rem 0 0.55rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: {ink_soft};
+  font-weight: 600;
+}}
+.predict-card, .result-card {{
+  border: 1px solid {line};
+  border-radius: 18px;
+  background: {card};
+  backdrop-filter: blur(8px);
+  box-shadow: 0 10px 28px rgba(16,35,63,0.06);
+  padding: 1rem 1rem 0.95rem;
+  margin: 0 0 0.85rem;
+}}
+.predict-card strong {{
+  color: {ink};
+}}
+.result-title {{
+  display: block;
+  font-family: "Shippori Mincho", serif;
+  font-size: 1.05rem;
+  color: {ink};
+  margin-bottom: 0.85rem;
+}}
+.result-note {{
+  display: block;
+  margin-top: 0.2rem;
+  font-family: "IBM Plex Sans JP", sans-serif;
+  font-size: 0.7rem;
+  color: {ink_soft};
+  font-weight: 500;
+}}
+.result-grid {{
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.4rem;
+}}
+.result-cell {{
+  text-align: center;
+  padding: 0.55rem 0.2rem;
+  border-radius: 12px;
+  background: rgba(16,35,63,0.035);
+}}
+.result-cell .label {{
+  margin: 0;
+  font-size: 0.72rem;
+  color: {ink_soft};
+  font-weight: 600;
+}}
+.result-cell .value {{
+  margin: 0.2rem 0 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}}
+.result-cell.now .value {{ color: {now}; }}
+.result-cell.goal .value {{ color: {goal}; }}
+.result-cell.delta .value {{ color: {delta}; }}
+div.stButton > button[kind="primary"] {{
+  background: linear-gradient(135deg, {accent} 0%, #165f54 100%);
+  border: none;
+  color: white;
+  border-radius: 999px;
+  font-weight: 600;
+  box-shadow: 0 10px 24px rgba(31,122,107,0.28);
+}}
+div.stButton > button[kind="primary"]:hover {{
+  background: linear-gradient(135deg, #258a7a 0%, {accent} 100%);
+  color: white;
+}}
+[data-testid="stExpander"] {{
+  border: 1px solid {line};
+  border-radius: 16px;
+  background: rgba(255,255,255,0.72);
+  overflow: hidden;
+}}
+[data-testid="stMetric"] {{
+  background: rgba(255,255,255,0.75);
+  border: 1px solid {line};
+  border-radius: 14px;
+  padding: 0.55rem 0.7rem;
+}}
+</style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _result_card_html(title: str, baseline: float, target: float, note: str = "") -> str:
+    diff = baseline - target
+    note_html = f'<span class="result-note">{note}</span>' if note else ""
+    return f"""
+<div class="result-card">
+  <strong class="result-title">{title}{note_html}</strong>
+  <div class="result-grid">
+    <div class="result-cell now">
+      <p class="label">現在</p>
+      <p class="value">{100 * baseline:.1f}%</p>
+    </div>
+    <div class="result-cell goal">
+      <p class="label">改善後</p>
+      <p class="value">{100 * target:.1f}%</p>
+    </div>
+    <div class="result-cell delta">
+      <p class="label">差</p>
+      <p class="value">{100 * diff:+.1f}%</p>
+    </div>
+  </div>
+</div>
+"""
+
+
+_inject_mobile_theme()
+
+st.markdown(
+    """
+<div class="hero">
+  <p class="hero-kicker">Primary Prevention · Mobile</p>
+  <h1 class="hero-brand">一次予防リスク<br>シミュレーター</h1>
+  <p class="hero-copy">いまの検査値と、食事・運動・お薬を選んだあとの将来リスクを、その場で比べられます。</p>
+</div>
+    """,
+    unsafe_allow_html=True,
+)
+st.link_button("詳細版（PC）を開く", "https://japan-cvd-risk-simulator.streamlit.app/")
 
 engine = OutcomesEngine("config.yaml")
 
@@ -348,7 +556,7 @@ def figure_mi(cumulative_data, age):
             y=_b[:cut_idx],
             mode="lines",
             name="現在のリスク因子",
-            line=dict(color="#ff6b6b", width=2),
+            line=dict(color="#c45c4a", width=2.5),
             showlegend=False,
             hovertemplate="%{x:.1f}年: %{y:.2f}%<extra></extra>",
         )
@@ -359,7 +567,7 @@ def figure_mi(cumulative_data, age):
             y=_b[cut_idx:],
             mode="lines",
             name="現在のリスク因子（≥85歳推定域）",
-            line=dict(color="rgba(255,107,107,0.45)", width=2),
+            line=dict(color="rgba(196,92,74,0.45)", width=2),
             showlegend=False,
             hovertemplate="%{x:.1f}年: %{y:.2f}%<extra></extra>",
         )
@@ -370,7 +578,7 @@ def figure_mi(cumulative_data, age):
             y=_tg[:cut_idx],
             mode="lines",
             name="目標達成時",
-            line=dict(color="#10B981", width=2),
+            line=dict(color="#1f7a6b", width=2.5),
             showlegend=False,
             hovertemplate="%{x:.1f}年: %{y:.2f}%<extra></extra>",
         )
@@ -381,7 +589,7 @@ def figure_mi(cumulative_data, age):
             y=_tg[cut_idx:],
             mode="lines",
             name="目標達成時（≥85歳推定域）",
-            line=dict(color="rgba(16, 185, 129, 0.45)", width=2),
+            line=dict(color="rgba(31,122,107,0.45)", width=2),
             showlegend=False,
             hovertemplate="%{x:.1f}年: %{y:.2f}%<extra></extra>",
         )
@@ -405,7 +613,7 @@ def figure_mi(cumulative_data, age):
             mode="lines",
             line=dict(width=0),
             name="現在のリスク因子 95%CI",
-            fillcolor="rgba(255,107,107,0.2)",
+            fillcolor="rgba(196,92,74,0.16)",
             showlegend=False,
         )
     )
@@ -428,7 +636,7 @@ def figure_mi(cumulative_data, age):
             mode="lines",
             line=dict(width=0),
             name="目標達成時 95%CI",
-            fillcolor="rgba(16, 185, 129, 0.2)",
+            fillcolor="rgba(31,122,107,0.16)",
             showlegend=False,
         )
     )
@@ -439,6 +647,11 @@ def figure_mi(cumulative_data, age):
         showlegend=False,
         hovermode="x unified",
         margin=dict(l=40, r=20, t=20, b=40),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(255,255,255,0.55)",
+        font=dict(family="IBM Plex Sans JP, sans-serif", color="#10233f", size=12),
+        xaxis=dict(gridcolor="rgba(16,35,63,0.08)", zeroline=False),
+        yaxis=dict(gridcolor="rgba(16,35,63,0.08)", zeroline=False),
     )
     _smooth_main_lines(fig)
     return fig
@@ -458,7 +671,7 @@ def figure_stroke(cumulative_data, age):
             y=_b[:cut_idx],
             mode="lines",
             name="現在のリスク因子",
-            line=dict(color="#ff6b6b", width=2),
+            line=dict(color="#c45c4a", width=2.5),
             showlegend=False,
             hovertemplate="%{x:.1f}年: %{y:.2f}%<extra></extra>",
         )
@@ -469,7 +682,7 @@ def figure_stroke(cumulative_data, age):
             y=_b[cut_idx:],
             mode="lines",
             name="現在のリスク因子（≥85歳推定域）",
-            line=dict(color="rgba(255,107,107,0.45)", width=2),
+            line=dict(color="rgba(196,92,74,0.45)", width=2),
             showlegend=False,
             hovertemplate="%{x:.1f}年: %{y:.2f}%<extra></extra>",
         )
@@ -480,7 +693,7 @@ def figure_stroke(cumulative_data, age):
             y=_tg[:cut_idx],
             mode="lines",
             name="目標達成時",
-            line=dict(color="#10B981", width=2),
+            line=dict(color="#1f7a6b", width=2.5),
             showlegend=False,
             hovertemplate="%{x:.1f}年: %{y:.2f}%<extra></extra>",
         )
@@ -491,7 +704,7 @@ def figure_stroke(cumulative_data, age):
             y=_tg[cut_idx:],
             mode="lines",
             name="目標達成時（≥85歳推定域）",
-            line=dict(color="rgba(16, 185, 129, 0.45)", width=2),
+            line=dict(color="rgba(31,122,107,0.45)", width=2),
             showlegend=False,
             hovertemplate="%{x:.1f}年: %{y:.2f}%<extra></extra>",
         )
@@ -515,7 +728,7 @@ def figure_stroke(cumulative_data, age):
             mode="lines",
             line=dict(width=0),
             name="現在のリスク因子 95%CI",
-            fillcolor="rgba(255,107,107,0.2)",
+            fillcolor="rgba(196,92,74,0.16)",
             showlegend=False,
         )
     )
@@ -538,7 +751,7 @@ def figure_stroke(cumulative_data, age):
             mode="lines",
             line=dict(width=0),
             name="目標達成時 95%CI",
-            fillcolor="rgba(16, 185, 129, 0.2)",
+            fillcolor="rgba(31,122,107,0.16)",
             showlegend=False,
         )
     )
@@ -549,6 +762,11 @@ def figure_stroke(cumulative_data, age):
         showlegend=False,
         hovermode="x unified",
         margin=dict(l=40, r=20, t=20, b=40),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(255,255,255,0.55)",
+        font=dict(family="IBM Plex Sans JP, sans-serif", color="#10233f", size=12),
+        xaxis=dict(gridcolor="rgba(16,35,63,0.08)", zeroline=False),
+        yaxis=dict(gridcolor="rgba(16,35,63,0.08)", zeroline=False),
     )
     _smooth_main_lines(fig)
     return fig
@@ -568,7 +786,7 @@ def figure_mortality(cumulative_data, age):
             y=_b[:cut_idx],
             mode="lines",
             name="現在のリスク因子",
-            line=dict(color="#ef5350", width=2),
+            line=dict(color="#c45c4a", width=2.5),
             showlegend=False,
             hovertemplate="%{x:.1f}年: %{y:.2f}%<extra></extra>",
         )
@@ -579,7 +797,7 @@ def figure_mortality(cumulative_data, age):
             y=_b[cut_idx:],
             mode="lines",
             name="現在のリスク因子（≥85歳推定域）",
-            line=dict(color="rgba(239,83,80,0.45)", width=2),
+            line=dict(color="rgba(196,92,74,0.45)", width=2),
             showlegend=False,
             hovertemplate="%{x:.1f}年: %{y:.2f}%<extra></extra>",
         )
@@ -590,7 +808,7 @@ def figure_mortality(cumulative_data, age):
             y=_tg[:cut_idx],
             mode="lines",
             name="目標達成時",
-            line=dict(color="#10B981", width=2),
+            line=dict(color="#1f7a6b", width=2.5),
             showlegend=False,
             hovertemplate="%{x:.1f}年: %{y:.2f}%<extra></extra>",
         )
@@ -601,7 +819,7 @@ def figure_mortality(cumulative_data, age):
             y=_tg[cut_idx:],
             mode="lines",
             name="目標達成時（≥85歳推定域）",
-            line=dict(color="rgba(16, 185, 129, 0.45)", width=2),
+            line=dict(color="rgba(31,122,107,0.45)", width=2),
             showlegend=False,
             hovertemplate="%{x:.1f}年: %{y:.2f}%<extra></extra>",
         )
@@ -625,7 +843,7 @@ def figure_mortality(cumulative_data, age):
             mode="lines",
             line=dict(width=0),
             name="現在のリスク因子 95%CI",
-            fillcolor="rgba(239,83,80,0.2)",
+            fillcolor="rgba(196,92,74,0.16)",
             showlegend=False,
         )
     )
@@ -648,7 +866,7 @@ def figure_mortality(cumulative_data, age):
             mode="lines",
             line=dict(width=0),
             name="目標達成時 95%CI",
-            fillcolor="rgba(16, 185, 129, 0.2)",
+            fillcolor="rgba(31,122,107,0.16)",
             showlegend=False,
         )
     )
@@ -659,11 +877,17 @@ def figure_mortality(cumulative_data, age):
         showlegend=False,
         hovermode="x unified",
         margin=dict(l=40, r=20, t=20, b=40),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(255,255,255,0.55)",
+        font=dict(family="IBM Plex Sans JP, sans-serif", color="#10233f", size=12),
+        xaxis=dict(gridcolor="rgba(16,35,63,0.08)", zeroline=False),
+        yaxis=dict(gridcolor="rgba(16,35,63,0.08)", zeroline=False),
     )
     _smooth_main_lines(fig)
     return fig
 
 
+st.markdown('<div class="section-label">Input</div>', unsafe_allow_html=True)
 st.subheader("入力")
 
 with st.expander("基本情報", expanded=True):
@@ -711,6 +935,7 @@ with st.expander("生活習慣その他", expanded=True):
         quit_today = False
 
 # ====== 食事・運動・薬剤（PC版と同じ統一介入モデル） ======
+st.markdown('<div class="section-label">Care plan</div>', unsafe_allow_html=True)
 st.subheader("治療を選ぶ")
 diet_intervention_keys = st.multiselect(
     "🥗 食事",
@@ -978,12 +1203,21 @@ selected_medication_labels = (
     + list(current_ldl_keys or ldl_sel_keys)
     + list(current_a1c_keys or a1c_sel_keys)
 )
-with st.container(border=True):
+with st.container():
     st.markdown(
-        f"**予測値**　血圧 {sbp_now:.0f}→**{sbp_tgt:.0f}**　"
-        f"LDL {ldl_now:.0f}→**{ldl_tgt:.0f}**　HbA1c {a1c_now:.1f}→**{a1c_tgt:.1f}%**  \n"
-        f"🥗 {('、'.join(selected_intervention_labels) if selected_intervention_labels else '未選択')}　／　"
-        f"💊 {('、'.join(selected_medication_labels) if selected_medication_labels else '未選択')}"
+        f"""
+<div class="predict-card">
+  <strong>予測値</strong><br>
+  血圧 {sbp_now:.0f}→<strong>{sbp_tgt:.0f}</strong>　
+  LDL {ldl_now:.0f}→<strong>{ldl_tgt:.0f}</strong>　
+  HbA1c {a1c_now:.1f}→<strong>{a1c_tgt:.1f}%</strong><br>
+  <span style="color:#3a4d66;font-size:0.88rem;">
+  食事・運動: {('、'.join(selected_intervention_labels) if selected_intervention_labels else '未選択')}　／　
+  お薬: {('、'.join(selected_medication_labels) if selected_medication_labels else '未選択')}
+  </span>
+</div>
+        """,
+        unsafe_allow_html=True,
     )
 for effect in lifestyle_result["skipped"]:
     st.warning(
@@ -1038,7 +1272,7 @@ params_hash = hashlib.md5(str(sorted(current_params.items())).encode()).hexdiges
 params_changed = st.session_state.params_hash != params_hash
 should_auto_calculate = params_changed and st.session_state.calculated
 
-manual_button_clicked = st.button("🔄 リスク計算を実行", type="primary")
+manual_button_clicked = st.button("リスク計算を実行", type="primary", use_container_width=True)
 if manual_button_clicked or should_auto_calculate:
     with st.spinner("リスク計算中..."):
         st.session_state.cumulative_data = calculate_cumulative_curves()
@@ -1066,9 +1300,9 @@ h = horizons[0]
 # labels = {"mi": "心筋梗塞", "stroke": "脳卒中", "mortality": "全死亡"}
 
 labels = {
-    "mi": "心筋梗塞",
-    "stroke": "脳卒中",
-    "mortality": "全死亡 <span style='font-size: 11px; font-weight: normal; color: #6b7280; margin-left: 8px;'>※死亡は癌や寿命など全ての疾患を含みます</span>"
+    "mi": ("心筋梗塞", ""),
+    "stroke": ("脳卒中", ""),
+    "mortality": ("全死亡", "がんや寿命など、すべての死因を含みます"),
 }
 
 r_by_outcome = {}
@@ -1091,35 +1325,20 @@ for outcome in ["mi", "stroke", "mortality"]:
         assume_quit_today_in_target=quit_today,
     )
 
-st.markdown(f"#### 結果サマリー（{h}年）")
+st.markdown('<div class="section-label">Results</div>', unsafe_allow_html=True)
+st.markdown(f"### 結果サマリー（{h}年）")
 
 for outcome in ["mortality", "mi", "stroke"]:
     r = r_by_outcome[outcome]
-    diff = r["baseline"] - r["target"]
-    st.markdown(f"""
-    <div style="background-color: #ffffff; border-radius: 8px; box-s
-    hadow: 0 2px 4px rgba(0,0,0,0.05); padding: 15px; margin-bottom: 10px; border: 1px solid #e5e7eb;">
-        <strong style="font-size: 16px; color: #374151; display: block; margin-bottom: 12px;">{labels[outcome]}</strong>
-        <div style="display: flex; justify-content: space-around;">
-            <div style="text-align: center;">
-                <p style="margin: 0; font-size: 14px; color: #6b7280; font-weight: bold;">現在</p>
-                <p style="margin: 0; font-size: 20px; font-weight: bold; color: {'#ff6b6b' if outcome != 'stroke' else '#ff6b6b'};">{100 * r['baseline']:.1f}%</p>
-            </div>
-            <div style="text-align: center;">
-                <p style="margin: 0; font-size: 14px; color: #6b7280; font-weight: bold;">目標</p>
-                <p style="margin: 0; font-size: 20px; font-weight: bold; color: #10B981;">{100 * r['target']:.1f}%</p>
-            </div>
-            <div style="text-align: center;">
-                <p style="margin: 0; font-size: 14px; color: #6b7280; font-weight: bold;">差</p>
-                <p style="margin: 0; font-size: 20px; font-weight: bold; color: #F59E0B;">{100 * diff:+.1f}%</p>
-            </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    title, note = labels[outcome]
+    st.markdown(
+        _result_card_html(title, r["baseline"], r["target"], note=note),
+        unsafe_allow_html=True,
+    )
 
 st.divider()
 
-st.markdown("## 💴 費用と副作用（薬剤選択時）")
+st.markdown("### 費用と副作用")
 if use_meds and meds_summary is not None:
     if meds_summary.get("mode") == "adjust":
         costs = meds_summary["costs"]
@@ -1153,21 +1372,25 @@ else:
     st.info("薬剤を選択していないため、費用・副作用は表示しません。")
 
 st.divider()
-st.markdown("### 詳細表示")
+st.markdown('<div class="section-label">Detail</div>', unsafe_allow_html=True)
+st.markdown("### 将来予測の詳細")
 
 detail_blocks = [
-    ("mortality", "💀 全死亡", figure_mortality),
-    ("mi", "🫀 心筋梗塞", figure_mi),
-    ("stroke", "🧠 脳卒中", figure_stroke),
+    ("mortality", "全死亡", figure_mortality),
+    ("mi", "心筋梗塞", figure_mi),
+    ("stroke", "脳卒中", figure_stroke),
 ]
 
 DETAIL_GRAPH_CAPTION = (
-    "<span style='font-size: 14px;'>🔴 <strong>現在の推移</strong>　🟢 <strong>目標達成時</strong></span><br>"
-    "<span style='font-size: 12px; color: #6b7280;'>※ 薄い帯：95%信頼区間　薄い線：85歳以上の推定域</span>"
+    "<span style='font-size: 13px; color:#3a4d66;'>"
+    "<strong style='color:#c45c4a;'>現在</strong>　"
+    "<strong style='color:#1f7a6b;'>改善後</strong>　｜　"
+    "薄い帯：95%信頼区間　／　薄い線：85歳以上の推定域"
+    "</span>"
 )
 
 for outcome_key, heading, fig_fn in detail_blocks:
-    st.markdown(f"#### {heading} - 将来予測詳細グラフ")
+    st.markdown(f"#### {heading}")
     fig = fig_fn(cumulative_data, age)
     st.plotly_chart(fig, width="stretch", config={'displayModeBar': False})
     st.markdown(DETAIL_GRAPH_CAPTION, unsafe_allow_html=True)
