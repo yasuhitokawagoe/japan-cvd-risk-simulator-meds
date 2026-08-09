@@ -64,10 +64,10 @@ _UI = {
         "review_cap": "数値や内容はここで最終調整できます。空欄にするとその項目は印字されません。",
         "privacy": "氏名・生年月日は個人情報保護のため空欄です。未入力の項目は印刷後に手書きできます。",
         "maintain": "治療効果の維持",
-        "dl_plan": "⬇ PDFをダウンロード",
+        "download_plan": "⬇ PDFをダウンロード",
         "patient_title": "#### 患者さん向け資料",
         "patient_ok": "現在の状態、介入前後の検査値、全死亡・心筋梗塞・脳卒中のリスク差と推移グラフ、相談して決めた目標を2ページにまとめました。",
-        "dl_patient": "⬇ グラフ付き患者さん向け資料（PDF）",
+        "download_patient": "⬇ グラフ付き患者さん向け資料（PDF）",
         "patient_need_calc": "リスク計算を実行すると、グラフ付き患者さん向け資料を作成できます。",
         "plan_filename": "療養計画書",
         "patient_filename": "健康づくりプラン",
@@ -105,10 +105,10 @@ _UI = {
         "review_cap": "Adjust values here. Blank fields are not printed.",
         "privacy": "Name and date of birth are left blank for privacy. Other blanks can be handwritten after printing.",
         "maintain": "Maintain treatment benefit",
-        "dl_plan": "⬇ Download PDF",
+        "download_plan": "⬇ Download PDF",
         "patient_title": "#### Patient handout",
         "patient_ok": "A 2-page handout with current status, lab changes, risk differences for all-cause death / MI / stroke, charts, and agreed goals.",
-        "dl_patient": "⬇ Patient handout with charts (PDF)",
+        "download_patient": "⬇ Patient handout with charts (PDF)",
         "patient_need_calc": "Run the risk calculation to create a patient handout with charts.",
         "plan_filename": "care_plan",
         "patient_filename": "health_plan",
@@ -116,22 +116,22 @@ _UI = {
 }
 
 _LIFESTYLE_TOPIC_EN = {
-    "塩分が多い": "High salt intake",
+    "塩分が多い": "High dietary sodium intake",
     "野菜が少ない": "Low vegetable intake",
-    "間食・甘い飲料が多い": "Frequent snacks / sweet drinks",
-    "運動不足": "Insufficient exercise",
-    "体重を減らしたい": "Want to lose weight",
-    "喫煙している": "Currently smoking",
+    "間食・甘い飲料が多い": "Frequent snacks / sweetened beverages",
+    "運動不足": "Insufficient physical activity",
+    "体重を減らしたい": "Weight-loss goal",
+    "喫煙している": "Current smoking",
     "飲酒量が多い": "Heavy alcohol use",
-    "服薬を忘れる": "Forgets medicines",
+    "服薬を忘れる": "Medication nonadherence",
 }
 
 _INTERVENTION_LABEL_EN = {
-    "減塩": "Salt reduction",
+    "減塩": "Dietary sodium restriction",
     "糖質制限": "Carbohydrate restriction",
     "飽和脂肪制限": "Saturated fat restriction",
     "中強度有酸素運動": "Moderate-intensity aerobic exercise",
-    "有酸素＋筋力トレーニング": "Aerobic + resistance training",
+    "有酸素＋筋力トレーニング": "Combined aerobic and resistance training",
     "高強度インターバル運動": "High-intensity interval training (HIIT)",
 }
 

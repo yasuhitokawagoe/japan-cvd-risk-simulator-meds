@@ -107,47 +107,135 @@ ACTION_LABELS = {
     RX_ACTION_SWITCH: "Switch",
 }
 
+# Longer phrases first; _display_text also sorts by length to avoid partial hits (e.g. 咳 vs 咳嗽).
 DISPLAY_TRANSLATIONS = {
-    "リシノプリル": "Lisinopril", "アジルサルタン": "Azilsartan", "サクビトリル/バルサルタン": "Sacubitril/valsartan",
-    "アムロジピン": "Amlodipine", "カルベジロール": "Carvedilol", "ビソプロロール": "Bisoprolol",
-    "フルイトラン（トリクロルメチアジド）": "Fluitran (trichlormethiazide)", "ミネブロ（エサキセレノン）": "Minnebro (esaxerenone)",
-    "レパーサ（エボロクマブ）": "Repatha (evolocumab)", "アトルバスタチン": "Atorvastatin", "ピタバスタチン": "Pitavastatin",
-    "ロスバスタチン": "Rosuvastatin", "エゼチミブ": "Ezetimibe", "トラゼンタ": "Tradjenta", "マンジャロ（チルゼパチド）": "Mounjaro (tirzepatide)",
-    "オゼンピック（セマグルチド）": "Ozempic (semaglutide)", "リベルサス（セマグルチド）": "Rybelsus (semaglutide)", "ジャディアンス": "Jardiance", "メトホルミン": "Metformin",
-    "ACE阻害薬": "ACE inhibitor", "Ca拮抗薬": "Calcium channel blocker", "β遮断薬": "Beta-blocker", "サイアザイド系利尿薬": "Thiazide diuretic",
-    "非ステロイド型MRA": "Nonsteroidal MRA", "PCSK9阻害薬": "PCSK9 inhibitor", "スタチン": "Statin", "吸収阻害薬": "Absorption inhibitor",
-    "DPP-4阻害薬": "DPP-4 inhibitor", "GIP/GLP-1受容体作動薬": "GIP/GLP-1 receptor agonist", "GLP-1受容体作動薬（皮下）": "GLP-1 receptor agonist (subcutaneous)",
-    "GLP-1受容体作動薬（経口）": "GLP-1 receptor agonist (oral)", "SGLT2阻害薬": "SGLT2 inhibitor", "ビグアナイド": "Biguanide",
-    "空咳": "Dry cough", "咳": "Cough", "めまい": "Dizziness", "高K血症": "Hyperkalemia", "血管性浮腫": "Angioedema", "頭痛": "Headache", "腎変化": "renal changes",
-    "低血圧": "Hypotension", "浮腫": "Edema", "腎障害": "Renal impairment", "顔面紅潮": "Flushing", "疲労感": "Fatigue", "疲労": "Fatigue", "代謝改善": "Improved metabolism",
-    "徐脈": "Bradycardia", "勃起障害": "Erectile dysfunction", "抑うつ": "Depression", "高尿酸血症": "Hyperuricemia", "高血糖症": "Hyperglycemia", "電解質失調": "Electrolyte imbalance",
-    "副作用発現率": "Adverse-event rate", "副作用発現頻度": "Adverse-event rate", "血中カリウム増加": "Increased blood potassium", "糸球体濾過率減少": "Decreased glomerular filtration rate",
-    "注射部位反応": "Injection-site reaction", "上気道感染": "Upper respiratory tract infection", "便秘": "Constipation", "肝機能上昇": "Elevated liver function tests", "肝酵素上昇": "Elevated liver enzymes",
-    "筋肉痛": "Myalgia", "CK上昇": "Elevated CK", "下痢": "Diarrhea", "低血糖（併用時）": "Hypoglycemia (with combination therapy)", "悪心": "Nausea", "投与中止に至る有害事象": "Adverse events leading to discontinuation",
-    "嘔吐": "Vomiting", "腹部不快感": "Abdominal discomfort", "腹痛": "Abdominal pain", "消化不良": "Dyspepsia", "尿路感染": "Urinary tract infection", "脱水": "Dehydration", "消化器症状": "Gastrointestinal symptoms",
-    "mg/日": "mg/day", "mg/週": "mg/week", "隔週注": "every 2 weeks", "（開始量）": "(starting dose)", "軽度": "Mild ", "未満": "", "以上": " or more", "、": ", ", "・": ", ", "（": " (", "）": ")", "〜": "–",
+    # Medicines (brand + INN where catalog uses that form)
+    "アダラートCR（ニフェジピン）": "Adalat CR (nifedipine controlled-release)",
+    "レニベース（エナラプリル）": "Renivace (enalapril)",
+    "フルイトラン（トリクロルメチアジド）": "Fluitran (trichlormethiazide)",
+    "ミネブロ（エサキセレノン）": "Minnebro (esaxerenone)",
+    "レパーサ（エボロクマブ）": "Repatha (evolocumab)",
+    "マンジャロ（チルゼパチド）": "Mounjaro (tirzepatide)",
+    "オゼンピック（セマグルチド）": "Ozempic (semaglutide)",
+    "リベルサス（セマグルチド）": "Rybelsus (semaglutide)",
+    "サクビトリル/バルサルタン": "Sacubitril/valsartan",
+    "リシノプリル": "Lisinopril",
+    "アジルサルタン": "Azilsartan",
+    "アムロジピン": "Amlodipine",
+    "カルベジロール": "Carvedilol",
+    "ビソプロロール": "Bisoprolol",
+    "アトルバスタチン": "Atorvastatin",
+    "ピタバスタチン": "Pitavastatin",
+    "ロスバスタチン": "Rosuvastatin",
+    "エゼチミブ": "Ezetimibe",
+    "トラゼンタ": "Tradjenta (linagliptin)",
+    "ジャディアンス": "Jardiance (empagliflozin)",
+    "メトホルミン": "Metformin",
+    "ニフェジピン": "nifedipine",
+    "エナラプリル": "enalapril",
+    # Drug classes
+    "GLP-1受容体作動薬（皮下）": "GLP-1 receptor agonist (subcutaneous)",
+    "GLP-1受容体作動薬（経口）": "GLP-1 receptor agonist (oral)",
+    "GIP/GLP-1受容体作動薬": "GIP/GLP-1 receptor agonist",
+    "サイアザイド系利尿薬": "Thiazide diuretic",
+    "非ステロイド型MRA": "Nonsteroidal mineralocorticoid receptor antagonist (MRA)",
+    "PCSK9阻害薬": "PCSK9 inhibitor",
+    "DPP-4阻害薬": "DPP-4 inhibitor",
+    "SGLT2阻害薬": "SGLT2 inhibitor",
+    "ACE阻害薬": "ACE inhibitor",
+    "Ca拮抗薬": "Calcium channel blocker",
+    "β遮断薬": "Beta-blocker",
+    "吸収阻害薬": "Cholesterol absorption inhibitor",
+    "ビグアナイド": "Biguanide",
+    "スタチン": "Statin",
+    # Adverse effects / clinical phrases
+    "投与中止に至る有害事象": "Adverse events leading to discontinuation",
+    "低血糖（併用時）": "Hypoglycemia (with concomitant therapy)",
+    "副作用発現頻度": "Adverse-event frequency",
+    "副作用発現率": "Adverse-event rate",
+    "血中カリウム増加": "Increased serum potassium",
+    "糸球体濾過率減少": "Decreased glomerular filtration rate (GFR)",
+    "注射部位反応": "Injection-site reaction",
+    "上気道感染": "Upper respiratory tract infection",
+    "肝機能上昇": "Elevated liver enzymes",
+    "肝酵素上昇": "Elevated liver enzymes",
+    "過度の血圧低下": "Excessive blood pressure reduction",
+    "末梢性浮腫": "Peripheral edema",
+    "顔面潮紅": "Facial flushing",
+    "顔面紅潮": "Flushing",
+    "腎機能悪化": "Worsening renal function",
+    "消化器症状": "Gastrointestinal symptoms",
+    "腹部不快感": "Abdominal discomfort",
+    "電解質失調": "Electrolyte imbalance",
+    "高尿酸血症": "Hyperuricemia",
+    "高血糖症": "Hyperglycemia",
+    "勃起障害": "Erectile dysfunction",
+    "血管性浮腫": "Angioedema",
+    "高K血症": "Hyperkalemia",
+    "軽度腎変化": "Mild renal function changes",
+    "腎変化": "renal function changes",
+    "腎障害": "Renal impairment",
+    "尿路感染": "Urinary tract infection",
+    "消化不良": "Dyspepsia",
+    "筋肉痛": "Myalgia",
+    "CK上昇": "Elevated CK",
+    "代謝改善": "Improved metabolic profile",
+    "疲労感": "Fatigue",
+    "空咳": "Dry cough",
+    "咳嗽": "Cough",
+    "動悸": "Palpitations",
+    "めまい": "Dizziness",
+    "低血圧": "Hypotension",
+    "徐脈": "Bradycardia",
+    "抑うつ": "Depression",
+    "便秘": "Constipation",
+    "下痢": "Diarrhea",
+    "悪心": "Nausea",
+    "嘔吐": "Vomiting",
+    "腹痛": "Abdominal pain",
+    "脱水": "Dehydration",
+    "浮腫": "Edema",
+    "頭痛": "Headache",
+    "疲労": "Fatigue",
+    "咳": "Cough",
+    "は稀": " (rare)",
+    # Dosing / punctuation
+    "1日2回": "twice daily",
+    "隔週注": "every 2 weeks",
+    "（開始量）": "(starting dose)",
+    "mg/日": "mg/day",
+    "mg/週": "mg/week",
+    "軽度": "Mild ",
+    "未満": " or less",
+    "以上": " or more",
+    "、": ", ",
+    "；": "; ",
+    "・": ", ",
+    "（": " (",
+    "）": ")",
+    "〜": "–",
 }
 
 ENGLISH_LIFESTYLE_LABELS = {
-    "salt": "Salt reduction",
+    "salt": "Dietary sodium restriction",
     "carb": "Carbohydrate restriction",
     "fat": "Saturated fat restriction",
     "aerobic_moderate": "Moderate-intensity aerobic exercise",
-    "combined": "Aerobic + resistance training",
+    "combined": "Combined aerobic and resistance training",
     "hiit": "High-intensity interval training (HIIT)",
 }
 
 ENGLISH_LIFESTYLE_DETAILS = {
     "salt": {
-        "definition": "Reduce dietary salt intake (aim for <6 g/day)",
+        "definition": "Reduce dietary sodium intake (aim for salt <6 g/day)",
         "population": "Adults",
-        "evidence_summary": "Meta-analysis of 133 RCTs (12,197 people). Mean SBP −4.26 mmHg, DBP −2.07 mmHg.",
-        "endpoint_evidence": "Hard-endpoint RCTs are limited. Effects are applied via blood-pressure reduction in the existing model.",
+        "evidence_summary": "Meta-analysis of 133 RCTs (12,197 participants). Mean SBP −4.26 mmHg, DBP −2.07 mmHg.",
+        "endpoint_evidence": "Hard cardiovascular endpoint RCTs are limited. Effects are applied via blood-pressure reduction in the existing model.",
     },
     "carb": {
-        "definition": "Aim for <130 g carbohydrate/day or <26% of total energy",
+        "definition": "Aim for <130 g carbohydrate/day or <26% of total energy intake",
         "population": "Adults with overweight/obesity and type 2 diabetes",
-        "evidence_summary": "Meta-analysis of 17 RCTs (1,197 people). HbA1c −0.36%. No significant LDL effect.",
+        "evidence_summary": "Meta-analysis of 17 RCTs (1,197 participants). HbA1c −0.36%. No significant LDL effect.",
         "endpoint_evidence": "No direct long-term hard-endpoint RCTs. Applied via HbA1c reduction.",
     },
     "fat": {
@@ -159,27 +247,27 @@ ENGLISH_LIFESTYLE_DETAILS = {
     "aerobic_moderate": {
         "definition": "3.0–5.9 METs, 150–210 minutes/week (e.g., brisk walking)",
         "population": "Adults with type 2 diabetes",
-        "evidence_summary": "100 RCTs (7,195 people). Sustained aerobic exercise: HbA1c −0.62%. SBP/LDL use conservative lower bounds.",
-        "endpoint_evidence": "Mortality evidence is mainly observational; no direct RR is applied.",
+        "evidence_summary": "100 RCTs (7,195 participants). Sustained aerobic exercise: HbA1c −0.62%. SBP/LDL use conservative lower bounds.",
+        "endpoint_evidence": "Mortality evidence is mainly observational; no direct relative risk is applied.",
     },
     "combined": {
-        "definition": "Moderate aerobic exercise plus resistance training 2–3×/week (150–210 min/week total)",
+        "definition": "Moderate aerobic exercise plus resistance training 2–3 times/week (150–210 min/week total)",
         "population": "Adults with type 2 diabetes",
-        "evidence_summary": "100 RCTs (7,195 people). Combined training: HbA1c −0.74% (largest). SBP/LDL use conservative lower bounds.",
-        "endpoint_evidence": "Mortality evidence is mainly observational; no direct RR is applied.",
+        "evidence_summary": "100 RCTs (7,195 participants). Combined training: HbA1c −0.74% (largest). SBP/LDL use conservative lower bounds.",
+        "endpoint_evidence": "Mortality evidence is mainly observational; no direct relative risk is applied.",
     },
     "hiit": {
         "definition": "Repeated high-intensity intervals ≥6 METs with recovery (clinician clearance required)",
         "population": "Adults with type 2 diabetes",
-        "evidence_summary": "100 RCTs (7,195 people). HIIT: HbA1c −0.71%. SBP/LDL use conservative lower bounds.",
-        "endpoint_evidence": "No confirmed additional mortality benefit vs moderate intensity; no direct RR is applied.",
+        "evidence_summary": "100 RCTs (7,195 participants). HIIT: HbA1c −0.71%. SBP/LDL use conservative lower bounds.",
+        "endpoint_evidence": "No confirmed additional mortality benefit versus moderate intensity; no direct relative risk is applied.",
     },
 }
 
 
 def _display_text(value: str) -> str:
     text = str(value)
-    for source, target in DISPLAY_TRANSLATIONS.items():
+    for source, target in sorted(DISPLAY_TRANSLATIONS.items(), key=lambda item: len(item[0]), reverse=True):
         text = text.replace(source, target)
     return text
 
@@ -215,7 +303,7 @@ def render_two_stage_med_picker(label, options, key_prefix):
     """Two-stage picker: drug name, then dose; returns catalog keys."""
     grouped = _medication_options_by_name(options)
     selected_names = st.multiselect(
-        f"{label}: ① Select medication",
+        f"{label}: 1) Select medication",
         options=list(grouped),
         format_func=_display_text,
         key=f"{key_prefix}_names",
@@ -224,7 +312,7 @@ def render_two_stage_med_picker(label, options, key_prefix):
     for name in selected_names:
         dose_options = grouped[name]
         selected_keys.append(st.selectbox(
-            f"{_display_text(name)}: ② Select dose",
+            f"{_display_text(name)}: 2) Select dose",
             options=dose_options,
             format_func=lambda key, n=name: _display_text(key[len(n):].strip() or key),
             key=f"{key_prefix}_dose_{name}",
@@ -592,10 +680,10 @@ with st.container(border=True):
         if baseline_result:
             st.success(f"Difference over {baseline_horizon} years between staying at current values and reaching the reference.")
             baseline_cols = st.columns(3)
-            for col, outcome, label in zip(baseline_cols, OUTCOME_DISPLAY_ORDER, ["All-cause death", "Myocardial infarction", "Stroke"]):
+            for col, outcome, label in zip(baseline_cols, OUTCOME_DISPLAY_ORDER, ["All-cause mortality", "Myocardial infarction", "Stroke"]):
                 curve = baseline_result[outcome]
                 col.metric(label, f"{curve['current'][-1]:.1f}%", delta=f"If reference {curve['reference'][-1]:.1f}%", delta_color="inverse")
-            for outcome, label in zip(OUTCOME_DISPLAY_ORDER, ["All-cause death", "Myocardial infarction", "Stroke"]):
+            for outcome, label in zip(OUTCOME_DISPLAY_ORDER, ["All-cause mortality", "Myocardial infarction", "Stroke"]):
                 curve = baseline_result[outcome]
                 with st.container(border=True):
                     fig = go.Figure()
@@ -1145,7 +1233,7 @@ if not backcast_enabled and not st.session_state.calculated:
     st.stop()
 
 cumulative_data = st.session_state.cumulative_data or {}
-labels = {"mi": "Myocardial infarction", "stroke": "Stroke", "mortality": "All-cause death"}
+labels = {"mi": "Myocardial infarction", "stroke": "Stroke", "mortality": "All-cause mortality"}
 
 # ---- 反実仮想モード：通常の将来リスク表示を、この結果へ丸ごと差し替える ----
 backcast_summary = None
@@ -1343,7 +1431,7 @@ if not backcast_enabled:
     st.markdown("## 📈 Cumulative risk curves (95% CI)")
 
 _OUTCOME_DETAIL_META = {
-    "mortality": {"title": "💀 All-cause death", "icon": "💀"},
+    "mortality": {"title": "💀 All-cause mortality", "icon": "💀"},
     "mi": {"title": "🫀 Myocardial infarction", "icon": "🫀"},
     "stroke": {"title": "🧠 Stroke", "icon": "🧠"},
 }
