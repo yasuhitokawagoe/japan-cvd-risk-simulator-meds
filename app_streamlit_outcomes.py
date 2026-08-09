@@ -16,7 +16,7 @@ from treatment_backcast import (
 )
 from lifestyle_interventions import DIET_EFFECTS, EXERCISE_EFFECTS, apply_lifestyle_effects
 
-st.set_page_config(page_title="生活習慣病ケアナビ", layout="wide", page_icon="🌿")
+st.set_page_config(page_title="Lifestyle Care Navigator (English)", layout="wide", page_icon="🌿")
 
 st.markdown("""
 <style>
@@ -49,17 +49,17 @@ st.markdown("""
   }
 </style>
 <div class="care-hero">
-  <h1>🌿 生活習慣病ケアナビ</h1>
-  <p>これまでの努力を確かめ、食事・運動・お薬を一緒に比べて、次の一歩を決めます。</p>
+  <h1>🌿 Lifestyle Care Navigator (English)</h1>
+  <p>Review progress so far, compare diet, exercise, and medicines together, and choose the next step.</p>
 </div>
 <div class="step-strip">
-  <span class="step-pill">1 現在地</span><span class="step-pill">2 これまでの成果</span>
-  <span class="step-pill">3 介入を選ぶ</span><span class="step-pill">4 将来を比べる</span>
-  <span class="step-pill">5 書類を作る</span>
+  <span class="step-pill">1 Baseline</span><span class="step-pill">2 Progress so far</span>
+  <span class="step-pill">3 Choose interventions</span><span class="step-pill">4 Compare the future</span>
+  <span class="step-pill">5 Create documents</span>
 </div>
 """, unsafe_allow_html=True)
 
-st.caption("診療と共有意思決定の支援用です。個人の結果を保証する医療機器ではありません。")
+st.caption("For clinical education and shared decision-making. This is not a medical device and does not guarantee individual outcomes.")
 
 @st.cache_resource(show_spinner=False)
 def _cached_outcomes_engine(config_path: str):
@@ -70,7 +70,7 @@ def _cached_outcomes_engine(config_path: str):
 engine = _cached_outcomes_engine("config.yaml")
 
 MORTALITY_ALL_CAUSE_DEATH_CAPTION = (
-    "※全死亡は、心血管疾患に限らず、がんや他の病気を含むすべての死亡を対象としています。"
+    "All-cause mortality includes deaths from cancer and other diseases, not only cardiovascular disease."
 )
 
 # 画面上の表示順（サマリー横並び・詳細グラフの並びを統一）
@@ -91,12 +91,104 @@ try:
 except Exception as e:
     catalog_error = str(e)
 
-# ====== 薬増減モード（差分モデル）用ヘルパー ======
+# ====== 薬増減モード（Differenceモデル）用ヘルパー ======
 RX_ACTION_NO_CHANGE = "変更なし"
 RX_ACTION_STOP = "中止"
 RX_ACTION_DOWN = "減量"
 RX_ACTION_UP = "増量"
 RX_ACTION_SWITCH = "切替"
+
+
+ACTION_LABELS = {
+    RX_ACTION_NO_CHANGE: "No change",
+    RX_ACTION_STOP: "Stop",
+    RX_ACTION_DOWN: "Reduce dose",
+    RX_ACTION_UP: "Increase dose",
+    RX_ACTION_SWITCH: "Switch",
+}
+
+DISPLAY_TRANSLATIONS = {
+    "リシノプリル": "Lisinopril", "アジルサルタン": "Azilsartan", "サクビトリル/バルサルタン": "Sacubitril/valsartan",
+    "アムロジピン": "Amlodipine", "カルベジロール": "Carvedilol", "ビソプロロール": "Bisoprolol",
+    "フルイトラン（トリクロルメチアジド）": "Fluitran (trichlormethiazide)", "ミネブロ（エサキセレノン）": "Minnebro (esaxerenone)",
+    "レパーサ（エボロクマブ）": "Repatha (evolocumab)", "アトルバスタチン": "Atorvastatin", "ピタバスタチン": "Pitavastatin",
+    "ロスバスタチン": "Rosuvastatin", "エゼチミブ": "Ezetimibe", "トラゼンタ": "Tradjenta", "マンジャロ（チルゼパチド）": "Mounjaro (tirzepatide)",
+    "オゼンピック（セマグルチド）": "Ozempic (semaglutide)", "リベルサス（セマグルチド）": "Rybelsus (semaglutide)", "ジャディアンス": "Jardiance", "メトホルミン": "Metformin",
+    "ACE阻害薬": "ACE inhibitor", "Ca拮抗薬": "Calcium channel blocker", "β遮断薬": "Beta-blocker", "サイアザイド系利尿薬": "Thiazide diuretic",
+    "非ステロイド型MRA": "Nonsteroidal MRA", "PCSK9阻害薬": "PCSK9 inhibitor", "スタチン": "Statin", "吸収阻害薬": "Absorption inhibitor",
+    "DPP-4阻害薬": "DPP-4 inhibitor", "GIP/GLP-1受容体作動薬": "GIP/GLP-1 receptor agonist", "GLP-1受容体作動薬（皮下）": "GLP-1 receptor agonist (subcutaneous)",
+    "GLP-1受容体作動薬（経口）": "GLP-1 receptor agonist (oral)", "SGLT2阻害薬": "SGLT2 inhibitor", "ビグアナイド": "Biguanide",
+    "空咳": "Dry cough", "咳": "Cough", "めまい": "Dizziness", "高K血症": "Hyperkalemia", "血管性浮腫": "Angioedema", "頭痛": "Headache", "腎変化": "renal changes",
+    "低血圧": "Hypotension", "浮腫": "Edema", "腎障害": "Renal impairment", "顔面紅潮": "Flushing", "疲労感": "Fatigue", "疲労": "Fatigue", "代謝改善": "Improved metabolism",
+    "徐脈": "Bradycardia", "勃起障害": "Erectile dysfunction", "抑うつ": "Depression", "高尿酸血症": "Hyperuricemia", "高血糖症": "Hyperglycemia", "電解質失調": "Electrolyte imbalance",
+    "副作用発現率": "Adverse-event rate", "副作用発現頻度": "Adverse-event rate", "血中カリウム増加": "Increased blood potassium", "糸球体濾過率減少": "Decreased glomerular filtration rate",
+    "注射部位反応": "Injection-site reaction", "上気道感染": "Upper respiratory tract infection", "便秘": "Constipation", "肝機能上昇": "Elevated liver function tests", "肝酵素上昇": "Elevated liver enzymes",
+    "筋肉痛": "Myalgia", "CK上昇": "Elevated CK", "下痢": "Diarrhea", "低血糖（併用時）": "Hypoglycemia (with combination therapy)", "悪心": "Nausea", "投与中止に至る有害事象": "Adverse events leading to discontinuation",
+    "嘔吐": "Vomiting", "腹部不快感": "Abdominal discomfort", "腹痛": "Abdominal pain", "消化不良": "Dyspepsia", "尿路感染": "Urinary tract infection", "脱水": "Dehydration", "消化器症状": "Gastrointestinal symptoms",
+    "mg/日": "mg/day", "mg/週": "mg/week", "隔週注": "every 2 weeks", "（開始量）": "(starting dose)", "軽度": "Mild ", "未満": "", "以上": " or more", "、": ", ", "・": ", ", "（": " (", "）": ")", "〜": "–",
+}
+
+ENGLISH_LIFESTYLE_LABELS = {
+    "salt": "Salt reduction",
+    "carb": "Carbohydrate restriction",
+    "fat": "Saturated fat restriction",
+    "aerobic_moderate": "Moderate-intensity aerobic exercise",
+    "combined": "Aerobic + resistance training",
+    "hiit": "High-intensity interval training (HIIT)",
+}
+
+ENGLISH_LIFESTYLE_DETAILS = {
+    "salt": {
+        "definition": "Reduce dietary salt intake (aim for <6 g/day)",
+        "population": "Adults",
+        "evidence_summary": "Meta-analysis of 133 RCTs (12,197 people). Mean SBP −4.26 mmHg, DBP −2.07 mmHg.",
+        "endpoint_evidence": "Hard-endpoint RCTs are limited. Effects are applied via blood-pressure reduction in the existing model.",
+    },
+    "carb": {
+        "definition": "Aim for <130 g carbohydrate/day or <26% of total energy",
+        "population": "Adults with overweight/obesity and type 2 diabetes",
+        "evidence_summary": "Meta-analysis of 17 RCTs (1,197 people). HbA1c −0.36%. No significant LDL effect.",
+        "endpoint_evidence": "No direct long-term hard-endpoint RCTs. Applied via HbA1c reduction.",
+    },
+    "fat": {
+        "definition": "Limit saturated fat to <7% of energy and replace with unsaturated fat",
+        "population": "Adults",
+        "evidence_summary": "Uses the midpoint (9%) of the NHLBI TLC estimated LDL reduction range (8–10%).",
+        "endpoint_evidence": "Direct event benefit in low-risk primary prevention is small/uncertain. Only LDL change is applied.",
+    },
+    "aerobic_moderate": {
+        "definition": "3.0–5.9 METs, 150–210 minutes/week (e.g., brisk walking)",
+        "population": "Adults with type 2 diabetes",
+        "evidence_summary": "100 RCTs (7,195 people). Sustained aerobic exercise: HbA1c −0.62%. SBP/LDL use conservative lower bounds.",
+        "endpoint_evidence": "Mortality evidence is mainly observational; no direct RR is applied.",
+    },
+    "combined": {
+        "definition": "Moderate aerobic exercise plus resistance training 2–3×/week (150–210 min/week total)",
+        "population": "Adults with type 2 diabetes",
+        "evidence_summary": "100 RCTs (7,195 people). Combined training: HbA1c −0.74% (largest). SBP/LDL use conservative lower bounds.",
+        "endpoint_evidence": "Mortality evidence is mainly observational; no direct RR is applied.",
+    },
+    "hiit": {
+        "definition": "Repeated high-intensity intervals ≥6 METs with recovery (clinician clearance required)",
+        "population": "Adults with type 2 diabetes",
+        "evidence_summary": "100 RCTs (7,195 people). HIIT: HbA1c −0.71%. SBP/LDL use conservative lower bounds.",
+        "endpoint_evidence": "No confirmed additional mortality benefit vs moderate intensity; no direct RR is applied.",
+    },
+}
+
+
+def _display_text(value: str) -> str:
+    text = str(value)
+    for source, target in DISPLAY_TRANSLATIONS.items():
+        text = text.replace(source, target)
+    return text
+
+
+def _lifestyle_label(key: str | None) -> str:
+    if key is None:
+        return "None"
+    return ENGLISH_LIFESTYLE_LABELS.get(key, key)
+
 
 
 def _split_med_key(key: str):
@@ -120,20 +212,21 @@ def _medication_options_by_name(options):
 
 
 def render_two_stage_med_picker(label, options, key_prefix):
-    """第1段階で薬剤名、第2段階で各薬剤の用量を選び、カタログキーを返す。"""
+    """Two-stage picker: drug name, then dose; returns catalog keys."""
     grouped = _medication_options_by_name(options)
     selected_names = st.multiselect(
-        f"{label}：① 薬剤を選択",
+        f"{label}: ① Select medication",
         options=list(grouped),
+        format_func=_display_text,
         key=f"{key_prefix}_names",
     )
     selected_keys = []
     for name in selected_names:
         dose_options = grouped[name]
         selected_keys.append(st.selectbox(
-            f"{name}：② 用量を選択",
+            f"{_display_text(name)}: ② Select dose",
             options=dose_options,
-            format_func=lambda key: key[len(name):].strip() or key,
+            format_func=lambda key, n=name: _display_text(key[len(n):].strip() or key),
             key=f"{key_prefix}_dose_{name}",
         ))
     return selected_keys
@@ -158,7 +251,7 @@ def _dose_neighbor_key(domain_meds, key, direction: int):
 
 
 def _switch_candidates(domain_meds, key, current_keys):
-    """切替先候補：同ドメインのうち別薬剤名で、服用中でないもの"""
+    """Switch to候補：同ドメインのうち別薬剤名で、服用中でないもの"""
     name, _ = _split_med_key(key)
     return [
         m["key"]
@@ -178,8 +271,8 @@ def _effect_label(domain: str, med) -> str:
 
 
 def render_rx_change_rows(domain_label, domain, domain_meds, current_keys, state_prefix):
-    """現在薬1剤ごとにカード（枠付きコンテナ）を描画し、
-    (変更後キーのリスト, 変更明細の文字列リスト) を返す。（案B カード型）"""
+    """Current薬1剤ごとにカード（枠付きコンテナ）を描画し、
+    (After changeキーのリスト, 変更明細の文字列リスト) を返す。（案B カード型）"""
     by_key = {m["key"]: m for m in domain_meds}
     adjusted_keys = []
     change_lines = []
@@ -198,19 +291,20 @@ def render_rx_change_rows(domain_label, domain, domain_meds, current_keys, state
 
         cost = med.get("annual_cost_yen") or 0
         with st.container(border=True):
-            st.markdown(f"**{k}**")
+            st.markdown(f"**{_display_text(k)}**")
             st.caption(
-                f"{domain_label}｜{med.get('category', '')}｜"
-                f"{_effect_label(domain, med)}・{cost:,} 円/年"
+                f"{domain_label} | {_display_text(med.get('category', ''))} | "
+                f"{_effect_label(domain, med)} | Estimated cost in Japan: {cost:,} JPY/year"
             )
 
             act_key = f"{state_prefix}_act_{k}"
             if act_key not in st.session_state:
                 st.session_state[act_key] = RX_ACTION_NO_CHANGE
             action = st.segmented_control(
-                f"{k} の変更",
+                f"{_display_text(k)} adjustment",
                 options,
                 key=act_key,
+                format_func=lambda x: ACTION_LABELS[x],
                 label_visibility="collapsed",
             ) or RX_ACTION_NO_CHANGE
 
@@ -222,35 +316,41 @@ def render_rx_change_rows(domain_label, domain, domain_meds, current_keys, state
             elif action == RX_ACTION_DOWN:
                 lower = ladder[:cur_idx]  # 現用量より下の用量（昇順）
                 result_key = st.selectbox(
-                    "減量後の用量",
+                    "Dose after reduction",
                     lower,
-                    index=len(lower) - 1,  # 既定は一段下
+                    format_func=_display_text,
+                    index=len(lower) - 1,  # default one step down
                     key=f"{state_prefix}_down_{k}",
                 ) if lower else k
             elif action == RX_ACTION_UP:
-                higher = ladder[cur_idx + 1:]  # 現用量より上の用量（昇順）
+                higher = ladder[cur_idx + 1:]  # doses above current (ascending)
                 result_key = st.selectbox(
-                    "増量後の用量",
+                    "Dose after increase",
                     higher,
-                    index=0,  # 既定は一段上
+                    format_func=_display_text,
+                    index=0,  # default one step up
                     key=f"{state_prefix}_up_{k}",
                 ) if higher else k
             elif action == RX_ACTION_SWITCH:
-                result_key = st.selectbox("切替先", switch_opts, key=f"{state_prefix}_sw_{k}")
+                result_key = st.selectbox(
+                    "Switch to", switch_opts, format_func=_display_text, key=f"{state_prefix}_sw_{k}"
+                )
 
-            # 変更後プレビュー（効果・費用差分をカード内に表示）
+            # Preview after change (effect and cost delta inside the card)
             if result_key is None:
-                st.markdown(f"🛑 **中止**（費用 {-cost:+,} 円/年）")
-                change_lines.append(f"🛑 中止: {k}")
+                st.markdown(f"🛑 **Stop** (cost {-cost:+,} JPY/year)")
+                change_lines.append(f"🛑 Stop: {_display_text(k)}")
             elif result_key != k:
                 new_med = by_key[result_key]
                 new_cost = new_med.get("annual_cost_yen") or 0
                 icon = {RX_ACTION_UP: "🔼", RX_ACTION_DOWN: "🔽"}.get(action, "🔁")
-                st.markdown(f"{icon} **{action} → {result_key}**")
+                st.markdown(f"{icon} **{ACTION_LABELS[action]} → {_display_text(result_key)}**")
                 st.caption(
-                    f"{_effect_label(domain, new_med)}・費用差 {new_cost - cost:+,} 円/年"
+                    f"{_effect_label(domain, new_med)} · Cost difference {new_cost - cost:+,} JPY/year"
                 )
-                change_lines.append(f"{icon} {action}: {k} → {result_key}")
+                change_lines.append(
+                    f"{icon} {ACTION_LABELS[action]}: {_display_text(k)} → {_display_text(result_key)}"
+                )
         if result_key is not None and result_key not in adjusted_keys:
             adjusted_keys.append(result_key)
     return adjusted_keys, change_lines
@@ -283,7 +383,7 @@ def _se_md_for_changes(stopped, added, continued):
     if pure_stopped:
         items = _items(pure_stopped)
         if items:
-            sections.append("**中止で消える副作用**\n" + "\n".join(items))
+            sections.append("**Adverse effects that stop**\n" + "\n".join(items))
     if dose_changed:
         items = [
             f"- {old['key']} → {new['key']}: {(new.get('side_effects') or '').strip()}"
@@ -291,29 +391,29 @@ def _se_md_for_changes(stopped, added, continued):
             if (new.get("side_effects") or "").strip()
         ]
         if items:
-            sections.append("**用量変更後も続く副作用**\n" + "\n".join(items))
+            sections.append("**Adverse effects continuing after dose change**\n" + "\n".join(items))
     if pure_added:
         items = _items(pure_added)
         if items:
-            sections.append("**新規で追加される副作用**\n" + "\n".join(items))
+            sections.append("**New adverse effects**\n" + "\n".join(items))
     if continued:
         items = _items(continued)
         if items:
-            sections.append("**継続中の副作用**\n" + "\n".join(items))
+            sections.append("**Ongoing adverse effects**\n" + "\n".join(items))
     return "\n\n".join(sections)
 
 
 with st.container(border=True):
-    st.markdown("## 入力")
-    st.subheader("🩺 今日の診療")
+    st.markdown("## Inputs")
+    st.subheader("Today's visit")
     care_path = st.segmented_control(
-        "診療の目的",
+        "Visit purpose",
         ["initial", "adjust", "continue"],
         default="initial",
         format_func=lambda value: {
-            "initial": "治療を始める",
-            "adjust": "治療を見直す",
-            "continue": "現在の治療を続ける",
+            "initial": "Start treatment",
+            "adjust": "Review treatment",
+            "continue": "Continue current treatment",
         }[value],
         key="care_path",
     ) or "initial"
@@ -324,38 +424,38 @@ with st.container(border=True):
     backcast_enabled = care_path == "continue"
     initial_risk_reviewed = bool(st.session_state.get("initial_risk_reviewed", False))
     if backcast_enabled:
-        st.caption("現在のお薬を入力すると、飲まなかった場合と比べてこれまでの成果を表示します。")
+        st.caption("Enter current medicines to estimate benefit versus never having taken them.")
     elif care_path == "adjust":
-        st.caption("現在のお薬と変更後を比べます。")
+        st.caption("Compare current medicines with proposed changes.")
     else:
-        st.caption("食事・運動・お薬の介入案を比べます。")
+        st.caption("Compare diet, exercise, and medicine options.")
 
     st.divider()
-    st.markdown("**患者プロフィール**")
+    st.markdown("**Patient profile**")
     profile_col1, profile_col2, profile_col3 = st.columns([1, 1, 2.4])
     with profile_col1:
-        sex = st.selectbox("性別", ["male", "female"], format_func=lambda x: "男性" if x == "male" else "女性")
+        sex = st.selectbox("Sex", ["male", "female"], format_func=lambda x: "Male" if x == "male" else "Female")
     with profile_col2:
-        age = st.number_input("年齢", 20, 95, 60, step=1)
+        age = st.number_input("Age", 20, 95, 60, step=1)
     with profile_col3:
         diagnosis_flags = st.multiselect(
-            "診断済み",
+            "Diagnosed",
             ["diabetes", "hypertension", "dyslipidemia", "ckd"],
             format_func=lambda value: {
-                "diabetes": "糖尿病", "hypertension": "高血圧症",
-                "dyslipidemia": "脂質異常症", "ckd": "CKD",
+                "diabetes": "Diabetes", "hypertension": "Hypertension",
+                "dyslipidemia": "Dyslipidemia", "ckd": "CKD",
             }[value],
             key="diagnosis_flags",
-            placeholder="該当する病気",
+            placeholder="Relevant conditions",
         )
     diabetes_diagnosed = "diabetes" in diagnosis_flags
     ckd_diagnosed = "ckd" in diagnosis_flags
 
-    st.subheader("現在の検査値" if backcast_enabled else "リスク因子（現在 → 目標）")
-    st.caption("数値を直接入力、または −／＋ で調整できます。")
+    st.subheader("Current labs" if backcast_enabled else "Risk factors (current → target)")
+    st.caption("Enter values directly, or adjust with − / +.")
     now_col1, now_col2, now_col3 = st.columns(3)
     with now_col1:
-        sbp_now = st.number_input("収縮期血圧", 90, 250, 150, step=10, key="sbp_now_input")
+        sbp_now = st.number_input("Systolic BP", 90, 250, 150, step=10, key="sbp_now_input")
     with now_col2:
         ldl_now = st.number_input("LDL", 20, 300, 160, step=10, key="ldl_now_input")
     with now_col3:
@@ -367,60 +467,60 @@ with st.container(border=True):
     elif care_path == "initial" and not initial_risk_reviewed:
         sbp_tgt_manual, ldl_tgt_manual, a1c_tgt_manual = sbp_now, ldl_now, a1c_now
         smoking_status = st.selectbox(
-            "喫煙", ["never", "current", "former"],
-            format_func=lambda x: {"never": "吸わない", "current": "現在吸っている", "former": "過去に吸っていた"}[x],
+            "Smoking", ["never", "current", "former"],
+            format_func=lambda x: {"never": "Never", "current": "Current", "former": "Former"}[x],
             key="smoking_status_compact",
         )
         smoke_col1, smoke_col2 = st.columns(2)
         with smoke_col1:
-            cigs_per_day = st.number_input("1日の本数", 0, 80, 20, step=5, key="cigs_compact") if smoking_status == "current" else 0
+            cigs_per_day = st.number_input("Cigarettes per day", 0, 80, 20, step=5, key="cigs_compact") if smoking_status == "current" else 0
         with smoke_col2:
-            years_smoked = st.number_input("喫煙年数", 0, 80, 20, step=5, key="years_smoked_compact") if smoking_status != "never" else 0
-        years_since_quit = st.number_input("禁煙してからの年数", 0, 80, 5, step=1, key="quit_years_compact") if smoking_status == "former" else 0
+            years_smoked = st.number_input("Years smoked", 0, 80, 20, step=5, key="years_smoked_compact") if smoking_status != "never" else 0
+        years_since_quit = st.number_input("Years since quitting", 0, 80, 5, step=1, key="quit_years_compact") if smoking_status == "former" else 0
         quit_today = False
     else:
-        st.markdown("**目標値**")
+        st.markdown("**Targets**")
         target_col1, target_col2, target_col3 = st.columns(3)
         with target_col1:
-            sbp_tgt_manual = st.number_input("目標血圧", 90, 200, 130, step=10, key="sbp_target_input")
+            sbp_tgt_manual = st.number_input("BP target", 90, 200, 130, step=10, key="sbp_target_input")
         with target_col2:
-            ldl_tgt_manual = st.number_input("目標LDL", 20, 250, 100, step=10, key="ldl_target_input")
+            ldl_tgt_manual = st.number_input("LDL target", 20, 250, 100, step=10, key="ldl_target_input")
         with target_col3:
-            a1c_tgt_manual = st.number_input("目標HbA1c", 4.0, 12.0, 7.0, step=0.5, format="%.1f", key="a1c_target_input")
+            a1c_tgt_manual = st.number_input("HbA1c target", 4.0, 12.0, 7.0, step=0.5, format="%.1f", key="a1c_target_input")
 
-        st.markdown("**喫煙**")
+        st.markdown("**Smoking**")
         smoking_status = st.selectbox(
-            "状況", ["never", "current", "former"],
-            format_func=lambda x: {"never": "吸わない", "current": "現在吸っている", "former": "過去に吸っていた"}[x],
+            "Status", ["never", "current", "former"],
+            format_func=lambda x: {"never": "Never", "current": "Current", "former": "Former"}[x],
             key="smoking_status_compact",
         )
         smoke_col1, smoke_col2 = st.columns(2)
         with smoke_col1:
-            cigs_per_day = st.number_input("1日の本数", 0, 80, 20, step=5, key="cigs_compact") if smoking_status == "current" else 0
+            cigs_per_day = st.number_input("Cigarettes per day", 0, 80, 20, step=5, key="cigs_compact") if smoking_status == "current" else 0
         with smoke_col2:
-            years_smoked = st.number_input("喫煙年数", 0, 80, 20, step=5, key="years_smoked_compact") if smoking_status != "never" else 0
-        years_since_quit = st.number_input("禁煙してからの年数", 0, 80, 5, step=1, key="quit_years_compact") if smoking_status == "former" else 0
-        quit_today = st.checkbox("今日から禁煙する場合も比較", key="quit_today_compact") if smoking_status == "current" else False
+            years_smoked = st.number_input("Years smoked", 0, 80, 20, step=5, key="years_smoked_compact") if smoking_status != "never" else 0
+        years_since_quit = st.number_input("Years since quitting", 0, 80, 5, step=1, key="quit_years_compact") if smoking_status == "former" else 0
+        quit_today = st.checkbox("Also compare quitting today", key="quit_today_compact") if smoking_status == "current" else False
 
-    st.markdown("**体格（未入力なら性別の標準値を使用）**")
+    st.markdown("**Body size (sex-specific defaults if blank)**")
     default_height, default_weight = ((170.0, 65.0) if sex == "male" else (160.0, 55.0))
     body_col1, body_col2, body_col3 = st.columns(3)
     with body_col1:
-        height_input = st.number_input("身長 (cm)", min_value=120.0, max_value=220.0, value=None, step=1.0, placeholder=f"自動 {default_height:.0f}")
+        height_input = st.number_input("Height (cm)", min_value=120.0, max_value=220.0, value=None, step=1.0, placeholder=f"Default {default_height:.0f}")
     with body_col2:
-        weight_input = st.number_input("体重 (kg)", min_value=30.0, max_value=200.0, value=None, step=1.0, placeholder=f"自動 {default_weight:.0f}")
+        weight_input = st.number_input("Weight (kg)", min_value=30.0, max_value=200.0, value=None, step=1.0, placeholder=f"Default {default_weight:.0f}")
     with body_col3:
-        dbp_now = st.number_input("拡張期血圧", min_value=40, max_value=130, value=90, step=5)
+        dbp_now = st.number_input("Diastolic BP", min_value=40, max_value=130, value=90, step=5)
     height_cm = float(height_input if height_input is not None else default_height)
     weight_kg = float(weight_input if weight_input is not None else default_weight)
     bmi_now = weight_kg / (height_cm / 100.0) ** 2
     bmi_target = 22.0
     if backcast_enabled:
-        st.caption(f"現在BMI: {bmi_now:.1f}")
+        st.caption(f"Current BMI: {bmi_now:.1f}")
     else:
-        st.caption(f"現在BMI: {bmi_now:.1f}／目標BMI: 22.0（目標体重 {22 * (height_cm / 100.0) ** 2:.1f} kg）")
+        st.caption(f"Current BMI: {bmi_now:.1f} / Target BMI: 22.0 (target weight {22 * (height_cm / 100.0) ** 2:.1f} kg)")
 
-    st.caption(f"計算に使用: {height_cm:.0f} cm・{weight_kg:.0f} kg・BMI {bmi_now:.1f}")
+    st.caption(f"Used in calculation: {height_cm:.0f} cm, {weight_kg:.0f} kg, BMI {bmi_now:.1f}")
 
     if backcast_enabled:
         egfr_now = egfr_target = 80.0
@@ -433,22 +533,22 @@ with st.container(border=True):
             with kidney_col1:
                 egfr_now = st.number_input("eGFR", min_value=5.0, max_value=120.0, value=45.0, step=5.0)
             with kidney_col2:
-                acr_now = st.selectbox("尿アルブミン／蛋白", ["A1", "A2", "A3"], index=1)
+                acr_now = st.selectbox("Urine albumin/protein", ["A1", "A2", "A3"], index=1)
             egfr_target, acr_target = egfr_now, acr_now
         else:
             egfr_now = egfr_target = 80.0
             acr_now = acr_target = "A1"
 
-        st.subheader("予測期間")
+        st.subheader("Prediction horizon")
         which = st.radio(
-            "期間を選択", ["5-year", "10-year", "20-year", "30-year", "50-year", "Both"], index=2,
-            format_func=lambda x: {"5-year": "5年", "10-year": "10年", "20-year": "20年", "30-year": "30年", "50-year": "50年", "Both": "両方"}[x]
+            "Select horizon", ["5-year", "10-year", "20-year", "30-year", "50-year", "Both"], index=2,
+            format_func=lambda x: {"5-year": "5 years", "10-year": "10 years", "20-year": "20 years", "30-year": "30 years", "50-year": "50 years", "Both": "Both"}[x]
         )
 
-    # 初診は「現在リスクの確認」を終えるまで介入選択を表示しない。
+    # 初診は「Currentリスクの確認」を終えるまで介入選択を表示しない。
     if care_path == "initial" and not initial_risk_reviewed:
         st.divider()
-        st.markdown("### 1. まず現在のリスクを確認")
+        st.markdown("### 1. Review current risk first")
         baseline_horizon = {"5-year": 5, "10-year": 10, "20-year": 20, "30-year": 30, "50-year": 50, "Both": 10}[which]
         baseline_signature = (
             sex, age, sbp_now, ldl_now, a1c_now, smoking_status, cigs_per_day,
@@ -459,14 +559,14 @@ with st.container(border=True):
             st.session_state["initial_baseline_signature"] = baseline_signature
         reference_values = {"sbp": 120.0, "ldl": 100.0, "a1c": 5.7, "bmi": 22.0}
         deviation_cols = st.columns(4)
-        deviation_cols[0].metric("収縮期血圧", f"{sbp_now:.0f}", delta=f"基準より {sbp_now-reference_values['sbp']:+.0f} mmHg", delta_color="inverse")
-        deviation_cols[1].metric("LDL", f"{ldl_now:.0f}", delta=f"基準より {ldl_now-reference_values['ldl']:+.0f} mg/dL", delta_color="inverse")
-        deviation_cols[2].metric("HbA1c", f"{a1c_now:.1f}%", delta=f"基準より {a1c_now-reference_values['a1c']:+.1f}%", delta_color="inverse")
-        deviation_cols[3].metric("BMI", f"{bmi_now:.1f}", delta=f"基準より {bmi_now-reference_values['bmi']:+.1f}", delta_color="inverse")
-        st.caption("比較基準: 収縮期血圧120 mmHg・LDL 100 mg/dL・HbA1c 5.7%・BMI 22・非喫煙。個別の治療目標とは異なります。")
-        if st.button("現在値と基準値の将来リスクを比較", type="primary", use_container_width=True, key="calculate_initial_baseline"):
+        deviation_cols[0].metric("Systolic BP", f"{sbp_now:.0f}", delta=f"vs reference {sbp_now-reference_values['sbp']:+.0f} mmHg", delta_color="inverse")
+        deviation_cols[1].metric("LDL", f"{ldl_now:.0f}", delta=f"vs reference {ldl_now-reference_values['ldl']:+.0f} mg/dL", delta_color="inverse")
+        deviation_cols[2].metric("HbA1c", f"{a1c_now:.1f}%", delta=f"vs reference {a1c_now-reference_values['a1c']:+.1f}%", delta_color="inverse")
+        deviation_cols[3].metric("BMI", f"{bmi_now:.1f}", delta=f"vs reference {bmi_now-reference_values['bmi']:+.1f}", delta_color="inverse")
+        st.caption("Reference: SBP 120 mmHg, LDL 100 mg/dL, HbA1c 5.7%, BMI 22, never smoked. This differs from individualized treatment targets.")
+        if st.button("Compare future risk: current vs reference", type="primary", use_container_width=True, key="calculate_initial_baseline"):
             baseline_result = {}
-            with st.spinner("累積リスクと予測幅を計算中..."):
+            with st.spinner("Calculating cumulative risk and prediction intervals..."):
                 for outcome in OUTCOME_DISPLAY_ORDER:
                     curve = {key: [0.0] for key in ("time", "current", "reference", "current_low", "current_high", "reference_low", "reference_high")}
                     for year in range(1, baseline_horizon + 1):
@@ -490,58 +590,65 @@ with st.container(border=True):
             st.session_state["initial_baseline_result"] = baseline_result
         baseline_result = st.session_state.get("initial_baseline_result")
         if baseline_result:
-            st.success(f"現在値のままと、比較基準を達成した場合の{baseline_horizon}年間の差です。")
+            st.success(f"Difference over {baseline_horizon} years between staying at current values and reaching the reference.")
             baseline_cols = st.columns(3)
-            for col, outcome, label in zip(baseline_cols, OUTCOME_DISPLAY_ORDER, ["全死亡", "心筋梗塞", "脳卒中"]):
+            for col, outcome, label in zip(baseline_cols, OUTCOME_DISPLAY_ORDER, ["All-cause death", "Myocardial infarction", "Stroke"]):
                 curve = baseline_result[outcome]
-                col.metric(label, f"{curve['current'][-1]:.1f}%", delta=f"基準値なら {curve['reference'][-1]:.1f}%", delta_color="inverse")
-            for outcome, label in zip(OUTCOME_DISPLAY_ORDER, ["全死亡", "心筋梗塞", "脳卒中"]):
+                col.metric(label, f"{curve['current'][-1]:.1f}%", delta=f"If reference {curve['reference'][-1]:.1f}%", delta_color="inverse")
+            for outcome, label in zip(OUTCOME_DISPLAY_ORDER, ["All-cause death", "Myocardial infarction", "Stroke"]):
                 curve = baseline_result[outcome]
                 with st.container(border=True):
                     fig = go.Figure()
                     fig.add_trace(go.Scatter(x=curve["time"], y=curve["current_high"], line=dict(width=0), showlegend=False, hoverinfo="skip"))
-                    fig.add_trace(go.Scatter(x=curve["time"], y=curve["current_low"], line=dict(width=0), fill="tonexty", fillcolor="rgba(220,79,68,.14)", name="現在値の95%予測幅", hoverinfo="skip"))
-                    fig.add_trace(go.Scatter(x=curve["time"], y=curve["current"], mode="lines", name="現在値のまま", line=dict(color="#d94f45", width=3)))
-                    fig.add_trace(go.Scatter(x=curve["time"], y=curve["reference"], mode="lines", name="基準値を達成", line=dict(color="#16846b", width=3)))
-                    fig.update_layout(title=f"{label}の累積リスク", xaxis_title="今からの年数", yaxis_title="累積リスク（%）", height=360, hovermode="x unified", margin=dict(l=20, r=20, t=55, b=20))
+                    fig.add_trace(go.Scatter(x=curve["time"], y=curve["current_low"], line=dict(width=0), fill="tonexty", fillcolor="rgba(220,79,68,.14)", name="Current 95% prediction interval", hoverinfo="skip"))
+                    fig.add_trace(go.Scatter(x=curve["time"], y=curve["current"], mode="lines", name="Stay at current values", line=dict(color="#d94f45", width=3)))
+                    fig.add_trace(go.Scatter(x=curve["time"], y=curve["reference"], mode="lines", name="Reach reference targets", line=dict(color="#16846b", width=3)))
+                    fig.update_layout(title=f"{label} cumulative risk", xaxis_title="Years from now", yaxis_title="Cumulative risk (%)", height=360, hovermode="x unified", margin=dict(l=20, r=20, t=55, b=20))
                     st.plotly_chart(fig, width="stretch")
-                    st.caption("薄い赤色の範囲は現在値に基づく95%予測幅です。個人の発症を断定するものではありません。")
-            if st.button("次へ：食事・運動・お薬を選ぶ", type="primary", use_container_width=True, key="open_initial_interventions"):
+                    st.caption("The light red band is the 95% prediction interval based on current values. It does not determine individual events.")
+            if st.button("Next: choose diet, exercise, and medicines", type="primary", use_container_width=True, key="open_initial_interventions"):
                 st.session_state["initial_risk_reviewed"] = True
                 st.rerun()
         st.stop()
 
     st.divider()
-    st.subheader("治療を選ぶ")
+    st.subheader("Choose treatment")
     lifestyle_col1, lifestyle_col2 = st.columns(2)
     with lifestyle_col1:
         diet_intervention_keys = st.multiselect(
-            "🥗 食事",
+            "Diet",
             list(DIET_EFFECTS),
-            format_func=lambda key: DIET_EFFECTS[key].label,
+            format_func=lambda key: _lifestyle_label(key),
             key="unified_diet_interventions",
-            placeholder="食事介入を選択",
+            placeholder="Select diet interventions",
         )
     with lifestyle_col2:
         exercise_intervention_key = st.selectbox(
-            "🏃 運動",
+            "Exercise",
             [None, *EXERCISE_EFFECTS],
-            format_func=lambda key: "選択しない" if key is None else EXERCISE_EFFECTS[key].label,
+            format_func=lambda key: _lifestyle_label(key),
             key="unified_exercise_intervention",
         )
-    with st.expander("効果量と文献を確認"):
+    with st.expander("Effect sizes and references"):
         selected_lifestyle_keys = [
             *(DIET_EFFECTS[key] for key in diet_intervention_keys),
             *([EXERCISE_EFFECTS[exercise_intervention_key]] if exercise_intervention_key else []),
         ]
         if not selected_lifestyle_keys:
-            st.caption("介入を選ぶと、ここに定義・効果量・根拠が表示されます。")
+            st.caption("Select interventions to see definitions, effect sizes, and evidence here.")
         for effect in selected_lifestyle_keys:
-            st.markdown(f"**{effect.label}** — {effect.definition}")
-            st.caption(f"{effect.evidence_summary} {effect.endpoint_evidence}")
-            st.link_button("根拠文献", effect.source_url, key=f"lifestyle_source_{effect.key}")
+            detail = ENGLISH_LIFESTYLE_DETAILS.get(effect.key, {})
+            st.markdown(
+                f"**{_lifestyle_label(effect.key)}** — "
+                f"{detail.get('definition', effect.definition)}"
+            )
+            st.caption(
+                f"{detail.get('evidence_summary', effect.evidence_summary)} "
+                f"{detail.get('endpoint_evidence', effect.endpoint_evidence)}"
+            )
+            st.link_button("Source paper", effect.source_url, key=f"lifestyle_source_{effect.key}")
 
-    st.markdown("**💊 お薬**")
+    st.markdown("**Medicines**")
 
     # 1. 薬剤オプションを先に定義
     sbp_options = [m["key"] for m in meds_catalog["sbp"]]
@@ -550,12 +657,12 @@ with st.container(border=True):
 
     # 2. 薬剤を使うかどうかのチェック
     use_meds = True if backcast_enabled else st.checkbox(
-        "薬剤を選んで目標値を自動計算する", value=True
+        "Select medicines to auto-calculate targets", value=True
     )
 
     # 薬剤カタログ読み込み失敗時の警告
     if catalog_error:
-        st.warning("薬剤カタログ読み込みに失敗。Excelのパス/シート名/列名を確認してください。")
+        st.warning("Failed to load the medicine catalog. Check Excel path / sheet / column names.")
         st.caption(catalog_error)
         use_meds = False
 
@@ -581,11 +688,11 @@ with st.container(border=True):
             mode = "backcast"
             med_cols = st.columns(3)
             with med_cols[0]:
-                current_sbp_keys = render_two_stage_med_picker("降圧薬", sbp_options, "backcast_current_sbp")
+                current_sbp_keys = render_two_stage_med_picker("BP medicines", sbp_options, "backcast_current_sbp")
             with med_cols[1]:
-                current_ldl_keys = render_two_stage_med_picker("脂質薬", ldl_options, "backcast_current_ldl")
+                current_ldl_keys = render_two_stage_med_picker("Lipid medicines", ldl_options, "backcast_current_ldl")
             with med_cols[2]:
-                current_a1c_keys = render_two_stage_med_picker("糖尿病薬", a1c_options, "backcast_current_a1c")
+                current_a1c_keys = render_two_stage_med_picker("Diabetes medicines", a1c_options, "backcast_current_a1c")
             adjusted_sbp_keys = list(current_sbp_keys)
             adjusted_ldl_keys = list(current_ldl_keys)
             adjusted_a1c_keys = list(current_a1c_keys)
@@ -612,13 +719,13 @@ with st.container(border=True):
         if mode == "add":
             med_cols = st.columns(3)
             with med_cols[0]:
-                sbp_sel_keys = render_two_stage_med_picker("降圧薬", sbp_options, "add_sbp")
+                sbp_sel_keys = render_two_stage_med_picker("BP medicines", sbp_options, "add_sbp")
             selected_sbp_meds = [m for m in meds_catalog["sbp"] if m["key"] in sbp_sel_keys]
             with med_cols[1]:
-                ldl_sel_keys = render_two_stage_med_picker("脂質薬", ldl_options, "add_ldl")
+                ldl_sel_keys = render_two_stage_med_picker("Lipid medicines", ldl_options, "add_ldl")
             selected_ldl_meds = [m for m in meds_catalog["ldl"] if m["key"] in ldl_sel_keys]
             with med_cols[2]:
-                a1c_sel_keys = render_two_stage_med_picker("糖尿病薬", a1c_options, "add_a1c")
+                a1c_sel_keys = render_two_stage_med_picker("Diabetes medicines", a1c_options, "add_a1c")
             selected_a1c_meds = [m for m in meds_catalog["hba1c"] if m["key"] in a1c_sel_keys]
 
             meds_summary = apply_meds_to_targets(
@@ -631,44 +738,44 @@ with st.container(border=True):
             )
 
         elif mode == "adjust":
-            # 薬増減UI：現在の治療をベースラインに、各薬をワンタップで 中止/減量/増量/切替
-            st.markdown("**現在服用中の薬**")
+            # 薬増減UI：Currentの治療をベースラインに、各薬をワンタップで 中止/減量/増量/切替
+            st.markdown("**Current medicines**")
             med_cols = st.columns(3)
             with med_cols[0]:
-                current_sbp_keys = render_two_stage_med_picker("降圧薬", sbp_options, "adjust_current_sbp")
+                current_sbp_keys = render_two_stage_med_picker("BP medicines", sbp_options, "adjust_current_sbp")
             with med_cols[1]:
-                current_ldl_keys = render_two_stage_med_picker("脂質薬", ldl_options, "adjust_current_ldl")
+                current_ldl_keys = render_two_stage_med_picker("Lipid medicines", ldl_options, "adjust_current_ldl")
             with med_cols[2]:
-                current_a1c_keys = render_two_stage_med_picker("糖尿病薬", a1c_options, "adjust_current_a1c")
+                current_a1c_keys = render_two_stage_med_picker("Diabetes medicines", a1c_options, "adjust_current_a1c")
 
-            st.markdown("**各薬の変更（タップで選択）**")
+            st.markdown("**Change each medicine**")
             if not (current_sbp_keys or current_ldl_keys or current_a1c_keys):
-                st.caption("現在服用中の薬を選ぶと、ここに変更ボタンが表示されます。")
+                st.caption("Select current medicines to show change options.")
             adjusted_sbp_keys, sbp_changes = render_rx_change_rows(
-                "降圧薬", "sbp", meds_catalog["sbp"], current_sbp_keys, "pc_sbp"
+                "BP medicines", "sbp", meds_catalog["sbp"], current_sbp_keys, "pc_sbp"
             )
             adjusted_ldl_keys, ldl_changes = render_rx_change_rows(
-                "脂質薬", "ldl", meds_catalog["ldl"], current_ldl_keys, "pc_ldl"
+                "Lipid medicines", "ldl", meds_catalog["ldl"], current_ldl_keys, "pc_ldl"
             )
             adjusted_a1c_keys, a1c_changes = render_rx_change_rows(
-                "糖尿病薬", "hba1c", meds_catalog["hba1c"], current_a1c_keys, "pc_a1c"
+                "Diabetes medicines", "hba1c", meds_catalog["hba1c"], current_a1c_keys, "pc_a1c"
             )
 
-            with st.expander("➕ 薬を追加する（任意）"):
+            with st.expander("Add medicines (optional)"):
                 add_sbp_keys = render_two_stage_med_picker(
-                    "降圧薬（追加）",
+                    "BP medicines (add)",
                     [o for o in sbp_options
                      if o not in current_sbp_keys and o not in adjusted_sbp_keys],
                     "pc_add_sbp",
                 )
                 add_ldl_keys = render_two_stage_med_picker(
-                    "脂質薬（追加）",
+                    "Lipid medicines (add)",
                     [o for o in ldl_options
                      if o not in current_ldl_keys and o not in adjusted_ldl_keys],
                     "pc_add_ldl",
                 )
                 add_a1c_keys = render_two_stage_med_picker(
-                    "糖尿病薬（追加）",
+                    "Diabetes medicines (add)",
                     [o for o in a1c_options
                      if o not in current_a1c_keys and o not in adjusted_a1c_keys],
                     "pc_add_a1c",
@@ -679,10 +786,10 @@ with st.container(border=True):
 
             rx_change_lines = (
                 sbp_changes + ldl_changes + a1c_changes
-                + [f"➕ 追加: {k}" for k in list(add_sbp_keys) + list(add_ldl_keys) + list(add_a1c_keys)]
+                + [f"➕ Add: {_display_text(k)}" for k in list(add_sbp_keys) + list(add_ldl_keys) + list(add_a1c_keys)]
             )
             if rx_change_lines:
-                st.markdown("**変更内容**")
+                st.markdown("**Changes**")
                 for line in rx_change_lines:
                     st.write(line)
 
@@ -735,25 +842,25 @@ with st.container(border=True):
             }
 
         # 結果表示
-        st.caption("合成ルール：SBPは足し算 / LDLは%低下を掛け算 / HbA1cは足し算")
+        st.caption("Combination rule: SBP additive / LDL multiplicative % / HbA1c additive")
         if meds_summary is not None:
             if meds_summary.get("mode") == "backcast":
-                st.metric("年間薬剤費（概算）", f"{meds_summary['annual_cost_yen']:,} 円/年")
-                st.caption("検査値の反実仮想結果はメイン画面に表示します。")
+                st.metric("Estimated annual drug cost", f"{meds_summary['annual_cost_yen']:,} JPY/year")
+                st.caption("Counterfactual lab results are shown in the main pane.")
             elif meds_summary.get("mode") == "adjust":
-                st.metric("年間薬剤費（変更後）", f"{meds_summary['annual_cost_yen']:,} 円/年")
-                st.markdown("**自動計算された目標値（この値でリスク計算）**")
-                st.write(f"- SBP 目標: **{meds_summary['sbp_target']:.0f} mmHg**")
-                st.write(f"- LDL 目標: **{meds_summary['ldl_target']:.0f} mg/dL**")
-                st.write(f"- HbA1c 目標: **{meds_summary['a1c_target']:.1f} %**")
+                st.metric("Annual drug cost (after change)", f"{meds_summary['annual_cost_yen']:,} JPY/year")
+                st.markdown("**Auto-calculated targets (used for risk calculation)**")
+                st.write(f"- SBP Target: **{meds_summary['sbp_target']:.0f} mmHg**")
+                st.write(f"- LDL Target: **{meds_summary['ldl_target']:.0f} mg/dL**")
+                st.write(f"- HbA1c Target: **{meds_summary['a1c_target']:.1f} %**")
 
-                st.markdown("**薬剤変更の比較**")
+                st.markdown("**Medicine-change comparison**")
                 costs = meds_summary["costs"]
                 delta = costs["delta"]
-                delta_sign = "＋" if delta > 0 else ""
+                delta_sign = "+" if delta > 0 else ""
                 st.write(
-                    f"- 年間薬剤費: {costs['baseline']:,} 円/年 → {costs['adjusted']:,} 円/年 "
-                    f"（差分 {delta_sign}{delta:,} 円/年）"
+                    f"- Annual drug cost: {costs['baseline']:,} JPY/year → {costs['adjusted']:,} JPY/year "
+                    f"(difference {delta_sign}{delta:,} JPY/year)"
                 )
                 st.write(
                     f"- SBP: {meds_summary['baseline_targets']['sbp_target']:.0f} → "
@@ -768,33 +875,33 @@ with st.container(border=True):
                     f"{meds_summary['a1c_target']:.1f} %"
                 )
             else:
-                st.markdown("**薬剤介入後の予測**")
+                st.markdown("**Prediction after medicine intervention**")
                 st.markdown(
                     f'<div class="prediction-strip">'
-                    f'<div class="prediction-item"><div class="prediction-label">収縮期血圧</div><div class="prediction-value">{meds_summary["sbp_target"]:.0f} <small>mmHg</small></div></div>'
+                    f'<div class="prediction-item"><div class="prediction-label">Systolic BP</div><div class="prediction-value">{meds_summary["sbp_target"]:.0f} <small>mmHg</small></div></div>'
                     f'<div class="prediction-item"><div class="prediction-label">LDL</div><div class="prediction-value">{meds_summary["ldl_target"]:.0f} <small>mg/dL</small></div></div>'
                     f'<div class="prediction-item"><div class="prediction-label">HbA1c</div><div class="prediction-value">{meds_summary["a1c_target"]:.1f}<small>%</small></div></div>'
-                    f'<div class="prediction-item"><div class="prediction-label">年間薬剤費（概算）</div><div class="prediction-value">{meds_summary["annual_cost_yen"]:,}<small>円/年</small></div></div>'
+                    f'<div class="prediction-item"><div class="prediction-label">Estimated annual drug cost</div><div class="prediction-value">{meds_summary["annual_cost_yen"]:,}<small>JPY/year</small></div></div>'
                     f'</div>',
                     unsafe_allow_html=True,
                 )
 
             if meds_summary["side_effects_md"].strip():
-                with st.expander("主な副作用（薬剤ごと）"):
-                    st.markdown(meds_summary["side_effects_md"])
+                with st.expander("Main adverse effects (by medicine)"):
+                    st.markdown(_display_text(meds_summary["side_effects_md"]))
         elif mode == "adjust":
-            st.caption("薬増減モード：現在服用中の薬を選択してください。")
+            st.caption("Adjust mode: select currently used medicines.")
 
     backcast_treatment_years = 1
     backcast_medication_years = {}
     backcast_keys = [*current_sbp_keys, *current_ldl_keys, *current_a1c_keys]
     if backcast_enabled:
-        st.markdown("**治療期間**")
+        st.markdown("**Treatment duration**")
         if not backcast_keys:
-            st.info("上で現在服用中の薬を入力すると計算できます。")
+            st.info("Enter current medicines above to calculate.")
         else:
             backcast_treatment_years = st.number_input(
-                "治療を始めてからの年数",
+                "Years since starting treatment",
                 min_value=1,
                 max_value=max(1, int(age) - 20),
                 value=min(10, max(1, int(age) - 20)),
@@ -805,11 +912,11 @@ with st.container(border=True):
                 backcast_medication_years[med_key] = float(backcast_treatment_years)
 
 with st.sidebar:
-    st.markdown("### 🌿 今日のナビ")
-    st.caption("入力はメイン画面で行います。ここには実行ボタンと要約だけを表示します。")
+    st.markdown("### Today's navigator")
+    st.caption("Enter data in the main pane. This sidebar shows the run button and a summary only.")
     calculation_button_slot = st.empty()
 
-# ====== 実際に使う目標値 ======
+# ====== 実際に使うTarget値 ======
 if use_meds and meds_summary is not None:
     sbp_tgt = float(meds_summary["sbp_target"])
     ldl_tgt = float(meds_summary["ldl_target"])
@@ -823,7 +930,7 @@ else:
     annual_cost_yen = 0
     side_effects_md = ""
 
-# 食事・運動も薬剤と同列の介入として、最終的な予測値に重ねる。
+# 食事・運動も薬剤と同列の介入として、最終的なPredicted valuesに重ねる。
 diabetes_context = bool(
     diabetes_diagnosed or a1c_now >= 6.5 or current_a1c_keys or a1c_sel_keys or adjusted_a1c_keys
 )
@@ -842,14 +949,16 @@ a1c_tgt = lifestyle_result["a1c"]
 with st.sidebar:
     if lifestyle_result["applied"]:
         with st.container(border=True):
-            st.markdown("**🎯 選択した介入による予測値**")
+            st.markdown("**Predicted values after selected interventions**")
             st.markdown(
-                f"🩸 血圧　**{sbp_tgt:.0f} mmHg**  \n"
+                f"BP **{sbp_tgt:.0f} mmHg**  \n"
                 f"🧪 LDL　**{ldl_tgt:.0f} mg/dL**  \n"
                 f"🍬 HbA1c　**{a1c_tgt:.1f}%**"
             )
     for effect in lifestyle_result["skipped"]:
-        st.warning(f"{effect.label}は{effect.population}の根拠のため、現在の入力には効果量を適用していません。")
+        st.warning(
+            f"{_lifestyle_label(effect.key)} is based on evidence in {ENGLISH_LIFESTYLE_DETAILS.get(effect.key, {}).get('population', effect.population)}; effect size was not applied to the current inputs."
+        )
 
 def _years_from_choice(choice: str) -> int:
     return {"5-year": 5, "10-year": 10, "20-year": 20, "30-year": 30, "50-year": 50}.get(choice, 10)
@@ -898,7 +1007,7 @@ def calculate_cumulative_risk_curves(years: int):
     return cumulative_data
 
 # ---- パラメータ変更検知と手動計算 ----
-# 現在のパラメータを文字列化してハッシュ化（変更検知用）
+# Currentのパラメータを文字列化してハッシュ化（変更検知用）
 import hashlib
 current_params = {
     "sex": sex, "age": age,
@@ -949,32 +1058,35 @@ if "backcast_params_hash" not in st.session_state:
 horizons = [5, 10] if which == "Both" else [_years_from_choice(which)]
 years_for_curve = max(horizons)
 
-selected_intervention_labels = [effect.label for effect in lifestyle_result["applied"]]
-selected_medication_labels = list(current_sbp_keys or sbp_sel_keys) + list(current_ldl_keys or ldl_sel_keys) + list(current_a1c_keys or a1c_sel_keys)
+selected_intervention_labels = [_lifestyle_label(effect.key) for effect in lifestyle_result["applied"]]
+selected_medication_labels = [
+    _display_text(k)
+    for k in list(current_sbp_keys or sbp_sel_keys) + list(current_ldl_keys or ldl_sel_keys) + list(current_a1c_keys or a1c_sel_keys)
+]
 with st.container(border=True):
     st.markdown(
-        f"**予測値**　血圧 {sbp_now:.0f}→**{sbp_tgt:.0f}**　"
-        f"LDL {ldl_now:.0f}→**{ldl_tgt:.0f}**　HbA1c {a1c_now:.1f}→**{a1c_tgt:.1f}%**  \n"
-        f"🥗 {('、'.join(selected_intervention_labels) if selected_intervention_labels else '未選択')}　／　"
-        f"💊 {('、'.join(selected_medication_labels) if selected_medication_labels else '未選択')}"
+        f"**Predicted values**  BP {sbp_now:.0f}→**{sbp_tgt:.0f}**  "
+        f"LDL {ldl_now:.0f}→**{ldl_tgt:.0f}**  HbA1c {a1c_now:.1f}→**{a1c_tgt:.1f}%**  \n"
+        f"🥗 {(', '.join(selected_intervention_labels) if selected_intervention_labels else 'None selected')}  /  "
+        f"💊 {(', '.join(selected_medication_labels) if selected_medication_labels else 'None selected')}"
     )
 
 if diabetes_diagnosed or ckd_diagnosed:
-    st.markdown("### 🩺 疾患別の評価")
+    st.markdown("### 🩺 Condition-specific view")
     disease_cols = st.columns(int(diabetes_diagnosed) + int(ckd_diagnosed))
     disease_index = 0
     if diabetes_diagnosed:
         with disease_cols[disease_index].container(border=True):
-            st.markdown("**糖尿病モジュール**")
-            st.metric("現在のHbA1c", f"{a1c_now:.1f}%", delta=f"介入後予測 {a1c_tgt:.1f}%")
-            st.caption("HbA1cによる心筋梗塞・脳卒中・死亡リスク補正を共通モデルへ統合しています。")
+            st.markdown("**Diabetes module**")
+            st.metric("Current HbA1c", f"{a1c_now:.1f}%", delta=f"After intervention {a1c_tgt:.1f}%")
+            st.caption("HbA1c-based MI, stroke, and mortality adjustments are integrated into the shared model.")
         disease_index += 1
     if ckd_diagnosed:
         g_stage = "G1" if egfr_now >= 90 else "G2" if egfr_now >= 60 else "G3a" if egfr_now >= 45 else "G3b" if egfr_now >= 30 else "G4" if egfr_now >= 15 else "G5"
         with disease_cols[disease_index].container(border=True):
-            st.markdown("**CKDモジュール**")
-            st.metric("eGFR区分", g_stage, delta=f"尿蛋白 {acr_now}")
-            st.caption("eGFRと尿アルブミン／蛋白による心筋梗塞・脳卒中・死亡リスク補正を共通モデルへ統合しています。")
+            st.markdown("**CKD module**")
+            st.metric("eGFR stage", g_stage, delta=f"Urine protein {acr_now}")
+            st.caption("eGFR and urine albumin/protein adjustments for MI, stroke, and mortality are integrated into the shared model.")
 
 # 入力が変わったら古い結果を無効化するが、自動再計算はしない。
 params_changed = st.session_state.params_hash != params_hash
@@ -987,20 +1099,20 @@ if not backcast_enabled and params_changed and st.session_state.calculated:
 manual_button_clicked = False
 if not backcast_enabled:
     sidebar_calculate_clicked = calculation_button_slot.button(
-        "🔄 リスク計算を実行",
+        "🔄 Run risk calculation",
         type="primary",
         use_container_width=True,
         key="risk_calculate_sidebar",
     )
     main_calculate_clicked = st.button(
-        "🔄 リスク計算を実行",
+        "🔄 Run risk calculation",
         type="primary",
         use_container_width=True,
         key="risk_calculate_main",
     )
     manual_button_clicked = sidebar_calculate_clicked or main_calculate_clicked
 if not backcast_enabled and manual_button_clicked:
-    with st.spinner("リスク計算中..."):
+    with st.spinner("Calculating risk..."):
         st.session_state.cumulative_data = calculate_cumulative_risk_curves(years_for_curve)
         st.session_state.calculated = True
         st.session_state.years = years_for_curve
@@ -1010,13 +1122,13 @@ if not backcast_enabled and manual_button_clicked:
 backcast_ready = False
 if backcast_enabled and backcast_keys:
     sidebar_backcast_clicked = calculation_button_slot.button(
-        "🔄 反実仮想を計算",
+        "Calculate counterfactual",
         type="primary",
         use_container_width=True,
         key="backcast_calculate_sidebar",
     )
     main_backcast_clicked = st.button(
-        "🔄 反実仮想を計算",
+        "Calculate counterfactual",
         type="primary",
         use_container_width=True,
         key="backcast_calculate_main",
@@ -1026,14 +1138,14 @@ if backcast_enabled and backcast_keys:
         st.session_state.backcast_params_hash = params_hash
     backcast_ready = st.session_state.backcast_params_hash == params_hash
     if not backcast_ready:
-        st.info("👆 薬剤と用量を確認し「反実仮想を計算」を押してください")
+        st.info("Confirm medicines and doses, then press Calculate counterfactual.")
 
 if not backcast_enabled and not st.session_state.calculated:
-    st.info("👆 上記のパラメータを設定して「リスク計算を実行」を押してください")
+    st.info('Set the parameters above, then press "Run risk calculation".')
     st.stop()
 
 cumulative_data = st.session_state.cumulative_data or {}
-labels = {"mi": "心筋梗塞", "stroke": "脳卒中", "mortality": "全死亡"}
+labels = {"mi": "Myocardial infarction", "stroke": "Stroke", "mortality": "All-cause death"}
 
 # ---- 反実仮想モード：通常の将来リスク表示を、この結果へ丸ごと差し替える ----
 backcast_summary = None
@@ -1114,57 +1226,57 @@ if backcast_enabled and backcast_keys and backcast_ready:
         "event_curves": event_curves,
         "future_years": future_years,
     }
-    st.markdown("## ⑤ 服薬しなかった場合との推定比較")
-    st.caption(f"現在までの{int(backcast_treatment_years)}年間について、薬剤カタログの平均効果から逆算した推定です。")
+    st.markdown("## 5. Estimated comparison if medicines had not been taken")
+    st.caption(f"Estimate for the past {int(backcast_treatment_years)} years, back-calculated from catalog average effects.")
     result_cols = st.columns(3)
     for col, label, untreated, current, unit in (
-        (result_cols[0], "収縮期血圧", untreated_values["sbp"], sbp_now, "mmHg"),
+        (result_cols[0], "Systolic BP", untreated_values["sbp"], sbp_now, "mmHg"),
         (result_cols[1], "LDL", untreated_values["ldl"], ldl_now, "mg/dL"),
         (result_cols[2], "HbA1c", untreated_values["a1c"], a1c_now, "%"),
     ):
         with col:
-            st.metric(label, f"現在 {current:.1f} {unit}", delta=f"薬なし推定 {untreated:.1f} {unit}")
-    st.markdown(f"### この{int(backcast_treatment_years)}年間に回避できた可能性があるイベント")
+            st.metric(label, f"Current {current:.1f} {unit}", delta=f"No-drug estimate {untreated:.1f} {unit}")
+    st.markdown(f"### Events that may have been avoided over these {int(backcast_treatment_years)} years")
     event_cols = st.columns(3)
     for col, outcome in zip(event_cols, OUTCOME_DISPLAY_ORDER):
         effect = event_effects[outcome]
         with col:
             st.metric(
                 labels[outcome],
-                f"{effect['avoided']:.1f}ポイント回避",
-                delta=f"薬なし {effect['untreated']:.1f}% → 服薬あり {effect['treated']:.1f}%",
+                f"{effect['avoided']:.1f} percentage points avoided",
+                delta=f"No drug {effect['untreated']:.1f}% → On treatment {effect['treated']:.1f}%",
             )
             if effect["avoided"] > 0.05:
-                st.caption(f"100人あたり約{effect['avoided']:.1f}件／NNT相当 約{100/effect['avoided']:.0f}人")
+                st.caption(f"About {effect['avoided']:.1f} events per 100 people / NNT ≈ {100/effect['avoided']:.0f}")
             else:
-                st.caption("推定差はごく小さい")
-    st.markdown(f"### これまでの利益と今後{future_years}年間の見通し")
-    st.caption("横軸の0年が現在です。左側がこれまで、右側が今後の推定です。")
+                st.caption("Estimated difference is very small")
+    st.markdown(f"### Benefit so far and outlook for the next {future_years} years")
+    st.caption("Year 0 is now. Left is the past; right is the future estimate.")
     colors = {"mortality": "#6B7280", "mi": "#E45756", "stroke": "#4C78A8"}
     for outcome in OUTCOME_DISPLAY_ORDER:
         curve = event_curves[outcome]
         fig = go.Figure()
         fig.add_trace(go.Scatter(
             x=curve["time"], y=curve["untreated"], mode="lines",
-            name="薬を飲まなかった場合", line=dict(color=colors[outcome], dash="dash", width=2),
+            name="If medicines had not been taken", line=dict(color=colors[outcome], dash="dash", width=2),
         ))
         fig.add_trace(go.Scatter(
             x=curve["time"], y=curve["treated"], mode="lines",
-            name="服薬を続ける場合", line=dict(color=colors[outcome], width=3),
+            name="If medicines are continued", line=dict(color=colors[outcome], width=3),
         ))
-        fig.add_vline(x=0, line_dash="dot", line_color="#111827", annotation_text="現在")
+        fig.add_vline(x=0, line_dash="dot", line_color="#111827", annotation_text="Current")
         fig.update_layout(
-            title=labels[outcome], xaxis_title="現在を0とした年数", yaxis_title="累積イベントリスク（%）",
+            title=labels[outcome], xaxis_title="Years relative to now (0 = today)", yaxis_title="Cumulative event risk (%)",
             height=420, hovermode="x unified", legend=dict(orientation="h", y=1.12),
         )
         st.plotly_chart(fig, width="stretch")
-    st.success("現在の数値は、服薬を続けて得られている成果です。自己判断で中止せず、今後の方針を主治医と相談しましょう。")
+    st.success("Current values reflect benefit from continued treatment. Do not stop medicines on your own; discuss the plan with the clinician.")
 elif backcast_enabled and not backcast_keys:
-    st.info("現在服用中の薬を選ぶと、服薬しなかった場合の推定値を表示します。")
+    st.info("Select current medicines to show estimates if they had not been taken.")
 
 # ---- サマリー ----
 if not backcast_enabled:
-    st.markdown("## 📊 リスク比較サマリー")
+    st.markdown("## 📊 Risk comparison summary")
     cols = st.columns(3)
     for i, outcome in enumerate(OUTCOME_DISPLAY_ORDER):
         with cols[i]:
@@ -1177,33 +1289,33 @@ if not backcast_enabled:
                     assume_quit_today_in_target=quit_today
                 )
                 arr = (r["baseline"] - r["target"]) * 100.0
-                st.metric(f"{horizon}年 リスク減少（ARR）", f"{arr:.1f}%", delta=f"現在 {r['baseline']*100:.1f}% → 目標 {r['target']*100:.1f}%")
+                st.metric(f"{horizon}-year risk reduction (ARR)", f"{arr:.1f}%", delta=f"Current {r['baseline']*100:.1f}% → Target {r['target']*100:.1f}%")
             if outcome == "mortality":
                 st.caption(MORTALITY_ALL_CAUSE_DEATH_CAPTION)
 
 st.divider()
 
-st.markdown("## 💴 費用と副作用（薬剤選択時）")
+st.markdown("## 💴 Cost and adverse effects (when medicines selected)")
 if use_meds and meds_summary is not None:
     if meds_summary.get("mode") == "backcast":
         annual_cost = int(meds_summary["annual_cost_yen"])
-        st.metric("年間薬剤費（現在）", f"{annual_cost:,} 円/年")
+        st.metric("Annual drug cost (current)", f"{annual_cost:,} JPY/year")
         st.metric(
-            f"治療{int(backcast_treatment_years)}年間に支払った薬剤費の概算",
-            f"{annual_cost * int(backcast_treatment_years):,} 円",
+            f"Approx. drug cost over {int(backcast_treatment_years)} treatment years",
+            f"{annual_cost * int(backcast_treatment_years):,} JPY",
         )
-        st.caption("現在の薬価を治療期間に単純乗算した概算です。過去の薬価・処方変更・自己負担割合は反映していません。")
+        st.caption("Rough estimate = current list price × treatment years. Past prices, regimen changes, and co-pay are not included.")
     elif meds_summary.get("mode") == "adjust":
         costs = meds_summary["costs"]
         delta = costs["delta"]
-        delta_sign = "＋" if delta > 0 else ""
-        st.metric("年間薬剤費（現在）", f"{costs['baseline']:,} 円/年")
+        delta_sign = "+" if delta > 0 else ""
+        st.metric("Annual drug cost (current)", f"{costs['baseline']:,} JPY/year")
         col1, col2 = st.columns(2)
         with col1:
-            st.metric("年間薬剤費（変更後）", f"{costs['adjusted']:,} 円/年")
+            st.metric("Annual drug cost (after change)", f"{costs['adjusted']:,} JPY/year")
         with col2:
-            st.metric("差分", f"{delta_sign}{delta:,} 円/年")
-        st.markdown("**目標値の変化**")
+            st.metric("Difference", f"{delta_sign}{delta:,} JPY/year")
+        st.markdown("**Target value changes**")
         st.write(
             f"- SBP: {meds_summary['baseline_targets']['sbp_target']:.0f} → "
             f"{meds_summary['sbp_target']:.0f} mmHg"
@@ -1217,23 +1329,23 @@ if use_meds and meds_summary is not None:
             f"{meds_summary['a1c_target']:.1f} %"
         )
     else:
-        st.metric("年間薬剤費（合計）", f"{annual_cost_yen:,} 円/年")
+        st.metric("Annual drug cost (total)", f"{annual_cost_yen:,} JPY/year")
     if side_effects_md.strip():
-        st.markdown("**主な副作用（薬剤ごと）**")
-        st.markdown(side_effects_md)
+        st.markdown("**Main adverse effects (by medicine)**")
+        st.markdown(_display_text(side_effects_md))
 else:
-    st.info("薬剤を選択していないため、費用・副作用は表示しません。")
+    st.info("No medicines selected, so cost and adverse effects are not shown.")
 
 st.divider()
 
 # ---- 曲線（MI / Stroke / Mortality すべて表示） ----
 if not backcast_enabled:
-    st.markdown("## 📈 累積リスク曲線（95%CI）")
+    st.markdown("## 📈 Cumulative risk curves (95% CI)")
 
 _OUTCOME_DETAIL_META = {
-    "mortality": {"title": "💀 全死亡", "icon": "💀"},
-    "mi": {"title": "🫀 心筋梗塞", "icon": "🫀"},
-    "stroke": {"title": "🧠 脳卒中", "icon": "🧠"},
+    "mortality": {"title": "💀 All-cause death", "icon": "💀"},
+    "mi": {"title": "🫀 Myocardial infarction", "icon": "🫀"},
+    "stroke": {"title": "🧠 Stroke", "icon": "🧠"},
 }
 outcomes_config = [{"key": k, **_OUTCOME_DETAIL_META[k]} for k in OUTCOME_DISPLAY_ORDER]
 
@@ -1253,41 +1365,41 @@ def plot_risk_curve(outcome_key: str, title: str):
     fig = go.Figure()
 
     fig.add_trace(go.Scatter(
-        x=t[:cut_idx], y=b[:cut_idx], mode="lines", name="現在",
-        hovertemplate="%{x:.1f}年: %{y:.2f}%<extra></extra>",
+        x=t[:cut_idx], y=b[:cut_idx], mode="lines", name="Current",
+        hovertemplate="%{x:.1f} y: %{y:.2f}%<extra></extra>",
         line=dict(color="red", width=2)
     ))
     fig.add_trace(go.Scatter(
-        x=t[cut_idx:], y=b[cut_idx:], mode="lines", name="現在（≥85歳推定域）",
-        opacity=0.4, hovertemplate="%{x:.1f}年: %{y:.2f}%<extra></extra>", showlegend=False,
+        x=t[cut_idx:], y=b[cut_idx:], mode="lines", name="Current (≥85y extrapolated)",
+        opacity=0.4, hovertemplate="%{x:.1f} y: %{y:.2f}%<extra></extra>", showlegend=False,
         line=dict(color="red", width=2)
     ))
 
     fig.add_trace(go.Scatter(
-        x=t[:cut_idx], y=tg[:cut_idx], mode="lines", name="薬剤/目標",
-        hovertemplate="%{x:.1f}年: %{y:.2f}%<extra></extra>",
+        x=t[:cut_idx], y=tg[:cut_idx], mode="lines", name="Medicine/target",
+        hovertemplate="%{x:.1f} y: %{y:.2f}%<extra></extra>",
         line=dict(color="blue", width=2)
     ))
     fig.add_trace(go.Scatter(
-        x=t[cut_idx:], y=tg[cut_idx:], mode="lines", name="薬剤/目標（≥85歳推定域）",
-        opacity=0.4, hovertemplate="%{x:.1f}年: %{y:.2f}%<extra></extra>", showlegend=False,
+        x=t[cut_idx:], y=tg[cut_idx:], mode="lines", name="Medicine/target (≥85y extrapolated)",
+        opacity=0.4, hovertemplate="%{x:.1f} y: %{y:.2f}%<extra></extra>", showlegend=False,
         line=dict(color="blue", width=2)
     ))
 
     # CI band: baseline
     fig.add_trace(go.Scatter(x=t, y=b_u, mode="lines", line=dict(width=0), showlegend=False, hoverinfo="skip"))
     fig.add_trace(go.Scatter(x=t, y=b_l, mode="lines", fill="tonexty", line=dict(width=0),
-                             name="現在 95%CI", hoverinfo="skip", fillcolor="rgba(255, 0, 0, 0.08)"))
+                             name="Current 95%CI", hoverinfo="skip", fillcolor="rgba(255, 0, 0, 0.08)"))
 
     # CI band: target
     fig.add_trace(go.Scatter(x=t, y=tg_u, mode="lines", line=dict(width=0), showlegend=False, hoverinfo="skip"))
     fig.add_trace(go.Scatter(x=t, y=tg_l, mode="lines", fill="tonexty", line=dict(width=0),
-                             name="薬剤/目標 95%CI", hoverinfo="skip", fillcolor="rgba(0, 0, 255, 0.08)"))
+                             name="Medicine/target 95% CI", hoverinfo="skip", fillcolor="rgba(0, 0, 255, 0.08)"))
 
     fig.update_layout(
         title=title,
-        xaxis_title="年数",
-        yaxis_title="累積リスク（%）",
+        xaxis_title="Years",
+        yaxis_title="Cumulative risk (%)",
         hovermode="x unified",
         height=520,
         legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01)
@@ -1345,20 +1457,20 @@ if False:  # 旧イベント推定表示は、上の検査値比較へ置き換�
         }
 
     st.divider()
-    st.markdown("## ⑤ 計算結果：これまでの治療で積み上げた成果")
+    st.markdown("## 5. Results: accumulated treatment benefit")
     st.caption(
-        f"{start_age}歳から現在までの{int(backcast_treatment_years)}年間を、"
-        "薬を飲まなかった反実仮想と比較します。"
+        f"{start_age}y to now over {int(backcast_treatment_years)} years, compared with a no-medicine counterfactual."
+        ""
     )
     c1, c2 = st.columns(2)
     with c1:
-        st.markdown("**薬を飲まなかった場合の推定値**")
+        st.markdown("**Estimated values if medicines had not been taken**")
         st.write(
             f"SBP {untreated_values['sbp']:.0f} mmHg／LDL {untreated_values['ldl']:.0f} mg/dL／"
             f"HbA1c {untreated_values['a1c']:.1f}%"
         )
     with c2:
-        st.markdown("**服薬年数を考慮した期間平均**")
+        st.markdown("**Duration-weighted period average**")
         st.write(
             f"SBP {treated_average['sbp']:.0f} mmHg／LDL {treated_average['ldl']:.0f} mg/dL／"
             f"HbA1c {treated_average['a1c']:.1f}%"
@@ -1369,13 +1481,13 @@ if False:  # 旧イベント推定表示は、上の検査値比較へ置き換�
         no_tx = backcast_curves[outcome]["untreated"][-1]
         tx = backcast_curves[outcome]["treated"][-1]
         arr = max(0.0, no_tx - tx)
-        nnt_text = f"NNT相当 約{100/arr:.0f}人" if arr > 0.05 else "差はごく小さい"
+        nnt_text = f"NNT ≈ {100/arr:.0f}" if arr > 0.05 else "Difference is very small"
         with col:
             st.metric(
-                labels[outcome], f"{arr:.1f}ポイント回避",
-                delta=f"無治療 {no_tx:.1f}% → 治療あり {tx:.1f}%",
+                labels[outcome], f"{arr:.1f}points avoided",
+                delta=f"No treatment {no_tx:.1f}% → Treated {tx:.1f}%",
             )
-            st.caption(f"100人あたり約{arr:.1f}件／{nnt_text}")
+            st.caption(f"About {arr:.1f} events per 100 people / {nnt_text}")
 
     fig_backcast = go.Figure()
     colors = {"mortality": "#6B7280", "mi": "#E45756", "stroke": "#4C78A8"}
@@ -1383,15 +1495,15 @@ if False:  # 旧イベント推定表示は、上の検査値比較へ置き換�
         curve = backcast_curves[outcome]
         fig_backcast.add_trace(go.Scatter(
             x=curve["time"], y=curve["untreated"], mode="lines",
-            name=f"{labels[outcome]}：薬なし", line=dict(color=colors[outcome], dash="dash"),
+            name=f"{labels[outcome]}：No drug", line=dict(color=colors[outcome], dash="dash"),
         ))
         fig_backcast.add_trace(go.Scatter(
             x=curve["time"], y=curve["treated"], mode="lines",
-            name=f"{labels[outcome]}：治療継続", line=dict(color=colors[outcome]),
+            name=f"{labels[outcome]}: continued treatment", line=dict(color=colors[outcome]),
         ))
     fig_backcast.update_layout(
-        title="薬を飲まなかった経路 vs 治療を続けた経路",
-        xaxis_title="治療開始からの年数", yaxis_title="累積リスク（%）",
+        title="No-medicine path vs continued treatment",
+        xaxis_title="Years since treatment start", yaxis_title="Cumulative risk (%)",
         height=500, hovermode="x unified",
     )
     st.plotly_chart(fig_backcast, width="stretch")
@@ -1409,18 +1521,18 @@ if False:  # 旧イベント推定表示は、上の検査値比較へ置き換�
         "mi_stroke_avoided": avoided,
     }
     st.success(
-        f"治療を続けたことで、心筋梗塞・脳卒中を合わせて100人あたり約{avoided:.1f}件を"
-        f"回避してきた可能性があります。これまでの服薬と通院で積み上げた成果です。"
+        f"Continuing treatment may have avoided about {avoided:.1f} myocardial infarction "
+        f"and stroke events combined per 100 people—benefit built through medicines and follow-up."
     )
     st.caption(
-        "これは薬剤カタログの平均効果から逆算した反実仮想推定です。"
-        "治療開始前の実測値、服薬遵守、用量変更、生活習慣の変化は完全には再現できません。"
+        "This is a counterfactual estimate back-calculated from catalog average effects."
+        "Pre-treatment measured values, adherence, dose changes, and lifestyle shifts cannot be fully reconstructed."
     )
 
 
 # ============================================================
 # 📄 療養計画書PDF（共通UIヘルパー pdf_plan_ui に委譲）
-#   目標欄は目標スライダーを直接使用（設計判断A）。BMIはPCにあるので渡す。
+#   Target欄はTargetスライダーを直接使用（設計判断A）。BMIはPCにあるので渡す。
 # ============================================================
 pdf_plan_ui.render_plan_section(
     sex=sex,
@@ -1437,7 +1549,9 @@ pdf_plan_ui.render_plan_section(
     bp_medications=tuple(current_sbp_keys or sbp_sel_keys),
     lipid_medications=tuple(current_ldl_keys or ldl_sel_keys),
     diabetes_medications=tuple(current_a1c_keys or a1c_sel_keys),
-    lifestyle_interventions=tuple(effect.label for effect in lifestyle_result["applied"]),
+    lifestyle_interventions=tuple(
+        _lifestyle_label(effect.key) for effect in lifestyle_result["applied"]
+    ),
     risk_curves=None if backcast_enabled else cumulative_data,
     risk_horizon_years=int(st.session_state.years) if st.session_state.years else None,
     sbp_after=sbp_tgt,
@@ -1445,4 +1559,5 @@ pdf_plan_ui.render_plan_section(
     a1c_after=a1c_tgt,
     treatment_benefit=backcast_summary,
     key_prefix="pc",
+    lang="en",
 )

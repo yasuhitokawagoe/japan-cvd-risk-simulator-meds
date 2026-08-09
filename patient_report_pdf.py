@@ -39,6 +39,11 @@ LIGHT = HexColor("#EEF1F3")
 TEXT = HexColor("#18242C")
 
 OUTCOME_LABELS = {"mortality": "全死亡", "mi": "心筋梗塞", "stroke": "脳卒中"}
+OUTCOME_LABELS_EN = {
+    "mortality": "All-cause death",
+    "mi": "Myocardial infarction",
+    "stroke": "Stroke",
+}
 
 
 def _text(c: canvas.Canvas, x: float, y: float, value: str, size: float = 10,
@@ -96,7 +101,7 @@ def _bar_chart(c: canvas.Canvas, x: float, y: float, w: float, h: float,
     row_h = 48
     for index, key in enumerate(OUTCOME_LABELS):
         cy = y + h - 46 - index * row_h
-        _text(c, x + 12, cy + 12, OUTCOME_LABELS[key], 8.5)
+        _text(c, x + 12, cy + 12, outcome_labels[key], 8.5)
         bx = x + 84
         available = w - 104
         current, target, _ = values[key]
@@ -197,8 +202,28 @@ def generate_patient_report_pdf(
     horizon_years: int,
     lifestyle_interventions: Iterable[str] = (),
     treatment_benefit: Mapping | None = None,
+    lang: str = "ja",
 ) -> bytes:
     """A4 2ページの患者向け説明資料を返す。"""
+    outcome_labels = OUTCOME_LABELS_EN if lang == "en" else OUTCOME_LABELS
+    # For English handouts, replace a few high-visibility Japanese phrases via local aliases.
+    t = {
+        "now": "Now" if lang == "en" else "現在",
+        "title_benefit": "Benefit from continuing medicines" if lang == "en" else "お薬を続けて得られている成果",
+        "subtitle_benefit": (
+            "Estimated comparison versus not taking medicines over the past {years} years"
+            if lang == "en"
+            else "現在までの{years}年間を、薬を飲まなかった場合と比べた推定"
+        ),
+        "sec_status": "1. Current status and medicines" if lang == "en" else "1. 現在の状態と服薬",
+        "sec_compare": "2. Estimated comparison if medicines had not been taken" if lang == "en" else "2. 薬を飲まなかった場合との推定比較",
+        "sec_events": "3. Events that may have been avoided over these {years} years" if lang == "en" else "3. この{years}年間に回避できた可能性があるイベント",
+        "points": "points avoided" if lang == "en" else "ポイント回避",
+        "no_drug": "No drug" if lang == "en" else "薬なし",
+        "on_drug": "On treatment" if lang == "en" else "服薬",
+        "footer": "For patient education and shared decision-making (not a medical device)" if lang == "en" else "患者教育・共有意思決定用（医療機器ではありません）",
+        "handout_title": "Your lifestyle care plan" if lang == "en" else "生活習慣改善 いっしょに取り組む目標",
+    }
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
     page_w, page_h = A4
@@ -208,25 +233,25 @@ def generate_patient_report_pdf(
         years = int(treatment_benefit.get("treatment_years", 0))
         c.setFillColor(NAVY)
         c.rect(0, page_h - 92, page_w, 92, fill=1, stroke=0)
-        _text(c, 30, page_h - 43, "お薬を続けて得られている成果", 20, white)
-        _text(c, 30, page_h - 68, f"現在までの{years}年間を、薬を飲まなかった場合と比べた推定", 10, white)
+        _text(c, 30, page_h - 43, t["title_benefit"], 20, white)
+        _text(c, 30, page_h - 68, t["subtitle_benefit"].format(years=years), 10, white)
         _text(c, page_w - 30, page_h - 68, date.today().strftime("%Y.%m.%d"), 8, white, "right")
 
         y = page_h - 120
-        y = _section_title(c, y, "1. 現在の状態と服薬")
+        y = _section_title(c, y, t["sec_status"])
         _text(c, 42, y, f"{age}歳・{sex_label}　身長 {height_cm:.1f} cm　体重 {weight_kg:.1f} kg", 10)
         _text(c, 42, y - 22, "現在服用中: " + ("、".join(medications) if list(medications) else "なし／未入力"), 9, GRAY)
         _text(c, 42, y - 38, "食事・運動: " + ("、".join(lifestyle_interventions) if lifestyle_interventions else "選択なし"), 9, GRAY)
 
         y -= 66
-        y = _section_title(c, y, "2. 薬を飲まなかった場合との推定比較")
+        y = _section_title(c, y, t["sec_compare"])
         card_y = y - 62
         _metric_card(c, 30, card_y, 170, "収縮期血圧（薬なし推定→現在）", float(treatment_benefit["untreated_sbp"]), float(treatment_benefit["current_sbp"]), "mmHg")
         _metric_card(c, 212, card_y, 170, "LDL（薬なし推定→現在）", float(treatment_benefit["untreated_ldl"]), float(treatment_benefit["current_ldl"]), "mg/dL")
         _metric_card(c, 394, card_y, 171, "HbA1c（薬なし推定→現在）", float(treatment_benefit["untreated_a1c"]), float(treatment_benefit["current_a1c"]), "%")
 
         y = card_y - 42
-        y = _section_title(c, y, f"3. この{years}年間に回避できた可能性があるイベント")
+        y = _section_title(c, y, t["sec_events"].format(years=years))
         event_card_y = y - 68
         event_effects = treatment_benefit.get("event_effects", {})
         for index, key in enumerate(("mortality", "mi", "stroke")):
@@ -237,9 +262,9 @@ def generate_patient_report_pdf(
             treated = float(effect.get("treated", 0.0))
             c.setFillColor(PALE_TEAL if avoided > 0 else LIGHT)
             c.roundRect(x, event_card_y, 170, 62, 7, fill=1, stroke=0)
-            _text(c, x + 10, event_card_y + 44, OUTCOME_LABELS[key], 9, NAVY)
-            _text(c, x + 10, event_card_y + 25, f"{avoided:.1f}ポイント回避", 12, TEAL)
-            _text(c, x + 10, event_card_y + 9, f"薬なし {untreated:.1f}% → 服薬 {treated:.1f}%", 7.5, GRAY)
+            _text(c, x + 10, event_card_y + 44, outcome_labels[key], 9, NAVY)
+            _text(c, x + 10, event_card_y + 25, f"{avoided:.1f} {t['points']}", 12, TEAL)
+            _text(c, x + 10, event_card_y + 9, f"{t['no_drug']} {untreated:.1f}% → {t['on_drug']} {treated:.1f}%", 7.5, GRAY)
 
         y = event_card_y - 38
         y = _section_title(c, y, "4. この結果の受け止め方")
@@ -255,7 +280,7 @@ def generate_patient_report_pdf(
         for index, line in enumerate(_wrap(status, 45)):
             _text(c, 44, y - index * 18, "□ " + line if index == 0 else line, 11, NAVY)
         _text(c, 30, 42, "推定値には不確実性があります。治療変更は主治医と相談してください。", 8, GRAY)
-        _text(c, page_w - 30, 27, "患者教育・共有意思決定用（医療機器ではありません）", 7.5, GRAY, "right")
+        _text(c, page_w - 30, 27, t["footer"], 7.5, GRAY, "right")
 
         event_curves = treatment_benefit.get("event_curves", {})
         if event_curves:
@@ -267,7 +292,7 @@ def generate_patient_report_pdf(
             for index, key in enumerate(("mortality", "mi", "stroke")):
                 _backcast_line_chart(
                     c, 30, page_h - 285 - index * 235, 535, 205,
-                    OUTCOME_LABELS[key], event_curves[key],
+                    outcome_labels[key], event_curves[key],
                 )
             _text(c, 30, 27, "過去と将来はいずれも薬剤の平均効果を用いた推定です。", 7.5, GRAY)
         c.save()
@@ -302,7 +327,7 @@ def generate_patient_report_pdf(
         x = 30 + index * 182
         c.setFillColor(PALE_TEAL if arr > 0 else LIGHT)
         c.roundRect(x, benefits_y, 170, 70, 7, fill=1, stroke=0)
-        _text(c, x + 10, benefits_y + 51, OUTCOME_LABELS[key], 9, NAVY)
+        _text(c, x + 10, benefits_y + 51, outcome_labels[key], 9, NAVY)
         _text(c, x + 10, benefits_y + 29, f"{current:.1f}% → {target:.1f}%", 14, TEAL if arr > 0 else GRAY)
         _text(c, x + 10, benefits_y + 10, f"絶対リスク減少 {arr:.1f}ポイント", 8, GRAY)
 
@@ -318,7 +343,7 @@ def generate_patient_report_pdf(
     chart_y = page_h - 250
     chart_w = 170
     for index, key in enumerate(OUTCOME_LABELS):
-        _line_chart(c, 30 + index * 182, chart_y, chart_w, 160, OUTCOME_LABELS[key], risks[key])
+        _line_chart(c, 30 + index * 182, chart_y, chart_w, 160, outcome_labels[key], risks[key])
     _text(c, 30, chart_y - 16, "赤: 現在の状態が続いた場合　緑: 目標を実行した場合", 8, GRAY)
 
     y = chart_y - 50

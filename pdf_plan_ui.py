@@ -28,6 +28,113 @@ from plan_logic import (
     suggested_instructions,
 )
 
+
+_UI = {
+    "ja": {
+        "title": "## 📄 療養計画書を作成",
+        "caption": "アプリが持つ値を療養計画書（別紙様式9）に記入します。一次予防モデルの患者情報・検査値・服薬内容を引き継ぎます。主病名は検査値と服薬内容から候補を示すため、必ず確認してください。",
+        "visit": "区分", "visit_first": "初回", "visit_cont": "継続",
+        "dbp": "目標拡張期血圧 (mmHg)",
+        "include": "**計画書に載せる項目**（チェックした値だけ記入されます）",
+        "inc_bp": "目標血圧", "inc_a1c": "目標HbA1c", "inc_ldl": "実測LDL", "inc_a1c_now": "実測HbA1c", "inc_bmi": "目標BMI",
+        "bmi_manual": "目標BMI（0＝記入しない）",
+        "handed": "**一次予防モデルから引き継いだ内容**",
+        "male": "男性", "female": "女性", "meds": "服薬内容: ", "meds_none": "なし／未入力",
+        "manual": "✍ 手入力項目（主病名・体重・栄養状態・行動目標）",
+        "manual_cap": "自動入力された候補を確認し、患者さんとの相談内容に合わせて修正してください。",
+        "dx": "**主病名の候補**（検査値または該当薬から自動チェック・確定診断ではありません）",
+        "dm": "糖尿病", "htn": "高血圧症", "dl": "脂質異常症",
+        "wt_bmi": "目標体重 (kg)（BMI 22から自動計算）",
+        "wt_manual": "目標体重 (kg)（0＝記入しない）",
+        "nutrition": "栄養状態", "nutrition_skip": "（記入しない）",
+        "life": "**生活習慣から指導項目・行動目標を選ぶ**",
+        "life_items": "生活習慣・相談事項",
+        "default_life": "運動不足",
+        "instr": "療養計画書にチェックする指導項目",
+        "goals": "療養計画書と患者さん向け資料に反映する目標",
+        "extra_goal": "追加の達成目標・行動目標",
+        "extra_ph": "患者さんと相談して決めた内容を追加",
+        "achieve": "目標の達成状況（継続の場合のみ）",
+        "achieve_ph": "継続受診時、前回目標の達成状況を記入",
+        "backcast_eval": "反実仮想の結果を踏まえた評価・方針",
+        "backcast_ok": "現在の治療で目標は達成できている。治療を継続する",
+        "backcast_improve": "一定の成果は得られている。さらに改善を目指す",
+        "ready": "📄 記入内容を確認する",
+        "review": "#### 記入内容（この値が印字されます・編集可）",
+        "review_cap": "数値や内容はここで最終調整できます。空欄にするとその項目は印字されません。",
+        "privacy": "氏名・生年月日は個人情報保護のため空欄です。未入力の項目は印刷後に手書きできます。",
+        "maintain": "治療効果の維持",
+        "dl_plan": "⬇ PDFをダウンロード",
+        "patient_title": "#### 患者さん向け資料",
+        "patient_ok": "現在の状態、介入前後の検査値、全死亡・心筋梗塞・脳卒中のリスク差と推移グラフ、相談して決めた目標を2ページにまとめました。",
+        "dl_patient": "⬇ グラフ付き患者さん向け資料（PDF）",
+        "patient_need_calc": "リスク計算を実行すると、グラフ付き患者さん向け資料を作成できます。",
+        "plan_filename": "療養計画書",
+        "patient_filename": "健康づくりプラン",
+    },
+    "en": {
+        "title": "## 📄 Create care plan form",
+        "caption": "Fill the Japanese official care-plan form (Annex Form 9) with values from the app. Confirm diagnosis candidates suggested from labs and medicines.",
+        "visit": "Visit type", "visit_first": "Initial", "visit_cont": "Follow-up",
+        "dbp": "Target diastolic BP (mmHg)",
+        "include": "**Items to include** (only checked values are filled)",
+        "inc_bp": "BP target", "inc_a1c": "HbA1c target", "inc_ldl": "Measured LDL", "inc_a1c_now": "Measured HbA1c", "inc_bmi": "BMI target",
+        "bmi_manual": "BMI target (0 = leave blank)",
+        "handed": "**Carried over from the prevention model**",
+        "male": "Male", "female": "Female", "meds": "Medicines: ", "meds_none": "None / not entered",
+        "manual": "✍ Manual items (diagnoses, weight, nutrition, goals)",
+        "manual_cap": "Review auto-suggestions and adjust based on discussion with the patient.",
+        "dx": "**Diagnosis candidates** (auto-checked from labs/meds; not a confirmed diagnosis)",
+        "dm": "Diabetes", "htn": "Hypertension", "dl": "Dyslipidemia",
+        "wt_bmi": "Target weight (kg) (from BMI 22)", "wt_manual": "Target weight (kg) (0 = leave blank)",
+        "nutrition": "Nutrition status", "nutrition_skip": "(leave blank)",
+        "life": "**Choose counseling items and goals from lifestyle topics**",
+        "life_items": "Lifestyle / counseling topics",
+        "default_life": "運動不足",
+        "instr": "Counseling items to check on the form",
+        "goals": "Goals for the form and patient handout",
+        "extra_goal": "Additional achievement / action goals",
+        "extra_ph": "Add what you agreed with the patient",
+        "achieve": "Goal achievement status (follow-up only)",
+        "achieve_ph": "At follow-up, record progress on prior goals",
+        "backcast_eval": "Assessment based on the counterfactual estimate",
+        "backcast_ok": "Targets are met with current treatment; continue therapy",
+        "backcast_improve": "Some benefit achieved; aim for further improvement",
+        "ready": "📄 Review form values",
+        "review": "#### Form values (editable; these will be printed)",
+        "review_cap": "Adjust values here. Blank fields are not printed.",
+        "privacy": "Name and date of birth are left blank for privacy. Other blanks can be handwritten after printing.",
+        "maintain": "Maintain treatment benefit",
+        "dl_plan": "⬇ Download PDF",
+        "patient_title": "#### Patient handout",
+        "patient_ok": "A 2-page handout with current status, lab changes, risk differences for all-cause death / MI / stroke, charts, and agreed goals.",
+        "dl_patient": "⬇ Patient handout with charts (PDF)",
+        "patient_need_calc": "Run the risk calculation to create a patient handout with charts.",
+        "plan_filename": "care_plan",
+        "patient_filename": "health_plan",
+    },
+}
+
+_LIFESTYLE_TOPIC_EN = {
+    "塩分が多い": "High salt intake",
+    "野菜が少ない": "Low vegetable intake",
+    "間食・甘い飲料が多い": "Frequent snacks / sweet drinks",
+    "運動不足": "Insufficient exercise",
+    "体重を減らしたい": "Want to lose weight",
+    "喫煙している": "Currently smoking",
+    "飲酒量が多い": "Heavy alcohol use",
+    "服薬を忘れる": "Forgets medicines",
+}
+
+_INTERVENTION_LABEL_EN = {
+    "減塩": "Salt reduction",
+    "糖質制限": "Carbohydrate restriction",
+    "飽和脂肪制限": "Saturated fat restriction",
+    "中強度有酸素運動": "Moderate-intensity aerobic exercise",
+    "有酸素＋筋力トレーニング": "Aerobic + resistance training",
+    "高強度インターバル運動": "High-intensity interval training (HIIT)",
+}
+
 _LABEL_MAP = {
     pdf_fill.F_SEX: "性別",
     pdf_fill.F_AGE: "年齢",
@@ -50,6 +157,9 @@ _INTERVENTION_PLAN_ITEMS = {
     "有酸素＋筋力トレーニング": (["運動処方", "日常生活の活動量を増やす"], ["運動"]),
     "高強度インターバル運動": (["運動処方", "運動時の注意事項を確認する"], ["運動"]),
 }
+# English display labels from the PC English app also map to the same Japanese PDF items.
+for _jp, _en in _INTERVENTION_LABEL_EN.items():
+    _INTERVENTION_PLAN_ITEMS[_en] = _INTERVENTION_PLAN_ITEMS[_jp]
 
 
 def _plan_items_for_interventions(labels: tuple[str, ...]) -> tuple[list[str], list[str]]:
@@ -85,6 +195,7 @@ def render_plan_section(
     a1c_after: Optional[float] = None,
     treatment_benefit: Optional[Mapping] = None,
     key_prefix: str = "pc",
+    lang: str = "ja",
 ) -> None:
     """
     療養計画書の作成セクションを描画する。
@@ -94,43 +205,60 @@ def render_plan_section(
     目標欄には使わない（設計判断A）。氏名・生年月日等は決定1で空欄・手書き。
     """
     p = key_prefix
+    ui = _UI.get(lang, _UI["ja"])
+    label_map = (
+        {
+            pdf_fill.F_SEX: "Sex",
+            pdf_fill.F_AGE: "Age",
+            pdf_fill.F_DATE_Y: "Created (year)",
+            pdf_fill.F_DATE_M: "Created (month)",
+            pdf_fill.F_DATE_D: "Created (day)",
+            pdf_fill.F_BP: "BP target (SBP/DBP)",
+            pdf_fill.F_BMI: "BMI target",
+            pdf_fill.F_A1C_TGT: "HbA1c target",
+            pdf_fill.F_LDL_NOW: "Measured LDL",
+            pdf_fill.F_A1C_NOW: "Measured HbA1c",
+        }
+        if lang == "en"
+        else _LABEL_MAP
+    )
 
     st.divider()
-    st.markdown("## 📄 療養計画書を作成")
-    st.caption(
-        "アプリが持つ値を療養計画書（別紙様式9）に記入します。"
-        "一次予防モデルの患者情報・検査値・服薬内容を引き継ぎます。"
-        "主病名は検査値と服薬内容から候補を示すため、必ず確認してください。"
-    )
+    st.markdown(ui["title"])
+    st.caption(ui["caption"])
 
     # --- 計画書に固有の入力 ---
     col_v, col_d = st.columns(2)
     with col_v:
-        visit_label = st.radio("区分", ["初回", "継続"], horizontal=True, key=f"{p}_plan_visit")
+        visit_label = st.radio(
+            ui["visit"],
+            [ui["visit_first"], ui["visit_cont"]],
+            horizontal=True,
+            key=f"{p}_plan_visit",
+        )
     with col_d:
         dbp_tgt_input = st.number_input(
-            "目標拡張期血圧 (mmHg)", min_value=50, max_value=120, value=80, step=1,
+            ui["dbp"], min_value=50, max_value=120, value=80, step=1,
             key=f"{p}_plan_dbp",
-            help="収縮期は自動で入ります。拡張期はここで指定（帳票は 130/80 の形式）",
         )
 
     # --- 載せる項目（決定5: 既定値の誤記入を避けるため人が選ぶ） ---
-    st.markdown("**計画書に載せる項目**（チェックした値だけ記入されます）")
+    st.markdown(ui["include"])
     c1, c2 = st.columns(2)
     with c1:
-        inc_bp = st.checkbox("目標血圧", value=True, key=f"{p}_inc_bp")
-        inc_a1c_tgt = st.checkbox("目標HbA1c", value=True, key=f"{p}_inc_a1ctgt")
+        inc_bp = st.checkbox(ui["inc_bp"], value=True, key=f"{p}_inc_bp")
+        inc_a1c_tgt = st.checkbox(ui["inc_a1c"], value=True, key=f"{p}_inc_a1ctgt")
     with c2:
-        inc_ldl = st.checkbox("実測LDL", value=True, key=f"{p}_inc_ldl")
-        inc_a1c_now = st.checkbox("実測HbA1c", value=True, key=f"{p}_inc_a1cnow")
+        inc_ldl = st.checkbox(ui["inc_ldl"], value=True, key=f"{p}_inc_ldl")
+        inc_a1c_now = st.checkbox(ui["inc_a1c_now"], value=True, key=f"{p}_inc_a1cnow")
 
     # BMI: アプリがBMIを持つ（PC）ならチェックで制御、持たない（モバイル）なら手入力
     if bmi_target is not None:
-        inc_bmi = st.checkbox("目標BMI", value=True, key=f"{p}_inc_bmi")
+        inc_bmi = st.checkbox(ui["inc_bmi"], value=True, key=f"{p}_inc_bmi")
         bmi_value = float(bmi_target) if inc_bmi else None
     else:
         bmi_in = st.number_input(
-            "目標BMI（0＝記入しない）", min_value=0.0, max_value=50.0, value=0.0, step=0.1,
+            ui["bmi_manual"], min_value=0.0, max_value=50.0, value=0.0, step=0.1,
             key=f"{p}_bmi",
         )
         bmi_value = float(bmi_in) if bmi_in > 0 else None
@@ -145,14 +273,23 @@ def render_plan_section(
 
     if height_cm is not None and weight_kg is not None and sbp_now is not None and dbp_now is not None:
         with st.container(border=True):
-            st.markdown("**一次予防モデルから引き継いだ内容**")
+            st.markdown(ui["handed"])
+            sex_label = ui["male"] if sex == "male" else ui["female"]
             st.write(
-                f"{int(age)}歳・{'男性' if sex == 'male' else '女性'}／"
-                f"身長 {height_cm:.1f} cm・体重 {weight_kg:.1f} kg／"
-                f"血圧 {int(round(sbp_now))}/{int(round(dbp_now))} mmHg／"
-                f"LDL {ldl_now:.0f} mg/dL・HbA1c {a1c_now:.1f}%"
+                f"{int(age)} / {sex_label} / "
+                f"Ht {height_cm:.1f} cm / Wt {weight_kg:.1f} kg / "
+                f"BP {int(round(sbp_now))}/{int(round(dbp_now))} mmHg / "
+                f"LDL {ldl_now:.0f} mg/dL / HbA1c {a1c_now:.1f}%"
+                if lang == "en"
+                else (
+                    f"{int(age)}歳・{sex_label}／"
+                    f"身長 {height_cm:.1f} cm・体重 {weight_kg:.1f} kg／"
+                    f"血圧 {int(round(sbp_now))}/{int(round(dbp_now))} mmHg／"
+                    f"LDL {ldl_now:.0f} mg/dL・HbA1c {a1c_now:.1f}%"
+                )
             )
-            st.write("服薬内容: " + ("、".join(medication_names) if medication_names else "なし／未入力"))
+            meds_text = ("、".join(medication_names) if medication_names else ui["meds_none"]) if lang != "en" else (", ".join(medication_names) if medication_names else ui["meds_none"])
+            st.write(ui["meds"] + meds_text)
     diagnosis_signature = (
         round(float(sbp_now or 0), 1), round(float(dbp_now or 0), 1),
         round(float(ldl_now), 1), round(float(a1c_now), 1), tuple(medication_names),
@@ -165,44 +302,46 @@ def render_plan_section(
         st.session_state[diagnosis_signature_key] = diagnosis_signature
 
     # --- 計画書の追加項目 ---
-    with st.expander("✍ 手入力項目（主病名・体重・栄養状態・行動目標）"):
-        st.caption("自動入力された候補を確認し、患者さんとの相談内容に合わせて修正してください。")
+    with st.expander(ui["manual"]):
+        st.caption(ui["manual_cap"])
 
-        st.markdown("**主病名の候補**（検査値または該当薬から自動チェック・確定診断ではありません）")
+        st.markdown(ui["dx"])
         dcol1, dcol2, dcol3 = st.columns(3)
         with dcol1:
-            dx_dm = st.checkbox("糖尿病", key=f"{p}_dx_dm")
+            dx_dm = st.checkbox(ui["dm"], key=f"{p}_dx_dm")
         with dcol2:
-            dx_htn = st.checkbox("高血圧症", key=f"{p}_dx_htn")
+            dx_htn = st.checkbox(ui["htn"], key=f"{p}_dx_htn")
         with dcol3:
-            dx_dl = st.checkbox("脂質異常症", key=f"{p}_dx_dl")
+            dx_dl = st.checkbox(ui["dl"], key=f"{p}_dx_dl")
 
         mcol1, mcol2 = st.columns(2)
         with mcol1:
             if height_cm is not None:
                 weight_input = st.number_input(
-                    "目標体重 (kg)（BMI 22から自動計算）",
+                    ui["wt_bmi"],
                     min_value=20.0, max_value=200.0, value=ideal_weight_kg(height_cm),
                     step=0.1, key=f"{p}_weight",
                 )
             else:
                 weight_input = st.number_input(
-                    "目標体重 (kg)（0＝記入しない）",
+                    ui["wt_manual"],
                     min_value=0.0, max_value=200.0, value=0.0,
                     step=0.1, key=f"{p}_weight",
                 )
         with mcol2:
             nutrition_input = st.selectbox(
-                "栄養状態",
-                ["（記入しない）", *pdf_fill.NUTRITION_OPTIONS],
+                ui["nutrition"],
+                [ui["nutrition_skip"], *pdf_fill.NUTRITION_OPTIONS],
                 key=f"{p}_nutrition",
             )
 
-        st.markdown("**生活習慣から指導項目・行動目標を選ぶ**")
+        st.markdown(ui["life"])
+        life_options = list(LIFESTYLE_GOALS)
         lifestyle_items = st.multiselect(
-            "生活習慣・相談事項",
-            list(LIFESTYLE_GOALS),
-            default=["運動不足"] if not medication_names else [],
+            ui["life_items"],
+            life_options,
+            format_func=(lambda k: _LIFESTYLE_TOPIC_EN.get(k, k) if lang == "en" else k),
+            default=[ui["default_life"]] if not medication_names else [],
             key=f"{p}_lifestyle",
         )
         intervention_instructions, intervention_goals = _plan_items_for_interventions(lifestyle_interventions)
@@ -215,33 +354,30 @@ def render_plan_section(
             st.session_state[f"{p}_selected_goals"] = goal_candidates
             st.session_state[lifestyle_signature_key] = lifestyle_signature
         selected_instructions = st.multiselect(
-            "療養計画書にチェックする指導項目",
+            ui["instr"],
             list(pdf_fill.PLAN_INSTRUCTION_FIELDS),
             key=f"{p}_selected_instructions",
         )
         selected_goals = st.multiselect(
-            "療養計画書と患者さん向け資料に反映する目標",
+            ui["goals"],
             goal_candidates,
             key=f"{p}_selected_goals",
         )
         additional_goal = st.text_area(
-            "追加の達成目標・行動目標",
+            ui["extra_goal"],
             key=f"{p}_freetext",
-            placeholder="患者さんと相談して決めた内容を追加",
+            placeholder=ui["extra_ph"],
         )
         achievement_status = st.text_area(
-            "目標の達成状況（継続の場合のみ）",
+            ui["achieve"],
             key=f"{p}_achievement",
-            placeholder="継続受診時、前回目標の達成状況を記入",
+            placeholder=ui["achieve_ph"],
         )
         treatment_plan_status = None
         if treatment_benefit:
             treatment_plan_status = st.radio(
-                "反実仮想の結果を踏まえた評価・方針",
-                [
-                    "現在の治療で目標は達成できている。治療を継続する",
-                    "一定の成果は得られている。さらに改善を目指す",
-                ],
+                ui["backcast_eval"],
+                [ui["backcast_ok"], ui["backcast_improve"]],
                 key=f"{p}_backcast_plan_status",
             )
 
@@ -249,7 +385,7 @@ def render_plan_section(
     plan = pdf_fill.PlanInput(
         sex=sex,
         age=int(age),
-        visit_type="initial" if visit_label == "初回" else "continued",
+        visit_type="initial" if visit_label in (ui["visit_first"], "初回") else "continued",
         created=date.today(),
         sbp_tgt=int(round(sbp_tgt_manual)) if inc_bp else None,
         dbp_tgt=int(dbp_tgt_input) if inc_bp else None,
@@ -260,7 +396,7 @@ def render_plan_section(
     )
 
     ready_key = f"{p}_plan_ready"
-    if st.button("📄 記入内容を確認する", key=f"{p}_plan_make"):
+    if st.button(ui["ready"], key=f"{p}_plan_make"):
         st.session_state[ready_key] = True
 
     if not st.session_state.get(ready_key):
@@ -269,8 +405,8 @@ def render_plan_section(
     fv = pdf_fill.build_field_values(plan)
 
     # 確認画面（決定5）: 書き込む値を表示し、ここで最終調整できる。空欄行は記入しない。
-    st.markdown("#### 記入内容（この値が印字されます・編集可）")
-    st.caption("数値や内容はここで最終調整できます。空欄にするとその項目は印字されません。")
+    st.markdown(ui["review"])
+    st.caption(ui["review_cap"])
     field_order = list(fv.text.keys())
     # st.data_editor は内部で DataFrame を PyArrow に変換する。Railway の
     # pandas/PyArrow 組み合わせでは、この変換がネイティブ層で segfault して
@@ -279,14 +415,12 @@ def render_plan_section(
     for index, fname in enumerate(field_order):
         edited_values.append(
             st.text_input(
-                _LABEL_MAP.get(fname, fname),
+                label_map.get(fname, fname),
                 value=fv.text[fname],
                 key=f"{p}_plan_value_{index}",
             )
         )
-    st.caption(
-        "氏名・生年月日は個人情報保護のため空欄です。未入力の項目は印刷後に手書きできます。"
-    )
+    st.caption(ui["privacy"])
 
     # 編集後の値で FieldValues を再構築（値があれば連動チェックもON）
     fv_final = pdf_fill.FieldValues()
@@ -319,7 +453,7 @@ def render_plan_section(
     if additional_goal and additional_goal.strip():
         final_goals.append(additional_goal.strip())
     if treatment_benefit:
-        final_goals.append("治療効果の維持")
+        final_goals.append(ui["maintain"])
     if final_goals:
         fv_final.text[pdf_fill.F_PLAN_FREETEXT] = "／".join(final_goals)
     final_achievement = achievement_status.strip() if achievement_status else ""
@@ -336,20 +470,24 @@ def render_plan_section(
 
     pdf_bytes = pdf_fill.fill_pdf(fv_final)
     st.download_button(
-        "⬇ PDFをダウンロード",
+        ui["download_plan"],
         data=pdf_bytes,
-        file_name=f"療養計画書_{date.today():%Y%m%d}.pdf",
+        file_name=(
+            f"care_plan_{date.today():%Y%m%d}.pdf"
+            if lang == "en"
+            else f"療養計画書_{date.today():%Y%m%d}.pdf"
+        ),
         mime="application/pdf",
         key=f"{p}_plan_dl",
         type="primary",
     )
 
     if height_cm is not None and weight_kg is not None and sbp_now is not None and dbp_now is not None:
-        st.markdown("#### 患者さん向け資料")
+        st.markdown("#### Patient handout" if lang == "en" else "#### 患者さん向け資料")
         if (risk_curves and risk_horizon_years) or treatment_benefit:
             selected_diagnoses = [
                 label for enabled, label in (
-                    (dx_dm, "糖尿病"), (dx_htn, "高血圧症"), (dx_dl, "脂質異常症")
+                    (dx_dm, ui["dm"]), (dx_htn, ui["htn"]), (dx_dl, ui["dl"])
                 ) if enabled
             ]
             report_treatment_benefit = dict(treatment_benefit or {})
@@ -357,7 +495,7 @@ def render_plan_section(
                 report_treatment_benefit["plan_status"] = treatment_plan_status
             report_pdf = generate_patient_report_pdf(
                 age=int(age),
-                sex_label="男性" if sex == "male" else "女性",
+                sex_label=ui["male"] if sex == "male" else ui["female"],
                 height_cm=height_cm,
                 weight_kg=weight_kg,
                 current_values={"sbp": sbp_now, "ldl": ldl_now, "a1c": a1c_now},
@@ -374,18 +512,32 @@ def render_plan_section(
                 risks=risk_curves,
                 horizon_years=risk_horizon_years,
                 treatment_benefit=report_treatment_benefit or None,
+                lang=lang,
             )
             st.success(
-                "現在の状態、介入前後の検査値、全死亡・心筋梗塞・脳卒中の"
-                "リスク差と推移グラフ、相談して決めた目標を2ページにまとめました。"
+                "Compiled current status, lab changes, mortality/MI/stroke risk differences, "
+                "trend charts, and agreed goals into a 2-page handout."
+                if lang == "en"
+                else (
+                    "現在の状態、介入前後の検査値、全死亡・心筋梗塞・脳卒中の"
+                    "リスク差と推移グラフ、相談して決めた目標を2ページにまとめました。"
+                )
             )
             st.download_button(
-                "⬇ グラフ付き患者さん向け資料（PDF）",
+                ui["download_patient"],
                 data=report_pdf,
-                file_name=f"健康づくりプラン_{date.today():%Y%m%d}.pdf",
+                file_name=(
+                    f"patient_handout_{date.today():%Y%m%d}.pdf"
+                    if lang == "en"
+                    else f"健康づくりプラン_{date.today():%Y%m%d}.pdf"
+                ),
                 mime="application/pdf",
                 key=f"{p}_patient_report_dl",
                 type="primary",
             )
         else:
-            st.info("リスク計算を実行すると、グラフ付き患者さん向け資料を作成できます。")
+            st.info(
+                "Run the risk calculation to create a graphed patient handout."
+                if lang == "en"
+                else "リスク計算を実行すると、グラフ付き患者さん向け資料を作成できます。"
+            )
