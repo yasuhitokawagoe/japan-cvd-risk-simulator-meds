@@ -5,6 +5,7 @@ import streamlit as st
 import plotly.graph_objects as go
 import numpy as np
 from calc_engine_outcomes import OutcomesEngine
+from lifestyle_interventions import DIET_EFFECTS, EXERCISE_EFFECTS, apply_lifestyle_effects
 from meds_catalog import load_meds_catalog, apply_meds_to_targets, MedicationAdjustment
 import pdf_plan_ui
 
@@ -709,7 +710,33 @@ with st.expander("生活習慣その他", expanded=True):
         years_since_quit = st.slider("禁煙からの年数（元喫煙者の場合）", 0, 40, 5)
         quit_today = False
 
-# ====== 薬剤選択 ======
+# ====== 食事・運動・薬剤（PC版と同じ統一介入モデル） ======
+st.subheader("治療を選ぶ")
+diet_intervention_keys = st.multiselect(
+    "🥗 食事",
+    list(DIET_EFFECTS),
+    format_func=lambda key: DIET_EFFECTS[key].label,
+    key="mobile_diet_interventions",
+    placeholder="食事介入を選択",
+)
+exercise_intervention_key = st.selectbox(
+    "🏃 運動",
+    [None, *EXERCISE_EFFECTS],
+    format_func=lambda key: "選択しない" if key is None else EXERCISE_EFFECTS[key].label,
+    key="mobile_exercise_intervention",
+)
+with st.expander("効果量と文献を確認"):
+    selected_lifestyle_keys = [
+        *(DIET_EFFECTS[key] for key in diet_intervention_keys),
+        *([EXERCISE_EFFECTS[exercise_intervention_key]] if exercise_intervention_key else []),
+    ]
+    if not selected_lifestyle_keys:
+        st.caption("介入を選ぶと、ここに定義・効果量・根拠が表示されます。")
+    for effect in selected_lifestyle_keys:
+        st.markdown(f"**{effect.label}** — {effect.definition}")
+        st.caption(f"{effect.evidence_summary} {effect.endpoint_evidence}")
+        st.link_button("根拠文献", effect.source_url, key=f"mobile_lifestyle_source_{effect.key}")
+
 selected_sbp_meds = []
 selected_ldl_meds = []
 selected_a1c_meds = []
@@ -726,7 +753,7 @@ meds_summary = None
 use_meds = False
 mode = "add"
 
-with st.expander("💊 薬剤で目標値を自動生成", expanded=True):
+with st.expander("💊 お薬", expanded=True):
     use_meds = st.checkbox("薬剤を選んで目標値を自動計算する", value=True)
 
     if catalog_error:
@@ -929,6 +956,40 @@ else:
     annual_cost_yen = 0
     side_effects_md = ""
 
+# 食事・運動も薬剤と同列の介入として、最終的な予測値に重ねる。
+diabetes_context = bool(
+    a1c_now >= 6.5 or current_a1c_keys or a1c_sel_keys or adjusted_a1c_keys
+)
+lifestyle_result = apply_lifestyle_effects(
+    sbp=sbp_tgt,
+    ldl=ldl_tgt,
+    a1c=a1c_tgt,
+    diet_keys=diet_intervention_keys,
+    exercise_key=exercise_intervention_key,
+    diabetes_context=diabetes_context,
+)
+sbp_tgt = lifestyle_result["sbp"]
+ldl_tgt = lifestyle_result["ldl"]
+a1c_tgt = lifestyle_result["a1c"]
+
+selected_intervention_labels = [effect.label for effect in lifestyle_result["applied"]]
+selected_medication_labels = (
+    list(current_sbp_keys or sbp_sel_keys)
+    + list(current_ldl_keys or ldl_sel_keys)
+    + list(current_a1c_keys or a1c_sel_keys)
+)
+with st.container(border=True):
+    st.markdown(
+        f"**予測値**　血圧 {sbp_now:.0f}→**{sbp_tgt:.0f}**　"
+        f"LDL {ldl_now:.0f}→**{ldl_tgt:.0f}**　HbA1c {a1c_now:.1f}→**{a1c_tgt:.1f}%**  \n"
+        f"🥗 {('、'.join(selected_intervention_labels) if selected_intervention_labels else '未選択')}　／　"
+        f"💊 {('、'.join(selected_medication_labels) if selected_medication_labels else '未選択')}"
+    )
+for effect in lifestyle_result["skipped"]:
+    st.warning(
+        f"{effect.label}は{effect.population}の根拠のため、現在の入力には効果量を適用していません。"
+    )
+
 which = st.radio(
     "予測期間",
     ["5-year", "10-year", "20-year", "30-year", "50-year"],
@@ -969,6 +1030,8 @@ current_params = {
         else tuple(current_a1c_keys) + tuple(adjusted_a1c_keys)
     ),
     "use_meds": use_meds,
+    "diet_interventions": tuple(diet_intervention_keys),
+    "exercise_intervention": exercise_intervention_key,
 }
 params_hash = hashlib.md5(str(sorted(current_params.items())).encode()).hexdigest()
 
@@ -1130,5 +1193,15 @@ pdf_plan_ui.render_plan_section(
     sbp_tgt_manual=sbp_tgt_manual,
     a1c_tgt_manual=a1c_tgt_manual,
     bmi_target=None,
+    sbp_now=sbp_now,
+    bp_medications=tuple(current_sbp_keys or sbp_sel_keys),
+    lipid_medications=tuple(current_ldl_keys or ldl_sel_keys),
+    diabetes_medications=tuple(current_a1c_keys or a1c_sel_keys),
+    lifestyle_interventions=tuple(effect.label for effect in lifestyle_result["applied"]),
+    risk_curves=cumulative_data,
+    risk_horizon_years=h,
+    sbp_after=sbp_tgt,
+    ldl_after=ldl_tgt,
+    a1c_after=a1c_tgt,
     key_prefix="mobile",
 )

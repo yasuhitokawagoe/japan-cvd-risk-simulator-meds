@@ -41,13 +41,14 @@ _LABEL_MAP = {
     pdf_fill.F_A1C_NOW: "実測HbA1c",
 }
 
+# 達成目標は短い見出し語。詳細な行動は指導項目チェック側で表現する。
 _INTERVENTION_PLAN_ITEMS = {
-    "減塩": (["食塩・調味料を控える"], ["1日食塩6g未満を目指す"]),
-    "糖質制限": (["食事摂取量を適正にする", "間食を減らす"], ["糖質量と甘い飲料を見直す"]),
-    "飽和脂肪制限": (["油を使った料理の摂取を減らす"], ["飽和脂肪を減らし不飽和脂肪へ置き換える"]),
-    "中強度有酸素運動": (["運動処方", "日常生活の活動量を増やす"], ["中強度の有酸素運動を週150分以上行う"]),
-    "有酸素＋筋力トレーニング": (["運動処方", "日常生活の活動量を増やす"], ["有酸素運動に週2〜3回の筋力トレーニングを加える"]),
-    "高強度インターバル運動": (["運動処方", "運動時の注意事項を確認する"], ["医療者と安全性を確認して高強度運動に取り組む"]),
+    "減塩": (["食塩・調味料を控える"], ["減塩"]),
+    "糖質制限": (["食事摂取量を適正にする", "間食を減らす"], ["食事の改善"]),
+    "飽和脂肪制限": (["油を使った料理の摂取を減らす"], ["食事の改善"]),
+    "中強度有酸素運動": (["運動処方", "日常生活の活動量を増やす"], ["運動"]),
+    "有酸素＋筋力トレーニング": (["運動処方", "日常生活の活動量を増やす"], ["運動"]),
+    "高強度インターバル運動": (["運動処方", "運動時の注意事項を確認する"], ["運動"]),
 }
 
 
@@ -318,15 +319,7 @@ def render_plan_section(
     if additional_goal and additional_goal.strip():
         final_goals.append(additional_goal.strip())
     if treatment_benefit:
-        years = int(treatment_benefit.get("treatment_years", 0))
-        events = treatment_benefit.get("event_effects", {})
-        mi_stroke = float(events.get("mi", {}).get("avoided", 0.0)) + float(
-            events.get("stroke", {}).get("avoided", 0.0)
-        )
-        final_goals.append(
-            f"服薬継続{years}年で得られた検査値改善と、心筋梗塞・脳卒中の推定回避効果"
-            f"（100人あたり約{mi_stroke:.1f}件）を維持する"
-        )
+        final_goals.append("治療効果の維持")
     if final_goals:
         fv_final.text[pdf_fill.F_PLAN_FREETEXT] = "／".join(final_goals)
     final_achievement = achievement_status.strip() if achievement_status else ""
