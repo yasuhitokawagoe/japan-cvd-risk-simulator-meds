@@ -4,6 +4,21 @@ from __future__ import annotations
 from typing import Iterable, Mapping
 
 
+FUTURE_HORIZONS = (5, 10, 20, 30, 40, 50)
+
+
+def combine_cumulative_risk(past_risk: float, future_conditional_risk: float) -> float:
+    """過去の累積リスクと、現在から先の条件付きリスクを連結する。"""
+    past = min(1.0, max(0.0, float(past_risk)))
+    future = min(1.0, max(0.0, float(future_conditional_risk)))
+    return 1.0 - (1.0 - past) * (1.0 - future)
+
+
+def available_future_horizons(current_age: int, age_cap: int = 110) -> tuple[int, ...]:
+    """モデルの上限年齢まで計算できる既定の将来時点を返す。"""
+    return tuple(years for years in FUTURE_HORIZONS if int(current_age) + years <= age_cap)
+
+
 def _by_key(items: Iterable[Mapping]) -> dict[str, Mapping]:
     return {str(item["key"]): item for item in items}
 

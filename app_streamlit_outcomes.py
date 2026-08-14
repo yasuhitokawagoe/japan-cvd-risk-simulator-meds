@@ -10,6 +10,9 @@ from calc_engine_outcomes import OutcomesEngine
 from meds_catalog import load_meds_catalog, apply_meds_to_targets, MedicationAdjustment
 import pdf_plan_ui
 from treatment_backcast import (
+    FUTURE_HORIZONS,
+    available_future_horizons,
+    combine_cumulative_risk,
     exposure_adjusted_values,
     reconstruct_untreated_values,
     selected_medications,
@@ -1055,11 +1058,14 @@ if backcast_enabled and backcast_keys and backcast_ready:
     start_age = int(age) - int(backcast_treatment_years)
     event_effects = {}
     event_curves = {}
-    future_years = min(10, max(1, 110 - int(age)))
+    supported_horizons = available_future_horizons(int(age))
+    future_years = min(50, max(0, 110 - int(age)))
+    horizon_effects = {}
     for outcome in OUTCOME_DISPLAY_ORDER:
         timeline = []
         untreated_curve = []
-        treated_curve = []
+        continued_curve = []
+        stopped_curve = []
         for elapsed in range(0, int(backcast_treatment_years) + 1):
             if elapsed == 0:
                 untreated_risk = treated_risk = 0.0
@@ -1076,10 +1082,11 @@ if backcast_enabled and backcast_keys and backcast_ready:
                 treated_risk = past_result["target"] * 100.0
             timeline.append(elapsed - int(backcast_treatment_years))
             untreated_curve.append(untreated_risk)
-            treated_curve.append(treated_risk)
+            continued_curve.append(treated_risk)
+            stopped_curve.append(treated_risk)
 
         past_untreated = untreated_curve[-1] / 100.0
-        past_treated = treated_curve[-1] / 100.0
+        past_treated = continued_curve[-1] / 100.0
         for future in range(1, future_years + 1):
             future_result = engine.cumulative_incidence(
                 outcome, sex, int(age), future,
@@ -1090,19 +1097,37 @@ if backcast_enabled and backcast_keys and backcast_ready:
                 assume_quit_today_in_target=False,
             )
             timeline.append(future)
-            untreated_curve.append((1.0 - (1.0 - past_untreated) * (1.0 - future_result["baseline"])) * 100.0)
-            treated_curve.append((1.0 - (1.0 - past_treated) * (1.0 - future_result["target"])) * 100.0)
+            untreated_curve.append(combine_cumulative_risk(past_untreated, future_result["baseline"]) * 100.0)
+            continued_curve.append(combine_cumulative_risk(past_treated, future_result["target"]) * 100.0)
+            stopped_curve.append(combine_cumulative_risk(past_treated, future_result["baseline"]) * 100.0)
 
         untreated_risk = untreated_curve[int(backcast_treatment_years)]
-        treated_risk = treated_curve[int(backcast_treatment_years)]
+        treated_risk = continued_curve[int(backcast_treatment_years)]
         event_effects[outcome] = {
             "untreated": untreated_risk,
             "treated": treated_risk,
             "avoided": max(0.0, untreated_risk - treated_risk),
         }
         event_curves[outcome] = {
-            "time": timeline, "untreated": untreated_curve, "treated": treated_curve,
+            "time": timeline,
+            "untreated": untreated_curve,
+            "treated": continued_curve,
+            "continued": continued_curve,
+            "stopped": stopped_curve,
         }
+        horizon_effects[outcome] = {}
+        for horizon in supported_horizons:
+            index = int(backcast_treatment_years) + horizon
+            never = untreated_curve[index]
+            continued = continued_curve[index]
+            stopped = stopped_curve[index]
+            horizon_effects[outcome][horizon] = {
+                "untreated": never,
+                "continued": continued,
+                "stopped": stopped,
+                "total_benefit": max(0.0, never - continued),
+                "continuation_benefit": max(0.0, stopped - continued),
+            }
     backcast_summary = {
         "treatment_years": int(backcast_treatment_years),
         "medications": [*current_sbp_keys, *current_ldl_keys, *current_a1c_keys],
@@ -1112,6 +1137,7 @@ if backcast_enabled and backcast_keys and backcast_ready:
         "untreated_a1c": float(untreated_values["a1c"]),
         "event_effects": event_effects,
         "event_curves": event_curves,
+        "horizon_effects": horizon_effects,
         "future_years": future_years,
     }
     st.markdown("## ⑤ 服薬しなかった場合との推定比較")
@@ -1138,19 +1164,44 @@ if backcast_enabled and backcast_keys and backcast_ready:
                 st.caption(f"100人あたり約{effect['avoided']:.1f}件／NNT相当 約{100/effect['avoided']:.0f}人")
             else:
                 st.caption("推定差はごく小さい")
+    st.markdown("### 今後も治療を続けることで期待できる利益")
+    st.caption("『今日から中止』との差は今後継続する追加利益、『最初から薬なし』との差はこれまでを含む治療全体の利益です。単位は絶対リスクのポイント差です。")
+    if supported_horizons:
+        horizon_tabs = st.tabs([labels[outcome] for outcome in OUTCOME_DISPLAY_ORDER])
+        for tab, outcome in zip(horizon_tabs, OUTCOME_DISPLAY_ORDER):
+            with tab:
+                rows = []
+                for horizon in FUTURE_HORIZONS:
+                    effect = horizon_effects[outcome].get(horizon)
+                    if effect:
+                        rows.append({
+                            "時点": f"{horizon}年後",
+                            "継続": f"{effect['continued']:.1f}%",
+                            "今日から中止": f"{effect['stopped']:.1f}%",
+                            "最初から薬なし": f"{effect['untreated']:.1f}%",
+                            "継続の追加利益": f"{effect['continuation_benefit']:.1f}ポイント",
+                            "治療全体の利益": f"{effect['total_benefit']:.1f}ポイント",
+                        })
+                    else:
+                        rows.append({"時点": f"{horizon}年後", "継続": "算出範囲外", "今日から中止": "—", "最初から薬なし": "—", "継続の追加利益": "—", "治療全体の利益": "—"})
+                st.dataframe(rows, hide_index=True, width="stretch")
     st.markdown(f"### これまでの利益と今後{future_years}年間の見通し")
-    st.caption("横軸の0年が現在です。左側がこれまで、右側が今後の推定です。")
+    st.caption("横軸の0年が現在です。左側はこれまで、右側は今後です。現在から『継続』と『今日から中止』が分かれます。")
     colors = {"mortality": "#6B7280", "mi": "#E45756", "stroke": "#4C78A8"}
     for outcome in OUTCOME_DISPLAY_ORDER:
         curve = event_curves[outcome]
         fig = go.Figure()
         fig.add_trace(go.Scatter(
             x=curve["time"], y=curve["untreated"], mode="lines",
-            name="薬を飲まなかった場合", line=dict(color=colors[outcome], dash="dash", width=2),
+            name="最初から薬なし", line=dict(color="#9CA3AF", dash="dash", width=2),
         ))
         fig.add_trace(go.Scatter(
-            x=curve["time"], y=curve["treated"], mode="lines",
-            name="服薬を続ける場合", line=dict(color=colors[outcome], width=3),
+            x=curve["time"], y=curve["stopped"], mode="lines",
+            name="今日から中止", line=dict(color="#F59E0B", dash="dot", width=2),
+        ))
+        fig.add_trace(go.Scatter(
+            x=curve["time"], y=curve["continued"], mode="lines",
+            name="服薬を継続", line=dict(color=colors[outcome], width=3),
         ))
         fig.add_vline(x=0, line_dash="dot", line_color="#111827", annotation_text="現在")
         fig.update_layout(

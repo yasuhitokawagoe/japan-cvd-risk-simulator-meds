@@ -3,7 +3,21 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from treatment_backcast import exposure_adjusted_values, reconstruct_untreated_values
+from treatment_backcast import (
+    available_future_horizons,
+    combine_cumulative_risk,
+    exposure_adjusted_values,
+    reconstruct_untreated_values,
+)
+
+
+def test_combine_cumulative_risk_connects_past_and_future_survival():
+    assert abs(combine_cumulative_risk(0.10, 0.20) - 0.28) < 1e-12
+
+
+def test_available_future_horizons_respects_age_cap():
+    assert available_future_horizons(60) == (5, 10, 20, 30, 40, 50)
+    assert available_future_horizons(85) == (5, 10, 20)
 
 
 def med(key, effect):
@@ -31,6 +45,8 @@ def test_exposure_years_weight_the_achieved_effect():
 
 
 if __name__ == "__main__":
+    test_combine_cumulative_risk_connects_past_and_future_survival()
+    test_available_future_horizons_respects_age_cap()
     test_reverse_medication_effects()
     test_exposure_years_weight_the_achieved_effect()
     print("OK: treatment backcast tests passed")

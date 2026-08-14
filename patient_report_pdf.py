@@ -33,6 +33,7 @@ PALE_BLUE = HexColor("#EAF4FB")
 TEAL = HexColor("#168C83")
 PALE_TEAL = HexColor("#E8F6F3")
 RED = HexColor("#D85A5A")
+ORANGE = HexColor("#D97706")
 PALE_RED = HexColor("#FCEEEE")
 GRAY = HexColor("#5F6B73")
 LIGHT = HexColor("#EEF1F3")
@@ -145,9 +146,10 @@ def _backcast_line_chart(c: canvas.Canvas, x: float, y: float, w: float, h: floa
                          title: str, curve: Mapping[str, Iterable[float]]) -> None:
     times = [float(v) for v in curve["time"]]
     untreated = [float(v) for v in curve["untreated"]]
-    treated = [float(v) for v in curve["treated"]]
+    continued = [float(v) for v in curve.get("continued", curve["treated"])]
+    stopped = [float(v) for v in curve.get("stopped", continued)]
     min_t, max_t = min(times), max(times)
-    max_y = max(untreated + treated + [1.0]) * 1.15
+    max_y = max(untreated + continued + stopped + [1.0]) * 1.15
     left, bottom, right, top = x + 42, y + 28, x + w - 14, y + h - 28
     c.setFillColor(white)
     c.roundRect(x, y, w, h, 7, fill=1, stroke=0)
@@ -160,11 +162,11 @@ def _backcast_line_chart(c: canvas.Canvas, x: float, y: float, w: float, h: floa
     span = max(max_t - min_t, 1.0)
     def point(t: float, v: float) -> tuple[float, float]:
         return left + (right-left)*(t-min_t)/span, bottom + (top-bottom)*v/max_y
-    for values, color, dashed in ((untreated, RED, True), (treated, TEAL, False)):
+    for values, color, dash in ((untreated, RED, (5, 3)), (stopped, ORANGE, (2, 2)), (continued, TEAL, None)):
         c.setStrokeColor(color)
         c.setLineWidth(2)
-        if dashed:
-            c.setDash(5, 3)
+        if dash:
+            c.setDash(*dash)
         else:
             c.setDash()
         pts = [point(t, v) for t, v in zip(times, values)]
@@ -263,7 +265,7 @@ def generate_patient_report_pdf(
             c.setFillColor(NAVY)
             c.rect(0, page_h - 72, page_w, 72, fill=1, stroke=0)
             _text(c, 30, page_h - 40, "これまでの利益と、これからの見通し", 18, white)
-            _text(c, 30, page_h - 58, "赤点線: 薬なし推定　緑実線: 服薬継続　縦点線: 現在", 8.5, white)
+            _text(c, 30, page_h - 58, "赤破線: 最初から薬なし　橙点線: 今日から中止　緑実線: 服薬継続", 8.5, white)
             for index, key in enumerate(("mortality", "mi", "stroke")):
                 _backcast_line_chart(
                     c, 30, page_h - 285 - index * 235, 535, 205,
