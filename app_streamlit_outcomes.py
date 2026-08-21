@@ -8,15 +8,72 @@ from meds_catalog import apply_meds_to_targets, load_meds_catalog
 
 
 st.set_page_config(
-    page_title="JP Outcomes Prevention Simulator (MVP)",
+    page_title="心血管一次予防シミュレーター",
     layout="wide",
-    page_icon="🫐",
+    page_icon="♥",
 )
 
 st.markdown(
     """
     <style>
     .block-container {max-width: 1500px; padding-top: 1.5rem;}
+    .app-hero {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 1.1rem 1.25rem;
+        margin-bottom: 1.3rem;
+        border: 1px solid #d7e7e2;
+        border-radius: 18px;
+        background: linear-gradient(135deg, #f4fbf9 0%, #ffffff 58%, #f7faf9 100%);
+        box-shadow: 0 8px 28px rgba(15, 92, 76, 0.07);
+    }
+    .hero-icon {
+        width: 58px;
+        height: 58px;
+        flex: 0 0 58px;
+        display: grid;
+        place-items: center;
+        border-radius: 16px;
+        color: white;
+        background: linear-gradient(145deg, #16876f, #0b6554);
+        box-shadow: 0 8px 18px rgba(20, 134, 109, 0.24);
+        font-size: 1.8rem;
+        line-height: 1;
+    }
+    .hero-copy {min-width: 0;}
+    .hero-kicker {
+        margin-bottom: 0.2rem;
+        color: #14745f;
+        font-size: 0.78rem;
+        font-weight: 750;
+        letter-spacing: 0.1em;
+    }
+    .hero-title {
+        margin: 0;
+        color: #193b34;
+        font-size: clamp(1.55rem, 3vw, 2.25rem);
+        font-weight: 780;
+        line-height: 1.2;
+        letter-spacing: -0.02em;
+    }
+    .hero-subtitle {
+        margin: 0.4rem 0 0;
+        color: #60736e;
+        font-size: 0.92rem;
+        line-height: 1.55;
+    }
+    .hero-badge {
+        margin-left: auto;
+        flex: 0 0 auto;
+        padding: 0.42rem 0.72rem;
+        border-radius: 999px;
+        color: #0d6d59;
+        background: #e4f4ef;
+        font-size: 0.78rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
     [data-testid="stMetric"] {
         background: #f7faf9;
         border: 1px solid #dce8e4;
@@ -44,14 +101,29 @@ st.markdown(
     @media (max-width: 900px) {
         .contribution-row {grid-template-columns: 1fr 70px;}
         .contribution-track {grid-column: 1 / -1; grid-row: 2;}
+        .app-hero {align-items: flex-start; padding: 1rem;}
+        .hero-icon {width: 48px; height: 48px; flex-basis: 48px; border-radius: 14px;}
+        .hero-badge {display: none;}
     }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
-st.title("🫐📈 アウトカムベース一次予防シミュレーター（MVP）")
-st.caption("教育・共有意思決定のため。医療機器ではありません。")
+st.markdown(
+    """
+    <div class="app-hero">
+      <div class="hero-icon" aria-hidden="true">♥</div>
+      <div class="hero-copy">
+        <div class="hero-kicker">CARDIOVASCULAR PREVENTION</div>
+        <h1 class="hero-title">心血管一次予防シミュレーター</h1>
+        <p class="hero-subtitle">リスク因子と薬物治療による将来リスクの変化を、わかりやすく可視化します。教育・共有意思決定支援用。</p>
+      </div>
+      <div class="hero-badge">● リアルタイム更新</div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 engine = OutcomesEngine("config.yaml")
 
@@ -60,9 +132,9 @@ MORTALITY_ALL_CAUSE_DEATH_CAPTION = (
 )
 OUTCOME_DISPLAY_ORDER = ("mortality", "mi", "stroke")
 OUTCOME_META = {
-    "mortality": {"label": "全死亡", "title": "💀 全死亡", "color": "#d95656"},
-    "mi": {"label": "心筋梗塞", "title": "🫐 心筋梗塞", "color": "#e07b39"},
-    "stroke": {"label": "脳卒中", "title": "🧠 脳卒中", "color": "#7656c9"},
+    "mortality": {"label": "全死亡", "title": "全死亡", "color": "#d95656"},
+    "mi": {"label": "心筋梗塞", "title": "心筋梗塞", "color": "#e07b39"},
+    "stroke": {"label": "脳卒中", "title": "脳卒中", "color": "#7656c9"},
 }
 
 BP_XLSX_PATH = "降圧薬詳細_Ca-ARNI_薬価付き_日本語表_英語タイトル引用付き.xlsx"
