@@ -98,12 +98,27 @@ st.markdown(
     .contribution-track {height: 9px; border-radius: 99px; background: #e7eeec; overflow: hidden;}
     .contribution-fill {height: 100%; border-radius: 99px; background: #14866d;}
     .contribution-value {text-align: right; color: #0d725c; font-weight: 700;}
+    div[data-testid="stHorizontalBlock"]:has(.live-note):has(.result-anchor) > div:nth-child(2) {
+        position: sticky;
+        top: 1rem;
+        align-self: flex-start;
+        max-height: calc(100vh - 2rem);
+        overflow-y: auto;
+        scrollbar-width: thin;
+        scrollbar-color: #c9d8d4 transparent;
+    }
+    .result-anchor {height: 0; overflow: hidden;}
     @media (max-width: 900px) {
         .contribution-row {grid-template-columns: 1fr 70px;}
         .contribution-track {grid-column: 1 / -1; grid-row: 2;}
         .app-hero {align-items: flex-start; padding: 1rem;}
         .hero-icon {width: 48px; height: 48px; flex-basis: 48px; border-radius: 14px;}
         .hero-badge {display: none;}
+        div[data-testid="stHorizontalBlock"]:has(.live-note):has(.result-anchor) > div:nth-child(2) {
+            position: static;
+            max-height: none;
+            overflow-y: visible;
+        }
     }
     </style>
     """,
@@ -511,6 +526,7 @@ horizon = _years_from_choice(horizon_choice)
 cumulative_data = calculate_cumulative_risk_curves(horizon)
 
 with result_col:
+    st.markdown('<div class="result-anchor" aria-hidden="true"></div>', unsafe_allow_html=True)
     st.subheader("リアルタイム予測")
     selected_outcome = st.radio(
         "表示するアウトカム",
