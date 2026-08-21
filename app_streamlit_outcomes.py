@@ -330,7 +330,7 @@ with input_col:
 
     with st.container(border=True):
         st.markdown("#### リスク因子（現在 → 目標）")
-        st.caption("薬剤を選択する場合、血圧・LDL・HbA1cの目標値は自動計算されます。")
+        st.caption("手入力した目標値はすぐにグラフへ反映されます。薬剤モードでは目標値を薬効から自動計算します。")
         now_col, target_col = st.columns(2)
         with now_col:
             st.markdown("**現在**")
@@ -381,7 +381,7 @@ with input_col:
 
     with st.container(border=True):
         st.markdown("#### 💊 薬剤")
-        use_meds = st.checkbox("薬剤から目標値を自動計算する", value=True)
+        use_meds = st.checkbox("薬剤から目標値を自動計算する", value=False)
         selected_sbp_meds = []
         selected_ldl_meds = []
         selected_a1c_meds = []
