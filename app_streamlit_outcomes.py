@@ -428,26 +428,26 @@ with input_col:
             annual_cost_yen = 0
             side_effects_md = ""
 
-    display_left, display_right = st.columns(2)
-    with display_left:
-        selected_outcome = st.selectbox(
-            "右に表示するアウトカム",
-            OUTCOME_DISPLAY_ORDER,
-            format_func=lambda value: OUTCOME_META[value]["label"],
-        )
-    with display_right:
-        horizon_choice = st.selectbox(
-            "予測期間",
-            ["5-year", "10-year", "20-year", "30-year", "50-year"],
-            index=2,
-            format_func=lambda value: f"{_years_from_choice(value)}年",
-        )
+    horizon_choice = st.selectbox(
+        "予測期間",
+        ["5-year", "10-year", "20-year", "30-year", "50-year"],
+        index=2,
+        format_func=lambda value: f"{_years_from_choice(value)}年",
+    )
 
 horizon = _years_from_choice(horizon_choice)
 cumulative_data = calculate_cumulative_risk_curves(horizon)
 
 with result_col:
     st.subheader("リアルタイム予測")
+    selected_outcome = st.radio(
+        "表示するアウトカム",
+        OUTCOME_DISPLAY_ORDER,
+        index=0,
+        format_func=lambda value: OUTCOME_META[value]["label"],
+        horizontal=True,
+        key="display_outcome",
+    )
     selected_data = cumulative_data[selected_outcome]
     baseline_risk = selected_data["baseline_cumulative"][-1]
     target_risk = selected_data["target_cumulative"][-1]
