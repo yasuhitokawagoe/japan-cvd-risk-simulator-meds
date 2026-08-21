@@ -85,21 +85,29 @@ def header() -> None:
         """
         <style>
         .stApp {background:#f6f8f7;color:#16332b}
-        .block-container{max-width:760px;padding:1rem 1rem 5rem}
-        h1,h2,h3{color:#163f34}
+        [data-testid="stSidebar"],[data-testid="collapsedControl"]{display:none!important}
+        .block-container{max-width:980px;padding:1.4rem 1.5rem 5rem}
+        html,body,[class*="css"],.stApp{font-size:20px}
+        h1,h2,h3{color:#163f34;line-height:1.35}
+        h1{font-size:2.45rem!important} h2{font-size:2rem!important} h3{font-size:1.55rem!important}
+        p,li{font-size:1.08rem;line-height:1.75}
         .patient-hero{background:linear-gradient(135deg,#0f6d58,#48a176);color:white;
           padding:1.5rem;border-radius:24px;margin:.25rem 0 1rem;box-shadow:0 12px 28px #155c4930}
-        .patient-hero h1{color:white;font-size:2rem;margin:0 0 .5rem}.patient-hero p{font-size:1.08rem;margin:0}
+        .patient-hero h1{color:white;font-size:2.35rem!important;margin:0 0 .65rem}.patient-hero p{font-size:1.2rem;margin:0}
         .step-line{height:7px;background:#dce9e3;border-radius:99px;margin:.4rem 0 1.3rem;overflow:hidden}
         .step-fill{height:100%;background:#18765f}
         div[data-testid="stVerticalBlockBorderWrapper"]{background:white;border-radius:18px!important;border-color:#dce7e1!important}
-        .stButton button{min-height:3.25rem;border-radius:14px;font-size:1rem;font-weight:750}
+        .stButton button{min-height:4rem;border-radius:14px;font-size:1.15rem;font-weight:750}
         .stButton button[kind="primary"]{background:#176f5a;border-color:#176f5a;color:white}
-        div[data-baseweb="select"]>div{min-height:3.1rem}
+        div[data-baseweb="select"]>div{min-height:4rem;font-size:1.12rem}
+        div[data-baseweb="select"] input{font-size:1.12rem!important}
+        label,[data-testid="stWidgetLabel"] p{font-size:1.08rem!important;font-weight:700}
+        [data-testid="stCaptionContainer"] p{font-size:.93rem!important;line-height:1.55}
+        [data-testid="stCheckbox"] p{font-size:1.05rem!important}
         div[data-testid="stMetric"]{background:white;border:1px solid #dce7e1;padding:1rem;border-radius:16px}
         .plain-card{background:white;border:1px solid #dce7e1;border-radius:18px;padding:1rem 1.1rem;margin:.55rem 0}
         .risk-number{font-size:2.25rem;font-weight:850;color:#165d4c}
-        @media(max-width:600px){.patient-hero h1{font-size:1.65rem}.block-container{padding:.7rem .75rem 4rem}}
+        @media(max-width:600px){html,body,[class*="css"],.stApp{font-size:17px}.patient-hero h1{font-size:1.8rem!important}.block-container{padding:.8rem .8rem 4rem}}
         </style>
         """,
         unsafe_allow_html=True,
@@ -132,24 +140,24 @@ def render_input() -> None:
         restore_form_values(page_keys)
         st.markdown("### 1/3 あなたについて")
         st.selectbox("性別", ["male", "female"], index=None, placeholder="選んでください", format_func=lambda x: "男性" if x == "male" else "女性", key="p_sex")
-        st.number_input("年齢", min_value=20, max_value=95, value=None, step=1, placeholder="例：60", key="p_age")
-        st.number_input("身長（cm）", min_value=120.0, max_value=220.0, value=None, step=1.0, placeholder="例：165", key="p_height")
-        st.number_input("体重（kg）", min_value=30.0, max_value=200.0, value=None, step=1.0, placeholder="例：60", key="p_weight")
+        st.selectbox("年齢", range(20, 96), index=None, placeholder="選んでください", format_func=lambda x: f"{x}歳", key="p_age")
+        st.selectbox("身長", range(120, 221), index=None, placeholder="選んでください", format_func=lambda x: f"{x} cm", key="p_height")
+        st.selectbox("体重", range(30, 201), index=None, placeholder="選んでください", format_func=lambda x: f"{x} kg", key="p_weight")
         with st.expander("わからない場合"):
             st.write("年齢・性別・身長・体重は計算に必要です。受付で確認するか、分かる範囲で健診結果をご覧ください。")
     elif page == 1:
         page_keys = ["p_sbp", "p_ldl", "p_a1c", "p_diabetes", "p_ckd", "p_egfr", "p_acr"]
         restore_form_values(page_keys)
         st.markdown("### 2/3 健診結果")
-        st.number_input("上の血圧", min_value=90, max_value=250, value=None, step=1, placeholder="例：140", key="p_sbp")
+        st.selectbox("上の血圧", range(90, 251), index=None, placeholder="選んでください", format_func=lambda x: f"{x} mmHg", key="p_sbp")
         st.caption("健診結果では「収縮期血圧」と書かれていることがあります。")
-        st.number_input("悪玉コレステロール（LDL）", min_value=20, max_value=300, value=None, step=1, placeholder="例：140", key="p_ldl")
+        st.selectbox("悪玉コレステロール（LDL）", range(20, 301), index=None, placeholder="選んでください", format_func=lambda x: f"{x} mg/dL", key="p_ldl")
         st.caption("健診結果の「LDL-C」または「LDLコレステロール」の欄です。")
-        st.number_input("HbA1c（%）", min_value=4.0, max_value=15.0, value=None, step=.1, placeholder="例：5.8", key="p_a1c")
+        st.selectbox("HbA1c", [round(x / 10, 1) for x in range(40, 151)], index=None, placeholder="選んでください", format_func=lambda x: f"{x:.1f} %", key="p_a1c")
         st.checkbox("糖尿病と診断されている", key="p_diabetes")
         st.checkbox("慢性腎臓病（CKD）と診断されている", key="p_ckd")
         if st.session_state.get("p_ckd"):
-            st.number_input("eGFR", min_value=5.0, max_value=120.0, value=None, step=1.0, key="p_egfr")
+            st.selectbox("eGFR", range(5, 121), index=None, placeholder="選んでください", key="p_egfr")
             st.selectbox("尿アルブミン／尿蛋白", ["A1", "A2", "A3"], index=None, placeholder="選んでください", key="p_acr")
         with st.expander("健診結果のどこを見る？"):
             st.write("血圧欄の高い方が上の血圧です。LDL-CとHbA1cは血液検査欄にあります。見つからない場合は受付でお尋ねください。")
@@ -160,12 +168,12 @@ def render_input() -> None:
         st.selectbox("現在の状況", ["never", "current", "former"], index=None, placeholder="選んでください", format_func=lambda x: {"never":"吸ったことがない", "current":"現在吸っている", "former":"以前吸っていた"}[x], key="p_smoking")
         status = st.session_state.get("p_smoking")
         if status == "current":
-            st.number_input("1日に吸う本数", min_value=0, max_value=80, value=None, step=1, key="p_cigs")
-            st.number_input("これまで吸った年数", min_value=0, max_value=80, value=None, step=1, key="p_smoke_years")
+            st.selectbox("1日に吸う本数", range(0, 81), index=None, placeholder="選んでください", format_func=lambda x: f"{x}本", key="p_cigs")
+            st.selectbox("これまで吸った年数", range(0, 81), index=None, placeholder="選んでください", format_func=lambda x: f"{x}年", key="p_smoke_years")
         elif status == "former":
-            st.number_input("以前、1日に吸っていた本数", min_value=0, max_value=80, value=None, step=1, key="p_cigs")
-            st.number_input("これまで吸った年数", min_value=0, max_value=80, value=None, step=1, key="p_smoke_years")
-            st.number_input("禁煙してからの年数", min_value=0, max_value=80, value=None, step=1, key="p_quit_years")
+            st.selectbox("以前、1日に吸っていた本数", range(0, 81), index=None, placeholder="選んでください", format_func=lambda x: f"{x}本", key="p_cigs")
+            st.selectbox("これまで吸った年数", range(0, 81), index=None, placeholder="選んでください", format_func=lambda x: f"{x}年", key="p_smoke_years")
+            st.selectbox("禁煙してからの年数", range(0, 81), index=None, placeholder="選んでください", format_func=lambda x: f"{x}年", key="p_quit_years")
     c1, c2 = st.columns(2)
     if page > 0 and c1.button("戻る", use_container_width=True):
         save_form_values(page_keys)
@@ -334,6 +342,32 @@ def emit_once(event: str, state_key: str, **properties) -> None:
         st.session_state[state_key] = True
 
 
+def build_comparison_figure(labels: list[str], before: list[float], after: list[float]) -> go.Figure:
+    """Large, non-overlapping comparison chart for tablet viewing."""
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        name="現在", y=labels, x=before, orientation="h",
+        marker_color="#d56b60", text=[f"{v:.1f}%" for v in before],
+        textposition="outside", cliponaxis=False,
+    ))
+    fig.add_trace(go.Bar(
+        name="変更後", y=labels, x=after, orientation="h",
+        marker_color="#17765f", text=[f"{v:.1f}%" for v in after],
+        textposition="outside", cliponaxis=False,
+    ))
+    max_value = max([*before, *after, 1.0])
+    fig.update_layout(
+        barmode="group", height=440,
+        margin=dict(l=190, r=90, t=70, b=75),
+        xaxis=dict(title="推定リスク（%）", range=[0, max_value * 1.25], tickfont=dict(size=17), title_font=dict(size=20)),
+        yaxis=dict(title="", tickfont=dict(size=19), automargin=True, categoryorder="array", categoryarray=labels),
+        legend=dict(orientation="h", y=1.12, x=.5, xanchor="center", font=dict(size=19)),
+        font=dict(size=19, color="#33443f"), hovermode=False,
+        plot_bgcolor="white", paper_bgcolor="white",
+    )
+    return fig
+
+
 def render_comparison(current: dict, changed: dict, horizon: int) -> None:
     emit_once("comparison_viewed", "comparison_logged")
     st.markdown(f"### 現在 → 変えた場合（{horizon}年）")
@@ -342,10 +376,8 @@ def render_comparison(current: dict, changed: dict, horizon: int) -> None:
         labels.append(OUTCOME_LABELS[outcome])
         before.append(current["outcomes"][outcome][horizon]["point"]["baseline"] * 100)
         after.append(changed["outcomes"][outcome][horizon]["point"]["target"] * 100)
-    fig = go.Figure()
-    for label, b, a in zip(labels, before, after):
-        fig.add_trace(go.Scatter(x=[b, a], y=[label, label], mode="lines+markers+text", text=[f"今 {b:.1f}%", f"変更後 {a:.1f}%"], textposition="top center", showlegend=False, line=dict(color="#84a99d", width=4), marker=dict(size=13, color=["#d26b5f", "#16745e"])))
-    fig.update_layout(height=290, margin=dict(l=10, r=10, t=25, b=30), xaxis_title="推定リスク（%）", yaxis_title="", hovermode=False)
+    # 値が近い場合も文字が重ならないよう、現在と変更後を別の横棒にする。
+    fig = build_comparison_figure(labels, before, after)
     st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
     st.caption("効果を保証するものではありません。複数の変更は既存モデルの組み合わせ計算です。")
     targets = changed["targets"]
