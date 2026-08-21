@@ -1,14 +1,56 @@
 # app_streamlit_outcomes.py
-import streamlit as st
-import plotly.graph_objects as go
 import numpy as np
+import plotly.graph_objects as go
+import streamlit as st
 
 from calc_engine_outcomes import OutcomesEngine
-from meds_catalog import load_meds_catalog, apply_meds_to_targets
+from meds_catalog import apply_meds_to_targets, load_meds_catalog
 
-st.set_page_config(page_title="JP Outcomes Prevention Simulator (MVP)", layout="wide", page_icon="🫀")
 
-st.title("🫀📈 アウトカムベース一次予防シミュレーター（MVP）")
+st.set_page_config(
+    page_title="JP Outcomes Prevention Simulator (MVP)",
+    layout="wide",
+    page_icon="🫐",
+)
+
+st.markdown(
+    """
+    <style>
+    .block-container {max-width: 1500px; padding-top: 1.5rem;}
+    [data-testid="stMetric"] {
+        background: #f7faf9;
+        border: 1px solid #dce8e4;
+        border-radius: 14px;
+        padding: 0.75rem 1rem;
+    }
+    .live-note {
+        color: #37665a;
+        background: #eef8f5;
+        border: 1px solid #cfe6df;
+        border-radius: 12px;
+        padding: 0.65rem 0.85rem;
+        margin-bottom: 0.8rem;
+    }
+    .contribution-row {
+        display: grid;
+        grid-template-columns: minmax(150px, 1.5fr) 2fr 70px;
+        gap: 10px;
+        align-items: center;
+        margin: 8px 0;
+    }
+    .contribution-track {height: 9px; border-radius: 99px; background: #e7eeec; overflow: hidden;}
+    .contribution-fill {height: 100%; border-radius: 99px; background: #14866d;}
+    .contribution-value {text-align: right; color: #0d725c; font-weight: 700;}
+    @media (max-width: 900px) {
+        .contribution-row {grid-template-columns: 1fr 70px;}
+        .contribution-track {grid-column: 1 / -1; grid-row: 2;}
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.title("🫐📈 アウトカムベース一次予防シミュレーター（MVP）")
 st.caption("教育・共有意思決定のため。医療機器ではありません。")
 
 engine = OutcomesEngine("config.yaml")
@@ -16,144 +58,37 @@ engine = OutcomesEngine("config.yaml")
 MORTALITY_ALL_CAUSE_DEATH_CAPTION = (
     "※全死亡は、心血管疾患に限らず、がんや他の病気を含むすべての死亡を対象としています。"
 )
-
-# 画面上の表示順（サマリー横並び・詳細グラフの並びを統一）
 OUTCOME_DISPLAY_ORDER = ("mortality", "mi", "stroke")
+OUTCOME_META = {
+    "mortality": {"label": "全死亡", "title": "💀 全死亡", "color": "#d95656"},
+    "mi": {"label": "心筋梗塞", "title": "🫐 心筋梗塞", "color": "#e07b39"},
+    "stroke": {"label": "脳卒中", "title": "🧠 脳卒中", "color": "#7656c9"},
+}
 
-# ====== 薬剤Excelのパス（必要なら修正） ======
 BP_XLSX_PATH = "降圧薬詳細_Ca-ARNI_薬価付き_日本語表_英語タイトル引用付き.xlsx"
 LIPID_GLU_XLSX_PATH = "LDL_HbA1c_用量別_薬価付き_日本語表_英語タイトル引用付き.xlsx"
+
 
 @st.cache_data(show_spinner=False)
 def _cached_catalog(bp_path: str, lipid_glu_path: str):
     return load_meds_catalog(bp_path, lipid_glu_path)
 
-meds_catalog = None
-catalog_error = None
+
 try:
     meds_catalog = _cached_catalog(BP_XLSX_PATH, LIPID_GLU_XLSX_PATH)
-except Exception as e:
-    catalog_error = str(e)
+    catalog_error = None
+except Exception as exc:
+    meds_catalog = None
+    catalog_error = str(exc)
 
-with st.sidebar:
-    st.subheader("患者プロフィール")
-    sex = st.selectbox("性別", ["male", "female"], format_func=lambda x: "男性" if x == "male" else "女性")
-    age = st.number_input("年齢（歳）", 20, 95, 60, step=1)
-
-    st.subheader("リスク因子（現在 → 目標）")
-    sbp_now = st.slider("収縮期血圧 現在 (mmHg)", 90, 200, 150)
-    sbp_tgt_manual = st.slider("収縮期血圧 目標 (mmHg)", 90, 160, 130)
-
-    ldl_now = st.slider("LDL 現在 (mg/dL)", 50, 250, 160)
-    ldl_tgt_manual = st.slider("LDL 目標 (mg/dL)", 50, 160, 100)
-
-    a1c_now = st.slider("HbA1c 現在 (%)", 5.0, 12.0, 8.0, step=0.1)
-    a1c_tgt_manual = st.slider("HbA1c 目標 (%)", 5.0, 9.0, 7.0, step=0.1)
-
-    st.subheader("喫煙状況")
-    smoking_status = st.selectbox(
-        "状況", ["never", "current", "former"],
-        format_func=lambda x: {"never": "非喫煙者", "current": "現在喫煙者", "former": "元喫煙者"}[x]
-    )
-    cigs_per_day = st.slider("1日あたりの喫煙本数", 0, 40, 20)
-    years_smoked = st.slider("喫煙年数", 0, 60, 20)
-    years_since_quit = st.slider("禁煙からの年数（元喫煙者の場合）", 0, 40, 5)
-    quit_today = st.checkbox("今日禁煙したと仮定（目標シナリオ）")
-
-    st.subheader("BMI（任意）")
-    col_b1, col_b2 = st.columns(2)
-    with col_b1:
-        bmi_now = st.number_input("現在のBMI", min_value=10.0, max_value=50.0, value=24.0, step=0.1)
-    with col_b2:
-        bmi_target = st.number_input("目標BMI（任意）", min_value=10.0, max_value=50.0, value=24.0, step=0.1)
-
-    st.subheader("CKD（任意）")
-    egfr_now = st.number_input("eGFR 現在", min_value=5.0, max_value=120.0, value=80.0, step=1.0)
-    egfr_target = st.number_input("eGFR 目標（任意）", min_value=5.0, max_value=120.0, value=80.0, step=1.0)
-    acr_now = st.selectbox("尿アルブミン/蛋白（現在）", ["A1", "A2", "A3"], index=0)
-    acr_target = st.selectbox("尿アルブミン/蛋白（目標・任意）", ["A1", "A2", "A3"], index=0)
-
-    st.subheader("予測期間")
-    which = st.radio(
-        "期間を選択", ["5-year", "10-year", "20-year", "30-year", "50-year", "Both"], index=2,
-        format_func=lambda x: {"5-year": "5年", "10-year": "10年", "20-year": "20年", "30-year": "30年", "50-year": "50年", "Both": "両方"}[x]
-    )
-
-    st.divider()
-    st.subheader("💊 薬剤（薬品名＝用量）で目標値を自動生成")
-
-    use_meds = st.checkbox("薬剤を選んで目標値を自動計算する", value=True)
-
-    selected_sbp_meds = []
-    selected_ldl_meds = []
-    selected_a1c_meds = []
-    meds_summary = None
-
-    if catalog_error:
-        st.warning("薬剤カタログ読み込みに失敗。Excelのパス/シート名/列名を確認してください。")
-        st.caption(catalog_error)
-        use_meds = False
-
-    if use_meds and meds_catalog:
-        # 降圧薬
-        sbp_options = [m["key"] for m in meds_catalog["sbp"]]
-        sbp_sel_keys = st.multiselect("降圧薬（SBPに反映）", options=sbp_options)
-        selected_sbp_meds = [m for m in meds_catalog["sbp"] if m["key"] in sbp_sel_keys]
-
-        # LDL薬
-        ldl_options = [m["key"] for m in meds_catalog["ldl"]]
-        ldl_sel_keys = st.multiselect("脂質薬（LDLに反映）", options=ldl_options)
-        selected_ldl_meds = [m for m in meds_catalog["ldl"] if m["key"] in ldl_sel_keys]
-
-        # HbA1c薬
-        a1c_options = [m["key"] for m in meds_catalog["hba1c"]]
-        a1c_sel_keys = st.multiselect("糖尿病薬（HbA1cに反映）", options=a1c_options)
-        selected_a1c_meds = [m for m in meds_catalog["hba1c"] if m["key"] in a1c_sel_keys]
-
-        meds_summary = apply_meds_to_targets(
-            sbp_now=float(sbp_now),
-            ldl_now_mg=float(ldl_now),
-            a1c_now=float(a1c_now),
-            selected_sbp=selected_sbp_meds,
-            selected_ldl=selected_ldl_meds,
-            selected_a1c=selected_a1c_meds,
-        )
-
-        st.caption("合成ルール：SBPは足し算 / LDLは%低下を掛け算 / HbA1cは足し算")
-        st.metric("年間薬剤費（合計）", f"{meds_summary['annual_cost_yen']:,} 円/年")
-        st.markdown("**自動計算された目標値（この値でリスク計算）**")
-        st.write(f"- SBP 目標: **{meds_summary['sbp_target']:.0f} mmHg**")
-        st.write(f"- LDL 目標: **{meds_summary['ldl_target']:.0f} mg/dL**")
-        st.write(f"- HbA1c 目標: **{meds_summary['a1c_target']:.1f} %**")
-
-        if meds_summary["side_effects_md"].strip():
-            with st.expander("主な副作用（薬剤ごと）"):
-                st.markdown(meds_summary["side_effects_md"])
-    else:
-        st.caption("薬剤を使わない場合は、上の手動目標値で計算します。")
-
-# ====== 実際に使う目標値 ======
-if use_meds and meds_summary is not None:
-    sbp_tgt = float(meds_summary["sbp_target"])
-    ldl_tgt = float(meds_summary["ldl_target"])
-    a1c_tgt = float(meds_summary["a1c_target"])
-    annual_cost_yen = int(meds_summary["annual_cost_yen"])
-    side_effects_md = meds_summary["side_effects_md"]
-else:
-    sbp_tgt = float(sbp_tgt_manual)
-    ldl_tgt = float(ldl_tgt_manual)
-    a1c_tgt = float(a1c_tgt_manual)
-    annual_cost_yen = 0
-    side_effects_md = ""
 
 def _years_from_choice(choice: str) -> int:
-    return {"5-year": 5, "10-year": 10, "20-year": 20, "30-year": 30, "50-year": 50}.get(choice, 10)
+    return {"5-year": 5, "10-year": 10, "20-year": 20, "30-year": 30, "50-year": 50}[choice]
+
 
 def calculate_cumulative_risk_curves(years: int):
-    calc_years = np.arange(1, years + 1, 1)
     cumulative_data = {}
-
-    for outcome in ["mi", "stroke", "mortality"]:
+    for outcome in OUTCOME_DISPLAY_ORDER:
         cumulative_data[outcome] = {
             "baseline_cumulative": [0.0],
             "target_cumulative": [0.0],
@@ -163,16 +98,24 @@ def calculate_cumulative_risk_curves(years: int):
             "target_ci_upper": [0.0],
             "time": [0.0],
         }
-
-        AGE_CAP = 110
-        for y in calc_years:
-            if age + y > AGE_CAP:
+        for year in np.arange(1, years + 1, 1):
+            if age + year > 110:
                 break
-
-            res = engine.cumulative_incidence_with_ci(
-                outcome, sex, age, int(y),
-                sbp_now, sbp_tgt, ldl_now, ldl_tgt, a1c_now, a1c_tgt,
-                smoking_status, cigs_per_day, years_smoked, years_since_quit,
+            result = engine.cumulative_incidence_with_ci(
+                outcome,
+                sex,
+                age,
+                int(year),
+                sbp_now,
+                sbp_tgt,
+                ldl_now,
+                ldl_tgt,
+                a1c_now,
+                a1c_tgt,
+                smoking_status,
+                cigs_per_day,
+                years_smoked,
+                years_since_quit,
                 quit_today,
                 bmi_now=bmi_now,
                 bmi_target=bmi_target if bmi_target != bmi_now else None,
@@ -181,178 +124,392 @@ def calculate_cumulative_risk_curves(years: int):
                 acr_now=acr_now,
                 acr_target=acr_target if acr_target != acr_now else None,
             )
-
-            cumulative_data[outcome]["time"].append(float(y))
-            cumulative_data[outcome]["baseline_cumulative"].append(res["point"]["baseline"] * 100.0)
-            cumulative_data[outcome]["target_cumulative"].append(res["point"]["target"] * 100.0)
-            cumulative_data[outcome]["baseline_ci_lower"].append(res["lower"]["baseline"] * 100.0)
-            cumulative_data[outcome]["baseline_ci_upper"].append(res["upper"]["baseline"] * 100.0)
-            cumulative_data[outcome]["target_ci_lower"].append(res["lower"]["target"] * 100.0)
-            cumulative_data[outcome]["target_ci_upper"].append(res["upper"]["target"] * 100.0)
-
+            cumulative_data[outcome]["time"].append(float(year))
+            for scenario in ("baseline", "target"):
+                cumulative_data[outcome][f"{scenario}_cumulative"].append(
+                    result["point"][scenario] * 100.0
+                )
+                cumulative_data[outcome][f"{scenario}_ci_lower"].append(
+                    result["lower"][scenario] * 100.0
+                )
+                cumulative_data[outcome][f"{scenario}_ci_upper"].append(
+                    result["upper"][scenario] * 100.0
+                )
     return cumulative_data
 
-# ---- パラメータ変更検知と自動計算 ----
-# 現在のパラメータを文字列化してハッシュ化（変更検知用）
-import hashlib
-current_params = {
-    "sex": sex, "age": age,
-    "sbp_now": sbp_now, "sbp_tgt": sbp_tgt,
-    "ldl_now": ldl_now, "ldl_tgt": ldl_tgt,
-    "a1c_now": a1c_now, "a1c_tgt": a1c_tgt,
-    "smoking_status": smoking_status, "cigs_per_day": cigs_per_day,
-    "years_smoked": years_smoked, "years_since_quit": years_since_quit,
-    "quit_today": quit_today,
-    "bmi_now": bmi_now, "bmi_target": bmi_target,
-    "egfr_now": egfr_now, "egfr_target": egfr_target,
-    "acr_now": acr_now, "acr_target": acr_target,
-    "which": which,
-    "sbp_meds": tuple(sbp_sel_keys) if use_meds and meds_catalog else (),
-    "ldl_meds": tuple(ldl_sel_keys) if use_meds and meds_catalog else (),
-    "a1c_meds": tuple(a1c_sel_keys) if use_meds and meds_catalog else (),
-    "use_meds": use_meds,
-}
-params_hash = hashlib.md5(str(sorted(current_params.items())).encode()).hexdigest()
 
-# セッション状態の初期化
-if "params_hash" not in st.session_state:
-    st.session_state.params_hash = None
-    st.session_state.calculated = False
-    st.session_state.cumulative_data = None
-    st.session_state.years = None
+def risk_at_horizon(outcome: str, horizon: int, targets: dict) -> float:
+    result = engine.cumulative_incidence_with_ci(
+        outcome,
+        sex,
+        age,
+        horizon,
+        sbp_now,
+        targets["sbp_target"],
+        ldl_now,
+        targets["ldl_target"],
+        a1c_now,
+        targets["a1c_target"],
+        smoking_status,
+        cigs_per_day,
+        years_smoked,
+        years_since_quit,
+        quit_today,
+        bmi_now=bmi_now,
+        bmi_target=bmi_target if bmi_target != bmi_now else None,
+        egfr_now=egfr_now,
+        egfr_target=egfr_target if egfr_target != egfr_now else None,
+        acr_now=acr_now,
+        acr_target=acr_target if acr_target != acr_now else None,
+    )
+    return float(result["point"]["target"])
 
-horizons = [5, 10] if which == "Both" else [_years_from_choice(which)]
-years_for_curve = max(horizons)
 
-# パラメータが変更されたか、または初回実行か
-params_changed = st.session_state.params_hash != params_hash
-should_auto_calculate = params_changed and st.session_state.calculated
+def build_medication_contributions(outcome: str, horizon: int):
+    ordered_meds = selected_sbp_meds + selected_ldl_meds + selected_a1c_meds
+    if not ordered_meds:
+        return []
 
-# 手動ボタンまたは自動計算
-manual_button_clicked = st.button("🔄 リスク計算を実行", type="primary")
-if manual_button_clicked or should_auto_calculate:
-    with st.spinner("リスク計算中..."):
-        st.session_state.cumulative_data = calculate_cumulative_risk_curves(years_for_curve)
-        st.session_state.calculated = True
-        st.session_state.years = years_for_curve
-        st.session_state.params_hash = params_hash
+    selected = {"sbp": [], "ldl": [], "hba1c": []}
+    current_targets = {
+        "sbp_target": float(sbp_now),
+        "ldl_target": float(ldl_now),
+        "a1c_target": float(a1c_now),
+    }
+    running_risk = risk_at_horizon(outcome, horizon, current_targets)
+    contributions = []
 
-if not st.session_state.calculated:
-    st.info("👆 上記のパラメータを設定して「リスク計算を実行」を押してください")
-    st.stop()
+    for medication in ordered_meds:
+        selected[medication["domain"]].append(medication)
+        next_targets = apply_meds_to_targets(
+            sbp_now=float(sbp_now),
+            ldl_now_mg=float(ldl_now),
+            a1c_now=float(a1c_now),
+            selected_sbp=selected["sbp"],
+            selected_ldl=selected["ldl"],
+            selected_a1c=selected["hba1c"],
+        )
+        next_risk = risk_at_horizon(outcome, horizon, next_targets)
+        contributions.append(
+            {
+                "name": medication["key"],
+                "delta": max(0.0, (running_risk - next_risk) * 100.0),
+            }
+        )
+        running_risk = next_risk
+    return contributions
 
-cumulative_data = st.session_state.cumulative_data
 
-# ---- サマリー ----
-st.markdown("## 📊 リスク比較サマリー")
-labels = {"mi": "心筋梗塞", "stroke": "脳卒中", "mortality": "全死亡"}
-cols = st.columns(3)
-
-for i, outcome in enumerate(OUTCOME_DISPLAY_ORDER):
-    with cols[i]:
-        st.subheader(labels[outcome])
-        for horizon in horizons:
-            r = engine.cumulative_incidence(
-                outcome, sex, age, horizon,
-                sbp_now, sbp_tgt, ldl_now, ldl_tgt, a1c_now, a1c_tgt,
-                smoking_status, cigs_per_day, years_smoked, years_since_quit,
-                assume_quit_today_in_target=quit_today
-            )
-            arr = (r["baseline"] - r["target"]) * 100.0
-            st.metric(
-                f"{horizon}年 リスク減少（ARR）",
-                f"{arr:.1f}%",
-                delta=f"現在 {r['baseline']*100:.1f}% → 目標 {r['target']*100:.1f}%"
-            )
-        if outcome == "mortality":
-            st.caption(MORTALITY_ALL_CAUSE_DEATH_CAPTION)
-
-st.divider()
-
-st.markdown("## 💴 費用と副作用（薬剤選択時）")
-if use_meds and meds_summary is not None:
-    st.metric("年間薬剤費（合計）", f"{annual_cost_yen:,} 円/年")
-    if side_effects_md.strip():
-        st.markdown("**主な副作用（薬剤ごと）**")
-        st.markdown(side_effects_md)
-else:
-    st.info("薬剤を選択していないため、費用・副作用は表示しません。")
-
-st.divider()
-
-# ---- 曲線（MI / Stroke / Mortality すべて表示） ----
-st.markdown("## 📈 累積リスク曲線（95%CI）")
-
-_OUTCOME_DETAIL_META = {
-    "mortality": {"title": "💀 全死亡", "icon": "💀"},
-    "mi": {"title": "🫀 心筋梗塞", "icon": "🫀"},
-    "stroke": {"title": "🧠 脳卒中", "icon": "🧠"},
-}
-outcomes_config = [{"key": k, **_OUTCOME_DETAIL_META[k]} for k in OUTCOME_DISPLAY_ORDER]
-
-def plot_risk_curve(outcome_key: str, title: str):
-    """リスク曲線を描画する関数"""
-    t = np.array(cumulative_data[outcome_key]["time"], dtype=float)
-    b = np.array(cumulative_data[outcome_key]["baseline_cumulative"], dtype=float)
-    tg = np.array(cumulative_data[outcome_key]["target_cumulative"], dtype=float)
-    b_l = np.array(cumulative_data[outcome_key]["baseline_ci_lower"], dtype=float)
-    b_u = np.array(cumulative_data[outcome_key]["baseline_ci_upper"], dtype=float)
-    tg_l = np.array(cumulative_data[outcome_key]["target_ci_lower"], dtype=float)
-    tg_u = np.array(cumulative_data[outcome_key]["target_ci_upper"], dtype=float)
+def plot_risk_curve(outcome: str, data: dict):
+    t = np.asarray(data["time"], dtype=float)
+    baseline = np.asarray(data["baseline_cumulative"], dtype=float)
+    target = np.asarray(data["target_cumulative"], dtype=float)
+    baseline_low = np.asarray(data["baseline_ci_lower"], dtype=float)
+    baseline_high = np.asarray(data["baseline_ci_upper"], dtype=float)
+    target_low = np.asarray(data["target_ci_lower"], dtype=float)
+    target_high = np.asarray(data["target_ci_upper"], dtype=float)
 
     cutoff_year = max(0.0, 85.0 - float(age))
     cut_idx = int(np.searchsorted(t, cutoff_year, side="right"))
-
     fig = go.Figure()
-
-    fig.add_trace(go.Scatter(
-        x=t[:cut_idx], y=b[:cut_idx], mode="lines", name="現在",
-        hovertemplate="%{x:.1f}年: %{y:.2f}%<extra></extra>",
-        line=dict(color="red", width=2)
-    ))
-    fig.add_trace(go.Scatter(
-        x=t[cut_idx:], y=b[cut_idx:], mode="lines", name="現在（≥85歳推定域）",
-        opacity=0.4, hovertemplate="%{x:.1f}年: %{y:.2f}%<extra></extra>", showlegend=False,
-        line=dict(color="red", width=2)
-    ))
-
-    fig.add_trace(go.Scatter(
-        x=t[:cut_idx], y=tg[:cut_idx], mode="lines", name="薬剤/目標",
-        hovertemplate="%{x:.1f}年: %{y:.2f}%<extra></extra>",
-        line=dict(color="blue", width=2)
-    ))
-    fig.add_trace(go.Scatter(
-        x=t[cut_idx:], y=tg[cut_idx:], mode="lines", name="薬剤/目標（≥85歳推定域）",
-        opacity=0.4, hovertemplate="%{x:.1f}年: %{y:.2f}%<extra></extra>", showlegend=False,
-        line=dict(color="blue", width=2)
-    ))
-
-    # CI band: baseline
-    fig.add_trace(go.Scatter(x=t, y=b_u, mode="lines", line=dict(width=0), showlegend=False, hoverinfo="skip"))
-    fig.add_trace(go.Scatter(x=t, y=b_l, mode="lines", fill="tonexty", line=dict(width=0),
-                             name="現在 95%CI", hoverinfo="skip", fillcolor="rgba(255, 0, 0, 0.08)"))
-
-    # CI band: target
-    fig.add_trace(go.Scatter(x=t, y=tg_u, mode="lines", line=dict(width=0), showlegend=False, hoverinfo="skip"))
-    fig.add_trace(go.Scatter(x=t, y=tg_l, mode="lines", fill="tonexty", line=dict(width=0),
-                             name="薬剤/目標 95%CI", hoverinfo="skip", fillcolor="rgba(0, 0, 255, 0.08)"))
-
+    fig.add_trace(
+        go.Scatter(
+            x=t,
+            y=baseline_high,
+            mode="lines",
+            line=dict(width=0),
+            showlegend=False,
+            hoverinfo="skip",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=t,
+            y=baseline_low,
+            mode="lines",
+            fill="tonexty",
+            line=dict(width=0),
+            name="現在 95%CI",
+            hoverinfo="skip",
+            fillcolor="rgba(211, 75, 75, 0.10)",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=t,
+            y=target_high,
+            mode="lines",
+            line=dict(width=0),
+            showlegend=False,
+            hoverinfo="skip",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=t,
+            y=target_low,
+            mode="lines",
+            fill="tonexty",
+            line=dict(width=0),
+            name="目標達成時 95%CI",
+            hoverinfo="skip",
+            fillcolor="rgba(20, 134, 109, 0.11)",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=t[:cut_idx],
+            y=baseline[:cut_idx],
+            mode="lines",
+            name="現在のリスク因子",
+            line=dict(color="#d34b4b", width=3),
+            hovertemplate="%{x:.0f}年：%{y:.2f}%<extra></extra>",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=t[cut_idx:],
+            y=baseline[cut_idx:],
+            mode="lines",
+            showlegend=False,
+            opacity=0.35,
+            line=dict(color="#d34b4b", width=3),
+            hovertemplate="%{x:.0f}年：%{y:.2f}%<extra></extra>",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=t[:cut_idx],
+            y=target[:cut_idx],
+            mode="lines",
+            name="薬剤／目標達成時",
+            line=dict(color="#14866d", width=3),
+            hovertemplate="%{x:.0f}年：%{y:.2f}%<extra></extra>",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=t[cut_idx:],
+            y=target[cut_idx:],
+            mode="lines",
+            showlegend=False,
+            opacity=0.35,
+            line=dict(color="#14866d", width=3),
+            hovertemplate="%{x:.0f}年：%{y:.2f}%<extra></extra>",
+        )
+    )
     fig.update_layout(
-        title=title,
+        title=OUTCOME_META[outcome]["title"],
         xaxis_title="年数",
         yaxis_title="累積リスク（%）",
         hovermode="x unified",
-        height=520,
-        legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01)
+        height=500,
+        margin=dict(l=20, r=20, t=55, b=20),
+        legend=dict(orientation="h", yanchor="bottom", y=1.01, xanchor="left", x=0),
     )
-
     return fig
 
-for outcome_config in outcomes_config:
-    st.markdown(f"### {outcome_config['title']}")
-    fig = plot_risk_curve(outcome_config["key"], outcome_config["title"])
-    st.plotly_chart(fig, use_container_width=True)
-    if outcome_config["key"] == "mortality":
-        st.caption(MORTALITY_ALL_CAUSE_DEATH_CAPTION)
-    st.markdown("---")
 
+input_col, result_col = st.columns([0.38, 0.62], gap="large")
+
+with input_col:
+    st.subheader("入力")
+    st.markdown('<div class="live-note">入力を変更すると、右のグラフがすぐに更新されます。</div>', unsafe_allow_html=True)
+
+    with st.container(border=True):
+        st.markdown("#### 患者プロフィール")
+        profile_left, profile_right = st.columns(2)
+        with profile_left:
+            sex = st.selectbox(
+                "性別",
+                ["male", "female"],
+                format_func=lambda value: "男性" if value == "male" else "女性",
+            )
+        with profile_right:
+            age = st.number_input("年齢（歳）", 20, 95, 60, step=1)
+
+    with st.container(border=True):
+        st.markdown("#### リスク因子（現在 → 目標）")
+        st.caption("薬剤を選択する場合、血圧・LDL・HbA1cの目標値は自動計算されます。")
+        now_col, target_col = st.columns(2)
+        with now_col:
+            st.markdown("**現在**")
+            sbp_now = st.slider("収縮期血圧 (mmHg)", 90, 200, 150, key="sbp_now")
+            ldl_now = st.slider("LDL (mg/dL)", 50, 250, 160, key="ldl_now")
+            a1c_now = st.slider("HbA1c (%)", 5.0, 12.0, 8.0, step=0.1, key="a1c_now")
+        with target_col:
+            st.markdown("**目標**")
+            sbp_tgt_manual = st.slider("収縮期血圧 (mmHg)", 90, 160, 130, key="sbp_target")
+            ldl_tgt_manual = st.slider("LDL (mg/dL)", 50, 160, 100, key="ldl_target")
+            a1c_tgt_manual = st.slider("HbA1c (%)", 5.0, 9.0, 7.0, step=0.1, key="a1c_target")
+
+    with st.expander("喫煙・BMI・CKD", expanded=False):
+        smoking_status = st.selectbox(
+            "喫煙状況",
+            ["never", "current", "former"],
+            format_func=lambda value: {
+                "never": "非喫煙者",
+                "current": "現在喫煙者",
+                "former": "元喫煙者",
+            }[value],
+        )
+        if smoking_status != "never":
+            cigs_per_day = st.slider("1日あたりの喫煙本数", 0, 40, 20)
+            years_smoked = st.slider("喫煙年数", 0, 60, 20)
+        else:
+            cigs_per_day = 0
+            years_smoked = 0
+        if smoking_status == "former":
+            years_since_quit = st.slider("禁煙からの年数", 0, 40, 5)
+        else:
+            years_since_quit = 0
+        quit_today = st.checkbox("今日禁煙したと仮定（目標シナリオ）")
+
+        bmi_left, bmi_right = st.columns(2)
+        with bmi_left:
+            bmi_now = st.number_input("現在のBMI", 10.0, 50.0, 24.0, 0.1)
+        with bmi_right:
+            bmi_target = st.number_input("目標BMI", 10.0, 50.0, 24.0, 0.1)
+
+        egfr_left, egfr_right = st.columns(2)
+        with egfr_left:
+            egfr_now = st.number_input("現在のeGFR", 5.0, 120.0, 80.0, 1.0)
+            acr_now = st.selectbox("尿アルブミン／蛋白（現在）", ["A1", "A2", "A3"])
+        with egfr_right:
+            egfr_target = st.number_input("目標eGFR", 5.0, 120.0, 80.0, 1.0)
+            acr_target = st.selectbox("尿アルブミン／蛋白（目標）", ["A1", "A2", "A3"])
+
+    with st.container(border=True):
+        st.markdown("#### 💊 薬剤")
+        use_meds = st.checkbox("薬剤から目標値を自動計算する", value=True)
+        selected_sbp_meds = []
+        selected_ldl_meds = []
+        selected_a1c_meds = []
+        meds_summary = None
+
+        if catalog_error:
+            st.warning("薬剤カタログの読み込みに失敗しました。")
+            st.caption(catalog_error)
+            use_meds = False
+        elif use_meds and meds_catalog:
+            sbp_options = [med["key"] for med in meds_catalog["sbp"]]
+            ldl_options = [med["key"] for med in meds_catalog["ldl"]]
+            a1c_options = [med["key"] for med in meds_catalog["hba1c"]]
+            sbp_keys = st.multiselect("降圧薬（SBPに反映）", sbp_options)
+            ldl_keys = st.multiselect("脂質薬（LDLに反映）", ldl_options)
+            a1c_keys = st.multiselect("糖尿病薬（HbA1cに反映）", a1c_options)
+            selected_sbp_meds = [med for med in meds_catalog["sbp"] if med["key"] in sbp_keys]
+            selected_ldl_meds = [med for med in meds_catalog["ldl"] if med["key"] in ldl_keys]
+            selected_a1c_meds = [med for med in meds_catalog["hba1c"] if med["key"] in a1c_keys]
+            meds_summary = apply_meds_to_targets(
+                sbp_now=float(sbp_now),
+                ldl_now_mg=float(ldl_now),
+                a1c_now=float(a1c_now),
+                selected_sbp=selected_sbp_meds,
+                selected_ldl=selected_ldl_meds,
+                selected_a1c=selected_a1c_meds,
+            )
+            st.caption("SBPは加算 / LDLは%低下を乗算 / HbA1cは加算")
+
+        if use_meds and meds_summary is not None:
+            sbp_tgt = float(meds_summary["sbp_target"])
+            ldl_tgt = float(meds_summary["ldl_target"])
+            a1c_tgt = float(meds_summary["a1c_target"])
+            annual_cost_yen = int(meds_summary["annual_cost_yen"])
+            side_effects_md = meds_summary["side_effects_md"]
+            target_metrics = st.columns(3)
+            target_metrics[0].metric("SBP目標", f"{sbp_tgt:.0f}")
+            target_metrics[1].metric("LDL目標", f"{ldl_tgt:.0f}")
+            target_metrics[2].metric("HbA1c目標", f"{a1c_tgt:.1f}")
+        else:
+            sbp_tgt = float(sbp_tgt_manual)
+            ldl_tgt = float(ldl_tgt_manual)
+            a1c_tgt = float(a1c_tgt_manual)
+            annual_cost_yen = 0
+            side_effects_md = ""
+
+    display_left, display_right = st.columns(2)
+    with display_left:
+        selected_outcome = st.selectbox(
+            "右に表示するアウトカム",
+            OUTCOME_DISPLAY_ORDER,
+            format_func=lambda value: OUTCOME_META[value]["label"],
+        )
+    with display_right:
+        horizon_choice = st.selectbox(
+            "予測期間",
+            ["5-year", "10-year", "20-year", "30-year", "50-year"],
+            index=2,
+            format_func=lambda value: f"{_years_from_choice(value)}年",
+        )
+
+horizon = _years_from_choice(horizon_choice)
+cumulative_data = calculate_cumulative_risk_curves(horizon)
+
+with result_col:
+    st.subheader("リアルタイム予測")
+    selected_data = cumulative_data[selected_outcome]
+    baseline_risk = selected_data["baseline_cumulative"][-1]
+    target_risk = selected_data["target_cumulative"][-1]
+    arr = baseline_risk - target_risk
+
+    metric_cols = st.columns(3)
+    metric_cols[0].metric(f"{horizon}年・現在", f"{baseline_risk:.1f}%")
+    metric_cols[1].metric(f"{horizon}年・目標達成時", f"{target_risk:.1f}%")
+    metric_cols[2].metric("絶対リスク減少（ARR）", f"{arr:.1f} pt")
+
+    st.plotly_chart(
+        plot_risk_curve(selected_outcome, selected_data),
+        width="stretch",
+        config={"displayModeBar": False},
+    )
+    if selected_outcome == "mortality":
+        st.caption(MORTALITY_ALL_CAUSE_DEATH_CAPTION)
+
+    with st.container(border=True):
+        st.markdown(f"#### 何がどれくらい下げているか（{horizon}年ARR）")
+        contributions = build_medication_contributions(selected_outcome, horizon)
+        if not contributions:
+            st.info("薬剤を選ぶと、各薬剤の追加によるリスク低下幅をここに表示します。")
+        else:
+            max_delta = max(max(item["delta"] for item in contributions), 0.01)
+            for item in contributions:
+                width = min(100.0, item["delta"] / max_delta * 100.0)
+                st.markdown(
+                    f"""
+                    <div class="contribution-row">
+                      <div>{item['name']}</div>
+                      <div class="contribution-track"><div class="contribution-fill" style="width:{width:.1f}%"></div></div>
+                      <div class="contribution-value">−{item['delta']:.2f} pt</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+            st.caption("表示順に1剤ずつ追加したときの追加ARRです。併用順によって内訳は変わります。")
+
+    with st.container(border=True):
+        st.markdown("#### 3アウトカムの比較")
+        summary_cols = st.columns(3)
+        for index, outcome in enumerate(OUTCOME_DISPLAY_ORDER):
+            data = cumulative_data[outcome]
+            outcome_arr = data["baseline_cumulative"][-1] - data["target_cumulative"][-1]
+            summary_cols[index].metric(
+                OUTCOME_META[outcome]["label"],
+                f"{data['target_cumulative'][-1]:.1f}%",
+                delta=f"ARR {outcome_arr:.1f} pt",
+                delta_color="normal",
+            )
+
+    with st.expander("💴 費用と主な副作用"):
+        if use_meds and meds_summary is not None:
+            st.metric("年間薬剤費（合計）", f"{annual_cost_yen:,} 円/年")
+            if side_effects_md.strip():
+                st.markdown("**主な副作用（薬剤ごと）**")
+                st.markdown(side_effects_md)
+        else:
+            st.info("薬剤を選択していないため、費用・副作用は表示しません。")
+
+st.caption(
+    "※ 薬剤ごとのARRは、既存の薬効・用量・リスクモデルをそのまま使い、"
+    "選択した薬剤を順に加えた際の表示上の差を分解したものです。"
+)
