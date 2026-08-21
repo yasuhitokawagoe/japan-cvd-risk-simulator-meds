@@ -515,6 +515,18 @@ with input_col:
             annual_cost_yen = 0
             side_effects_md = ""
 
+        selected_meds = selected_sbp_meds + selected_ldl_meds + selected_a1c_meds
+        if use_meds and meds_summary is not None and selected_meds:
+            st.divider()
+            st.metric("年間薬剤費（合計）", f"{annual_cost_yen:,} 円/年")
+            with st.expander("主な副作用を確認", expanded=False):
+                if side_effects_md.strip():
+                    st.markdown(side_effects_md)
+                else:
+                    st.info("副作用情報は登録されていません。")
+        elif use_meds:
+            st.caption("薬剤を選択すると、年間費用と主な副作用をここに表示します。")
+
     horizon_choice = st.selectbox(
         "予測期間",
         ["5-year", "10-year", "20-year", "30-year", "50-year"],
@@ -587,15 +599,6 @@ with result_col:
                 delta=f"ARR {outcome_arr:.1f} pt",
                 delta_color="normal",
             )
-
-    with st.expander("💴 費用と主な副作用"):
-        if use_meds and meds_summary is not None:
-            st.metric("年間薬剤費（合計）", f"{annual_cost_yen:,} 円/年")
-            if side_effects_md.strip():
-                st.markdown("**主な副作用（薬剤ごと）**")
-                st.markdown(side_effects_md)
-        else:
-            st.info("薬剤を選択していないため、費用・副作用は表示しません。")
 
 st.caption(
     "※ 薬剤ごとのARRは、既存の薬効・用量・リスクモデルをそのまま使い、"
