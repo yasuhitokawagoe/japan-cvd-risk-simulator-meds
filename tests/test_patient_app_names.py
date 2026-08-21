@@ -13,3 +13,15 @@ def test_tablet_comparison_chart_keeps_labels_and_values_visible():
     assert figure.layout.margin.r >= 90
     assert figure.layout.xaxis.range[1] > 18.3
     assert all(trace.cliponaxis is False for trace in figure.data)
+
+
+def test_body_defaults_follow_selected_sex(monkeypatch):
+    monkeypatch.setitem(patient_app.st.session_state, "p_sex", "male")
+    patient_app.set_body_defaults_for_selected_sex()
+    assert patient_app.st.session_state["p_height"] == 170
+    assert patient_app.st.session_state["p_weight"] == 65
+
+    monkeypatch.setitem(patient_app.st.session_state, "p_sex", "female")
+    patient_app.set_body_defaults_for_selected_sex()
+    assert patient_app.st.session_state["p_height"] == 160
+    assert patient_app.st.session_state["p_weight"] == 55

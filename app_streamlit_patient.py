@@ -80,6 +80,14 @@ def save_form_values(keys: list[str]) -> None:
             st.session_state.patient_form[key] = st.session_state[key]
 
 
+def set_body_defaults_for_selected_sex() -> None:
+    """Populate the same sex-specific standard values used by the clinician app."""
+    defaults = {"male": (170, 65), "female": (160, 55)}
+    selected_sex = st.session_state.get("p_sex")
+    if selected_sex in defaults:
+        st.session_state["p_height"], st.session_state["p_weight"] = defaults[selected_sex]
+
+
 def header() -> None:
     st.markdown(
         """
@@ -139,8 +147,12 @@ def render_input() -> None:
         page_keys = ["p_sex", "p_age", "p_height", "p_weight"]
         restore_form_values(page_keys)
         st.markdown("### 1/3 あなたについて")
-        st.selectbox("性別", ["male", "female"], index=None, placeholder="選んでください", format_func=lambda x: "男性" if x == "male" else "女性", key="p_sex")
-        st.selectbox("年齢", range(20, 96), index=None, placeholder="選んでください", format_func=lambda x: f"{x}歳", key="p_age")
+        st.selectbox(
+            "性別", ["male", "female"], index=None, placeholder="選んでください",
+            format_func=lambda x: "男性" if x == "male" else "女性", key="p_sex",
+            on_change=set_body_defaults_for_selected_sex,
+        )
+        st.selectbox("年齢", range(20, 96), index=50, format_func=lambda x: f"{x}歳", key="p_age")
         st.selectbox("身長", range(120, 221), index=None, placeholder="選んでください", format_func=lambda x: f"{x} cm", key="p_height")
         st.selectbox("体重", range(30, 201), index=None, placeholder="選んでください", format_func=lambda x: f"{x} kg", key="p_weight")
         with st.expander("わからない場合"):
@@ -149,11 +161,11 @@ def render_input() -> None:
         page_keys = ["p_sbp", "p_ldl", "p_a1c", "p_diabetes", "p_ckd", "p_egfr", "p_acr"]
         restore_form_values(page_keys)
         st.markdown("### 2/3 健診結果")
-        st.selectbox("上の血圧", range(90, 251), index=None, placeholder="選んでください", format_func=lambda x: f"{x} mmHg", key="p_sbp")
+        st.selectbox("上の血圧", range(90, 251), index=30, format_func=lambda x: f"{x} mmHg", key="p_sbp")
         st.caption("健診結果では「収縮期血圧」と書かれていることがあります。")
-        st.selectbox("悪玉コレステロール（LDL）", range(20, 301), index=None, placeholder="選んでください", format_func=lambda x: f"{x} mg/dL", key="p_ldl")
+        st.selectbox("悪玉コレステロール（LDL）", range(20, 301), index=120, format_func=lambda x: f"{x} mg/dL", key="p_ldl")
         st.caption("健診結果の「LDL-C」または「LDLコレステロール」の欄です。")
-        st.selectbox("HbA1c", [round(x / 10, 1) for x in range(40, 151)], index=None, placeholder="選んでください", format_func=lambda x: f"{x:.1f} %", key="p_a1c")
+        st.selectbox("HbA1c", [round(x / 10, 1) for x in range(40, 151)], index=25, format_func=lambda x: f"{x:.1f} %", key="p_a1c")
         st.checkbox("糖尿病と診断されている", key="p_diabetes")
         st.checkbox("慢性腎臓病（CKD）と診断されている", key="p_ckd")
         if st.session_state.get("p_ckd"):
