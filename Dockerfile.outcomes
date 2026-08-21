@@ -25,6 +25,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # アプリ本体をコピー
 COPY . .
 
-# 起動するアプリ：PC版（outcomes）。$PORT はRailwayが注入
+# 起動するアプリ：既定はPC版（outcomes）。patient-facingサービスだけ
+# APP_ENTRYPOINT=app_streamlit_patient.py を設定する。$PORT はRailwayが注入。
 # ※ shell形式で書くこと。exec形式 CMD ["..."] だと $PORT が展開されない
-CMD streamlit run app_streamlit_outcomes.py --server.address 0.0.0.0 --server.port $PORT
+CMD streamlit run ${APP_ENTRYPOINT:-app_streamlit_outcomes.py} --server.address 0.0.0.0 --server.port $PORT
