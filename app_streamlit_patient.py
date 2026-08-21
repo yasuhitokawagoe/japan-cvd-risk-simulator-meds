@@ -63,7 +63,7 @@ def init_state() -> None:
         st.session_state.patient_session_started = True
 
 
-def go(step: int) -> None:
+def navigate_to(step: int) -> None:
     st.session_state.patient_step = step
     st.rerun()
 
@@ -120,7 +120,7 @@ def render_entry() -> None:
         st.write("今の状態を確認し、いくつかの選択肢を自由に試して、先生に聞きたいことを整理できます。")
         st.caption("診断や治療の指示をするものではありません。結果をもとに、医師と相談するためのツールです。")
     if st.button("はじめる", type="primary", use_container_width=True):
-        go(2)
+        navigate_to(2)
 
 
 def render_input() -> None:
@@ -189,7 +189,7 @@ def render_input() -> None:
             if smoking_required and former_ok and kidney_ok:
                 save_form_values(page_keys)
                 st.session_state.patient_inputs = build_inputs()
-                go(3)
+                navigate_to(3)
             else:
                 st.error("計算に必要な項目を入力してください。分からない場合は受付でご確認ください。")
 
@@ -237,7 +237,7 @@ def render_current() -> None:
             st.write(f"**{OUTCOME_LABELS[outcome]}**：{r['point']['baseline']*100:.2f}%（95%予測幅 {r['lower']['baseline']*100:.2f}〜{r['upper']['baseline']*100:.2f}%）")
         st.caption("予測幅は推定の不確かさを表します。")
     if st.button("もし変えたら？を試す", type="primary", use_container_width=True):
-        go(4)
+        navigate_to(4)
 
 
 def selected_plan() -> InterventionPlan:
@@ -325,7 +325,7 @@ def render_explore() -> None:
     if ai_is_available() and st.button("AIに聞いてみる"):
         emit("ai_help_opened")
     if st.button("見た感想へ進む", type="primary", use_container_width=True):
-        go(6)
+        navigate_to(6)
 
 
 def emit_once(event: str, state_key: str, **properties) -> None:
@@ -363,7 +363,7 @@ def render_reaction() -> None:
         st.session_state.patient_reactions = list(selected)
         for reaction in selected:
             emit("final_reaction_selected", option=REACTIONS.index(reaction))
-        go(7)
+        navigate_to(7)
 
 
 def render_questions() -> None:
@@ -381,7 +381,7 @@ def render_questions() -> None:
         st.session_state.patient_free_question = free_question
         for question in selected:
             emit("doctor_question_selected", option=DOCTOR_QUESTIONS.index(question))
-        go(8)
+        navigate_to(8)
 
 
 def render_summary() -> None:
