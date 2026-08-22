@@ -1,18 +1,23 @@
 """療養計画書UIで使う、PDFやStreamlitに依存しない判定・文面生成ロジック。"""
 from __future__ import annotations
 
+import unicodedata
 from typing import Iterable
 
 
+# 目標の文言は【①達成目標】欄(テキスト111)にそのまま印字される。
+# 欄は1行・全角21.4字しか入らず、溢れた分は縮小されずに切れて消える
+# （PLAN_GOAL_FIELD_CAPACITY 参照）。2件を「／」で連結して収めるため、
+# 1件あたり全角10字以内に保つこと。文言を足すときも同じ制約が要る。
 LIFESTYLE_GOALS = {
-    "塩分が多い": ["汁物は1日1杯までにする", "漬物・加工食品を減らし、1日食塩6g未満を目指す"],
-    "野菜が少ない": ["毎食、野菜料理を1皿追加する"],
-    "間食・甘い飲料が多い": ["間食は1日1回までにする", "甘い飲料を水・お茶に置き換える"],
-    "運動不足": ["週5日、1日30分の歩行を目指す", "まず現在より1日1000歩増やす"],
-    "体重を減らしたい": ["毎日同じ時間に体重を測り記録する", "3か月で現在体重の3%減を目指す"],
-    "喫煙している": ["禁煙開始日を決める", "禁煙外来・禁煙補助薬について相談する"],
+    "塩分が多い": ["汁物は1日1杯まで", "食塩1日6g未満"],
+    "野菜が少ない": ["毎食野菜を1皿追加"],
+    "間食・甘い飲料が多い": ["間食は1日1回まで", "甘い飲料は水・お茶に"],
+    "運動不足": ["週5日30分歩く", "1日1000歩増やす"],
+    "体重を減らしたい": ["毎日体重を測り記録", "3か月で体重3%減"],
+    "喫煙している": ["禁煙開始日を決める", "禁煙外来を相談する"],
     "飲酒量が多い": ["休肝日を週2日設ける", "飲酒量を記録する"],
-    "服薬を忘れる": ["服薬を食事や歯磨きと結び付ける", "薬箱・アラームを利用する"],
+    "服薬を忘れる": ["食事・歯磨き時に服薬", "薬箱・アラームを使う"],
 }
 
 LIFESTYLE_INSTRUCTIONS = {
@@ -67,6 +72,47 @@ def suggested_instructions(lifestyle_items: Iterable[str]) -> list[str]:
             if instruction not in result:
                 result.append(instruction)
     return result
+
+
+# --- 【①達成目標】欄(テキスト111)の容量制約 ---------------------------------
+# ひな型実測: 幅228.5pt・改行フラグなし(1行のみ)・フォント10.5pt固定。
+# サイズ0(自動縮小)ではないため、溢れた文字は縮まずに切れて消える。
+# 内側余白を4pt見込むと (228.5 - 4) / 10.5 = 21.4 全角字。
+PLAN_GOAL_FIELD_CAPACITY = 21.4
+# 1欄に連結して入れる目標の上限。各10字以内なら 10 + 1(／) + 10 = 21字 で収まる。
+PLAN_GOAL_MAX_ITEMS = 2
+PLAN_GOAL_SEPARATOR = "／"
+
+
+def goal_text_width(text: str) -> float:
+    """帳票上の表示幅を全角字数で返す。全角=1.0、半角=0.5。"""
+    return sum(
+        1.0 if unicodedata.east_asian_width(ch) in "WFA" else 0.5 for ch in text
+    )
+
+
+def build_plan_goal_text(goals: Iterable[str]) -> tuple[str, list[str]]:
+    """
+    達成目標欄に印字する文字列と、入りきらず落とした目標を返す。
+
+    欄は1行・自動縮小なしのため、そのまま渡すと溢れた分がPDF上で黙って消える。
+    ここで先に落とし、UI側が「落ちたこと」を提示できるようにする。
+    """
+    kept: list[str] = []
+    dropped: list[str] = []
+    for goal in goals:
+        goal = (goal or "").strip()
+        if not goal:
+            continue
+        if len(kept) >= PLAN_GOAL_MAX_ITEMS:
+            dropped.append(goal)
+            continue
+        candidate = PLAN_GOAL_SEPARATOR.join([*kept, goal])
+        if goal_text_width(candidate) > PLAN_GOAL_FIELD_CAPACITY:
+            dropped.append(goal)
+            continue
+        kept.append(goal)
+    return PLAN_GOAL_SEPARATOR.join(kept), dropped
 
 
 def build_patient_handout(
