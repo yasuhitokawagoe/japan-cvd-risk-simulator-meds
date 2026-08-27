@@ -11,7 +11,7 @@ from treatment_backcast import reconstruct_untreated_values
 
 
 st.set_page_config(
-    page_title="糖尿病療養指導シミュレーター",
+    page_title="生活習慣病療養指導シュミレーター",
     layout="wide",
     page_icon="♥",
 )
@@ -134,7 +134,7 @@ st.markdown(
       <div class="hero-icon" aria-hidden="true">♥</div>
       <div class="hero-copy">
         <div class="hero-kicker">DIABETES CARE &amp; COMPLICATION PREVENTION</div>
-        <h1 class="hero-title">糖尿病療養指導シミュレーター</h1>
+        <h1 class="hero-title">生活習慣病療養指導シュミレーター</h1>
         <p class="hero-subtitle">血糖・血圧・腎機能と治療による将来リスクの変化を可視化し、合併症予防の目標を一緒に考えます。教育・共有意思決定支援用。</p>
       </div>
       <div class="hero-badge">● リアルタイム更新</div>
