@@ -4,11 +4,14 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from calc_engine_outcomes import OutcomesEngine
+from dm_outcomes import ACR_CATEGORY_MG_G, DIABETES_OUTCOMES, DiabetesOutcomeModel
+from lifestyle_interventions import EXERCISE_EFFECTS, apply_lifestyle_effects
 from meds_catalog import apply_meds_to_targets, load_meds_catalog
+from treatment_backcast import reconstruct_untreated_values
 
 
 st.set_page_config(
-    page_title="心血管一次予防シミュレーター",
+    page_title="糖尿病療養指導シミュレーター",
     layout="wide",
     page_icon="♥",
 )
@@ -130,9 +133,9 @@ st.markdown(
     <div class="app-hero">
       <div class="hero-icon" aria-hidden="true">♥</div>
       <div class="hero-copy">
-        <div class="hero-kicker">CARDIOVASCULAR PREVENTION</div>
-        <h1 class="hero-title">心血管一次予防シミュレーター</h1>
-        <p class="hero-subtitle">リスク因子と薬物治療による将来リスクの変化を、わかりやすく可視化します。教育・共有意思決定支援用。</p>
+        <div class="hero-kicker">DIABETES CARE &amp; COMPLICATION PREVENTION</div>
+        <h1 class="hero-title">糖尿病療養指導シミュレーター</h1>
+        <p class="hero-subtitle">血糖・血圧・腎機能と治療による将来リスクの変化を可視化し、合併症予防の目標を一緒に考えます。教育・共有意思決定支援用。</p>
       </div>
       <div class="hero-badge">● リアルタイム更新</div>
     </div>
@@ -141,15 +144,21 @@ st.markdown(
 )
 
 engine = OutcomesEngine("config.yaml")
+dm_engine = DiabetesOutcomeModel()
 
 MORTALITY_ALL_CAUSE_DEATH_CAPTION = (
     "※全死亡は、心血管疾患に限らず、がんや他の病気を含むすべての死亡を対象としています。"
 )
-OUTCOME_DISPLAY_ORDER = ("mortality", "mi", "stroke")
+CARDIOVASCULAR_OUTCOMES = ("mortality", "mi", "stroke")
+DIABETES_OUTCOME_KEYS = tuple(DIABETES_OUTCOMES)
+OUTCOME_DISPLAY_ORDER = CARDIOVASCULAR_OUTCOMES + DIABETES_OUTCOME_KEYS
 OUTCOME_META = {
     "mortality": {"label": "全死亡", "title": "全死亡", "color": "#d95656"},
     "mi": {"label": "心筋梗塞", "title": "心筋梗塞", "color": "#e07b39"},
     "stroke": {"label": "脳卒中", "title": "脳卒中", "color": "#7656c9"},
+    "esrd": {"label": "透析", "title": "透析（末期腎不全）", "color": "#3f7f9f"},
+    "amputation": {"label": "大切断", "title": "大切断", "color": "#9c6b3f"},
+    "blindness": {"label": "失明", "title": "失明", "color": "#3e7c58"},
 }
 
 BP_XLSX_PATH = "降圧薬詳細_Ca-ARNI_薬価付き_日本語表_英語タイトル引用付き.xlsx"
@@ -175,7 +184,7 @@ def _years_from_choice(choice: str) -> int:
 
 def calculate_cumulative_risk_curves(years: int):
     cumulative_data = {}
-    for outcome in OUTCOME_DISPLAY_ORDER:
+    for outcome in CARDIOVASCULAR_OUTCOMES:
         cumulative_data[outcome] = {
             "baseline_cumulative": [0.0],
             "target_cumulative": [0.0],
@@ -222,10 +231,95 @@ def calculate_cumulative_risk_curves(years: int):
                 cumulative_data[outcome][f"{scenario}_ci_upper"].append(
                     result["upper"][scenario] * 100.0
                 )
+    dm_common = {
+        "age": float(age),
+        "sex": 1 if sex == "male" else 0,
+        "years": years,
+    }
+    for outcome in DIABETES_OUTCOME_KEYS:
+        current = dm_engine.predict_curve_with_ci(
+            outcome, hba1c=float(a1c_now), egfr=float(egfr_now),
+            acr=ACR_CATEGORY_MG_G[acr_now], sbp=float(sbp_now), **dm_common,
+        )
+        target = dm_engine.predict_curve_with_ci(
+            outcome, hba1c=float(a1c_tgt), egfr=float(egfr_target),
+            acr=ACR_CATEGORY_MG_G[acr_target], sbp=float(sbp_tgt), **dm_common,
+        )
+        cumulative_data[outcome] = {
+            "time": current["time"].tolist(),
+            "baseline_cumulative": (current["risk"] * 100.0).tolist(),
+            "target_cumulative": (target["risk"] * 100.0).tolist(),
+            "baseline_ci_lower": (current["lower"] * 100.0).tolist(),
+            "baseline_ci_upper": (current["upper"] * 100.0).tolist(),
+            "target_ci_lower": (target["lower"] * 100.0).tolist(),
+            "target_ci_upper": (target["upper"] * 100.0).tolist(),
+        }
     return cumulative_data
 
 
+def calculate_past_treatment_benefit(years: int) -> dict:
+    """治療開始から現在までの、無治療との累積リスク差を推定する。"""
+    start_age = max(20, int(age) - int(years))
+    result = {}
+    for outcome in CARDIOVASCULAR_OUTCOMES:
+        untreated_curve = [0.0]
+        treated_curve = [0.0]
+        for elapsed in range(1, int(years) + 1):
+            risk = engine.cumulative_incidence(
+                outcome, sex, start_age, elapsed,
+                float(sbp_tgt), float(sbp_now),
+                float(ldl_tgt), float(ldl_now),
+                float(a1c_tgt), float(a1c_now),
+                smoking_status, cigs_per_day, years_smoked, years_since_quit,
+                assume_quit_today_in_target=False,
+            )
+            untreated_curve.append(float(risk["baseline"]) * 100.0)
+            treated_curve.append(float(risk["target"]) * 100.0)
+        result[outcome] = {
+            "time": list(range(-int(years), 1)),
+            "untreated": untreated_curve,
+            "treated": treated_curve,
+            "avoided": max(0.0, untreated_curve[-1] - treated_curve[-1]),
+        }
+
+    dm_common = {
+        "age": float(start_age), "sex": 1 if sex == "male" else 0,
+        "years": int(years),
+    }
+    for outcome in DIABETES_OUTCOME_KEYS:
+        untreated_dm = dm_engine.predict_curve_with_ci(
+            outcome, hba1c=float(a1c_tgt), egfr=float(egfr_now),
+            acr=ACR_CATEGORY_MG_G[acr_now], sbp=float(sbp_tgt), **dm_common,
+        )
+        treated_dm = dm_engine.predict_curve_with_ci(
+            outcome, hba1c=float(a1c_now), egfr=float(egfr_now),
+            acr=ACR_CATEGORY_MG_G[acr_now], sbp=float(sbp_now), **dm_common,
+        )
+        untreated_curve = (untreated_dm["risk"] * 100.0).tolist()
+        treated_curve = (treated_dm["risk"] * 100.0).tolist()
+        result[outcome] = {
+            "time": list(range(-int(years), 1)),
+            "untreated": untreated_curve,
+            "treated": treated_curve,
+            "avoided": max(0.0, untreated_curve[-1] - treated_curve[-1]),
+        }
+
+    mortality = result["mortality"]
+    survival_gain = np.asarray(mortality["untreated"]) - np.asarray(mortality["treated"])
+    result["estimated_life_years_gained"] = max(
+        0.0, float(np.trapezoid(survival_gain / 100.0, dx=1.0))
+    )
+    return result
+
+
 def risk_at_horizon(outcome: str, horizon: int, targets: dict) -> float:
+    if outcome in DIABETES_OUTCOME_KEYS:
+        return dm_engine.predict_risk(
+            outcome, hba1c=float(targets["a1c_target"]), age=float(age),
+            egfr=float(egfr_target), acr=ACR_CATEGORY_MG_G[acr_target],
+            sbp=float(targets["sbp_target"]), sex=1 if sex == "male" else 0,
+            years=horizon,
+        )
     result = engine.cumulative_incidence_with_ci(
         outcome,
         sex,
@@ -254,7 +348,7 @@ def risk_at_horizon(outcome: str, horizon: int, targets: dict) -> float:
 
 def build_medication_contributions(outcome: str, horizon: int):
     ordered_meds = selected_sbp_meds + selected_ldl_meds + selected_a1c_meds
-    if not ordered_meds:
+    if not ordered_meds and exercise_intervention_key is None:
         return []
 
     selected = {"sbp": [], "ldl": [], "hba1c": []}
@@ -284,6 +378,28 @@ def build_medication_contributions(outcome: str, horizon: int):
             }
         )
         running_risk = next_risk
+        current_targets = next_targets
+
+    if exercise_intervention_key is not None:
+        exercise_targets = apply_lifestyle_effects(
+            sbp=current_targets["sbp_target"],
+            ldl=current_targets["ldl_target"],
+            a1c=current_targets["a1c_target"],
+            exercise_key=exercise_intervention_key,
+            diabetes_context=True,
+        )
+        next_targets = {
+            "sbp_target": exercise_targets["sbp"],
+            "ldl_target": exercise_targets["ldl"],
+            "a1c_target": exercise_targets["a1c"],
+        }
+        next_risk = risk_at_horizon(outcome, horizon, next_targets)
+        contributions.append(
+            {
+                "name": f"運動：{EXERCISE_EFFECTS[exercise_intervention_key].label}",
+                "delta": max(0.0, (running_risk - next_risk) * 100.0),
+            }
+        )
     return contributions
 
 
@@ -298,6 +414,8 @@ def plot_risk_curve(outcome: str, data: dict):
 
     cutoff_year = max(0.0, 85.0 - float(age))
     cut_idx = int(np.searchsorted(t, cutoff_year, side="right"))
+    baseline_color = "#14866d" if care_mode == "continue" else "#d34b4b"
+    target_color = "#d34b4b" if care_mode == "continue" else "#14866d"
     fig = go.Figure()
     fig.add_trace(
         go.Scatter(
@@ -338,7 +456,7 @@ def plot_risk_curve(outcome: str, data: dict):
             mode="lines",
             fill="tonexty",
             line=dict(width=0),
-            name="目標達成時 95%CI",
+            name="全薬中止時 95%CI" if care_mode == "continue" else "目標達成時 95%CI",
             hoverinfo="skip",
             fillcolor="rgba(20, 134, 109, 0.11)",
         )
@@ -348,8 +466,8 @@ def plot_risk_curve(outcome: str, data: dict):
             x=t[:cut_idx],
             y=baseline[:cut_idx],
             mode="lines",
-            name="現在のリスク因子",
-            line=dict(color="#d34b4b", width=3),
+            name="服薬を継続" if care_mode == "continue" else "現在のリスク因子",
+            line=dict(color=baseline_color, width=3),
             hovertemplate="%{x:.0f}年：%{y:.2f}%<extra></extra>",
         )
     )
@@ -360,7 +478,7 @@ def plot_risk_curve(outcome: str, data: dict):
             mode="lines",
             showlegend=False,
             opacity=0.35,
-            line=dict(color="#d34b4b", width=3),
+            line=dict(color=baseline_color, width=3),
             hovertemplate="%{x:.0f}年：%{y:.2f}%<extra></extra>",
         )
     )
@@ -369,8 +487,8 @@ def plot_risk_curve(outcome: str, data: dict):
             x=t[:cut_idx],
             y=target[:cut_idx],
             mode="lines",
-            name="薬剤／目標達成時",
-            line=dict(color="#14866d", width=3),
+            name="今日から全薬中止" if care_mode == "continue" else "薬剤／目標達成時",
+            line=dict(color=target_color, width=3),
             hovertemplate="%{x:.0f}年：%{y:.2f}%<extra></extra>",
         )
     )
@@ -381,7 +499,7 @@ def plot_risk_curve(outcome: str, data: dict):
             mode="lines",
             showlegend=False,
             opacity=0.35,
-            line=dict(color="#14866d", width=3),
+            line=dict(color=target_color, width=3),
             hovertemplate="%{x:.0f}年：%{y:.2f}%<extra></extra>",
         )
     )
@@ -403,6 +521,19 @@ with input_col:
     st.subheader("入力")
     st.markdown('<div class="live-note">入力を変更すると、右のグラフがすぐに更新されます。</div>', unsafe_allow_html=True)
 
+    care_mode = st.segmented_control(
+        "診療モード",
+        ["start", "continue"],
+        default="start",
+        format_func=lambda value: {
+            "start": "治療を始める",
+            "continue": "現在の治療を続ける",
+        }[value],
+        key="care_mode",
+    ) or "start"
+    if care_mode == "continue":
+        st.caption("現在の服薬をすべて中止した場合と比べ、続ける意味を確認します。")
+
     with st.container(border=True):
         st.markdown("#### 患者プロフィール")
         profile_left, profile_right = st.columns(2)
@@ -416,8 +547,11 @@ with input_col:
             age = st.number_input("年齢（歳）", 20, 95, 60, step=1)
 
     with st.container(border=True):
-        st.markdown("#### リスク因子（現在 → 目標）")
-        st.caption("手入力した目標値はすぐにグラフへ反映されます。薬剤モードでは目標値を薬効から自動計算します。")
+        st.markdown("#### 現在の検査値" if care_mode == "continue" else "#### リスク因子（現在 → 目標）")
+        if care_mode == "continue":
+            st.caption("服薬中の直近値を入力してください。薬を中止した場合の値を薬効から逆算します。")
+        else:
+            st.caption("手入力した目標値はすぐにグラフへ反映されます。薬剤モードでは目標値を薬効から自動計算します。")
         now_col, target_col = st.columns(2)
         with now_col:
             st.markdown("**現在**")
@@ -425,12 +559,19 @@ with input_col:
             ldl_now = st.slider("LDL (mg/dL)", 50, 250, 160, key="ldl_now")
             a1c_now = st.slider("HbA1c (%)", 5.0, 12.0, 8.0, step=0.1, key="a1c_now")
         with target_col:
-            st.markdown("**目標**")
-            sbp_tgt_manual = st.slider("収縮期血圧 (mmHg)", 90, 160, 130, key="sbp_target")
-            ldl_tgt_manual = st.slider("LDL (mg/dL)", 50, 160, 100, key="ldl_target")
-            a1c_tgt_manual = st.slider("HbA1c (%)", 5.0, 9.0, 7.0, step=0.1, key="a1c_target")
+            if care_mode == "continue":
+                st.markdown("**全薬中止時（自動推定）**")
+                st.info("下で現在の薬を選ぶと表示されます。")
+                sbp_tgt_manual = float(sbp_now)
+                ldl_tgt_manual = float(ldl_now)
+                a1c_tgt_manual = float(a1c_now)
+            else:
+                st.markdown("**目標**")
+                sbp_tgt_manual = st.slider("収縮期血圧 (mmHg)", 90, 160, 130, key="sbp_target")
+                ldl_tgt_manual = st.slider("LDL (mg/dL)", 50, 160, 100, key="ldl_target")
+                a1c_tgt_manual = st.slider("HbA1c (%)", 5.0, 9.0, 7.0, step=0.1, key="a1c_target")
 
-    with st.expander("喫煙・BMI・CKD", expanded=False):
+    with st.expander("喫煙・BMI・腎機能・尿アルブミン", expanded=False):
         smoking_status = st.selectbox(
             "喫煙状況",
             ["never", "current", "former"],
@@ -458,17 +599,24 @@ with input_col:
         with bmi_right:
             bmi_target = st.number_input("目標BMI", 10.0, 50.0, 24.0, 0.1)
 
+        st.markdown("**糖尿病合併症予測に使用する腎指標**")
         egfr_left, egfr_right = st.columns(2)
         with egfr_left:
             egfr_now = st.number_input("現在のeGFR", 5.0, 120.0, 80.0, 1.0)
-            acr_now = st.selectbox("尿アルブミン／蛋白（現在）", ["A1", "A2", "A3"])
+            acr_now = st.selectbox(
+                "尿アルブミン（現在）", ["A1", "A2", "A3"],
+                format_func=lambda value: {"A1": "A1（正常〜軽度）", "A2": "A2（中等度）", "A3": "A3（高度）"}[value],
+            )
         with egfr_right:
             egfr_target = st.number_input("目標eGFR", 5.0, 120.0, 80.0, 1.0)
-            acr_target = st.selectbox("尿アルブミン／蛋白（目標）", ["A1", "A2", "A3"])
+            acr_target = st.selectbox(
+                "尿アルブミン（目標）", ["A1", "A2", "A3"],
+                format_func=lambda value: {"A1": "A1（正常〜軽度）", "A2": "A2（中等度）", "A3": "A3（高度）"}[value],
+            )
 
     with st.container(border=True):
-        st.markdown("#### 💊 薬剤")
-        use_meds = st.checkbox("薬剤から目標値を自動計算する", value=False)
+        st.markdown("#### 💊 現在服用中の薬" if care_mode == "continue" else "#### 💊 薬剤")
+        use_meds = True if care_mode == "continue" else st.checkbox("薬剤から目標値を自動計算する", value=False)
         selected_sbp_meds = []
         selected_ldl_meds = []
         selected_a1c_meds = []
@@ -482,21 +630,37 @@ with input_col:
             sbp_options = [med["key"] for med in meds_catalog["sbp"]]
             ldl_options = [med["key"] for med in meds_catalog["ldl"]]
             a1c_options = [med["key"] for med in meds_catalog["hba1c"]]
-            sbp_keys = st.multiselect("降圧薬（SBPに反映）", sbp_options)
-            ldl_keys = st.multiselect("脂質薬（LDLに反映）", ldl_options)
-            a1c_keys = st.multiselect("糖尿病薬（HbA1cに反映）", a1c_options)
+            med_label_prefix = "現在の" if care_mode == "continue" else ""
+            sbp_keys = st.multiselect(f"{med_label_prefix}降圧薬", sbp_options, key="current_sbp_meds")
+            ldl_keys = st.multiselect(f"{med_label_prefix}脂質薬", ldl_options, key="current_ldl_meds")
+            a1c_keys = st.multiselect(f"{med_label_prefix}糖尿病薬", a1c_options, key="current_a1c_meds")
             selected_sbp_meds = [med for med in meds_catalog["sbp"] if med["key"] in sbp_keys]
             selected_ldl_meds = [med for med in meds_catalog["ldl"] if med["key"] in ldl_keys]
             selected_a1c_meds = [med for med in meds_catalog["hba1c"] if med["key"] in a1c_keys]
-            meds_summary = apply_meds_to_targets(
-                sbp_now=float(sbp_now),
-                ldl_now_mg=float(ldl_now),
-                a1c_now=float(a1c_now),
-                selected_sbp=selected_sbp_meds,
-                selected_ldl=selected_ldl_meds,
-                selected_a1c=selected_a1c_meds,
-            )
-            st.caption("SBPは加算 / LDLは%低下を乗算 / HbA1cは加算")
+            if care_mode == "continue":
+                untreated = reconstruct_untreated_values(
+                    sbp_now=float(sbp_now), ldl_now=float(ldl_now), a1c_now=float(a1c_now),
+                    sbp_meds=selected_sbp_meds, ldl_meds=selected_ldl_meds,
+                    a1c_meds=selected_a1c_meds,
+                )
+                meds_summary = {
+                    "sbp_target": untreated["sbp"],
+                    "ldl_target": untreated["ldl"],
+                    "a1c_target": untreated["a1c"],
+                    "annual_cost_yen": sum(int(m.get("annual_cost_yen") or 0) for m in selected_sbp_meds + selected_ldl_meds + selected_a1c_meds),
+                    "side_effects_md": "",
+                }
+                st.caption("選択薬の平均効果を逆算し、全薬中止時の検査値を推定します。")
+            else:
+                meds_summary = apply_meds_to_targets(
+                    sbp_now=float(sbp_now),
+                    ldl_now_mg=float(ldl_now),
+                    a1c_now=float(a1c_now),
+                    selected_sbp=selected_sbp_meds,
+                    selected_ldl=selected_ldl_meds,
+                    selected_a1c=selected_a1c_meds,
+                )
+                st.caption("SBPは加算 / LDLは%低下を乗算 / HbA1cは加算")
 
         if use_meds and meds_summary is not None:
             sbp_tgt = float(meds_summary["sbp_target"])
@@ -505,9 +669,10 @@ with input_col:
             annual_cost_yen = int(meds_summary["annual_cost_yen"])
             side_effects_md = meds_summary["side_effects_md"]
             target_metrics = st.columns(3)
-            target_metrics[0].metric("SBP目標", f"{sbp_tgt:.0f}")
-            target_metrics[1].metric("LDL目標", f"{ldl_tgt:.0f}")
-            target_metrics[2].metric("HbA1c目標", f"{a1c_tgt:.1f}")
+            metric_prefix = "中止時" if care_mode == "continue" else "目標"
+            target_metrics[0].metric(f"SBP{metric_prefix}", f"{sbp_tgt:.0f}")
+            target_metrics[1].metric(f"LDL{metric_prefix}", f"{ldl_tgt:.0f}")
+            target_metrics[2].metric(f"HbA1c{metric_prefix}", f"{a1c_tgt:.1f}")
         else:
             sbp_tgt = float(sbp_tgt_manual)
             ldl_tgt = float(ldl_tgt_manual)
@@ -526,6 +691,58 @@ with input_col:
                     st.info("副作用情報は登録されていません。")
         elif use_meds:
             st.caption("薬剤を選択すると、年間費用と主な副作用をここに表示します。")
+
+    if care_mode != "continue":
+      with st.container(border=True):
+        st.markdown("#### 🏃 運動療法")
+        exercise_intervention_key = st.selectbox(
+            "運動プログラム",
+            [None, *EXERCISE_EFFECTS],
+            format_func=lambda key: (
+                "選択しない" if key is None else EXERCISE_EFFECTS[key].label
+            ),
+            key="exercise_intervention",
+        )
+        if exercise_intervention_key is not None:
+            exercise_effect = EXERCISE_EFFECTS[exercise_intervention_key]
+            st.caption(exercise_effect.definition)
+            exercise_result = apply_lifestyle_effects(
+                sbp=sbp_tgt,
+                ldl=ldl_tgt,
+                a1c=a1c_tgt,
+                exercise_key=exercise_intervention_key,
+                diabetes_context=True,
+            )
+            sbp_tgt = float(exercise_result["sbp"])
+            ldl_tgt = float(exercise_result["ldl"])
+            a1c_tgt = float(exercise_result["a1c"])
+            exercise_metrics = st.columns(3)
+            exercise_metrics[0].metric("介入後SBP", f"{sbp_tgt:.1f}")
+            exercise_metrics[1].metric("介入後LDL", f"{ldl_tgt:.1f}")
+            exercise_metrics[2].metric("介入後HbA1c", f"{a1c_tgt:.2f}%")
+            with st.expander("効果量と根拠を確認", expanded=False):
+                st.write(exercise_effect.evidence_summary)
+                st.caption(exercise_effect.endpoint_evidence)
+                st.link_button("根拠文献を開く", exercise_effect.source_url)
+        else:
+            st.caption("運動療法を選択すると、予測検査値と6アウトカムへ反映します。")
+    else:
+        exercise_intervention_key = None
+
+    if care_mode == "continue":
+        with st.container(border=True):
+            st.markdown("#### ⏪ これまでの治療期間")
+            treatment_years = st.number_input(
+                "治療を開始したのは何年前ですか？",
+                min_value=1,
+                max_value=max(1, int(age) - 20),
+                value=min(10, max(1, int(age) - 20)),
+                step=1,
+                key="treatment_years",
+            )
+            st.caption("この期間、現在選択した薬を継続していたと仮定して累積利益を推定します。")
+    else:
+        treatment_years = 0
 
     horizon_choice = st.selectbox(
         "予測期間",
@@ -554,9 +771,15 @@ with result_col:
     arr = baseline_risk - target_risk
 
     metric_cols = st.columns(3)
-    metric_cols[0].metric(f"{horizon}年・現在", f"{baseline_risk:.1f}%")
-    metric_cols[1].metric(f"{horizon}年・目標達成時", f"{target_risk:.1f}%")
-    metric_cols[2].metric("絶対リスク減少（ARR）", f"{arr:.1f} pt")
+    if care_mode == "continue":
+        harm = target_risk - baseline_risk
+        metric_cols[0].metric(f"{horizon}年・服薬継続", f"{baseline_risk:.1f}%")
+        metric_cols[1].metric(f"{horizon}年・今日から全薬中止", f"{target_risk:.1f}%")
+        metric_cols[2].metric("中止によるリスク増加", f"+{harm:.1f} pt")
+    else:
+        metric_cols[0].metric(f"{horizon}年・現在", f"{baseline_risk:.1f}%")
+        metric_cols[1].metric(f"{horizon}年・目標達成時", f"{target_risk:.1f}%")
+        metric_cols[2].metric("絶対リスク減少（ARR）", f"{arr:.1f} pt")
 
     st.plotly_chart(
         plot_risk_curve(selected_outcome, selected_data),
@@ -566,41 +789,109 @@ with result_col:
     if selected_outcome == "mortality":
         st.caption(MORTALITY_ALL_CAUSE_DEATH_CAPTION)
 
-    with st.container(border=True):
-        st.markdown(f"#### 何がどれくらい下げているか（{horizon}年ARR）")
-        contributions = build_medication_contributions(selected_outcome, horizon)
-        if not contributions:
-            st.info("薬剤を選ぶと、各薬剤の追加によるリスク低下幅をここに表示します。")
-        else:
-            max_delta = max(max(item["delta"] for item in contributions), 0.01)
-            for item in contributions:
-                width = min(100.0, item["delta"] / max_delta * 100.0)
-                st.markdown(
-                    f"""
-                    <div class="contribution-row">
-                      <div>{item['name']}</div>
-                      <div class="contribution-track"><div class="contribution-fill" style="width:{width:.1f}%"></div></div>
-                      <div class="contribution-value">−{item['delta']:.2f} pt</div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-            st.caption("表示順に1剤ずつ追加したときの追加ARRです。併用順によって内訳は変わります。")
+    if care_mode != "continue":
+        with st.container(border=True):
+            st.markdown(f"#### 何がどれくらい下げているか（{horizon}年ARR）")
+            contributions = build_medication_contributions(selected_outcome, horizon)
+            if not contributions:
+                st.info("薬剤または運動療法を選ぶと、追加によるリスク低下幅をここに表示します。")
+            else:
+                max_delta = max(max(item["delta"] for item in contributions), 0.01)
+                for item in contributions:
+                    width = min(100.0, item["delta"] / max_delta * 100.0)
+                    st.markdown(
+                        f"""
+                        <div class="contribution-row">
+                          <div>{item['name']}</div>
+                          <div class="contribution-track"><div class="contribution-fill" style="width:{width:.1f}%"></div></div>
+                          <div class="contribution-value">−{item['delta']:.2f} pt</div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+                st.caption("表示順に介入を追加したときの追加ARRです。併用順によって内訳は変わります。")
+    elif selected_meds:
+        st.success("現在の良好な検査値と低い将来リスクは、服薬継続で得られている効果です。自己判断で中止せず主治医と相談しましょう。")
+    else:
+        st.info("左側で現在服用中の薬を選ぶと、全薬中止との比較を表示します。")
 
     with st.container(border=True):
-        st.markdown("#### 3アウトカムの比較")
+        st.markdown("#### 6アウトカムの比較")
         summary_cols = st.columns(3)
         for index, outcome in enumerate(OUTCOME_DISPLAY_ORDER):
             data = cumulative_data[outcome]
             outcome_arr = data["baseline_cumulative"][-1] - data["target_cumulative"][-1]
-            summary_cols[index].metric(
+            if care_mode == "continue":
+                stopping_harm = max(0.0, -outcome_arr)
+                summary_cols[index % 3].metric(
+                    OUTCOME_META[outcome]["label"],
+                    f"継続 {data['baseline_cumulative'][-1]:.1f}%",
+                    delta=f"中止で +{stopping_harm:.1f} pt",
+                    delta_color="inverse",
+                )
+            else:
+                summary_cols[index % 3].metric(
+                    OUTCOME_META[outcome]["label"],
+                    f"{data['target_cumulative'][-1]:.1f}%",
+                    delta=f"ARR {outcome_arr:.1f} pt",
+                    delta_color="normal",
+                )
+
+    if care_mode == "continue" and selected_meds and treatment_years > 0:
+        past_benefit = calculate_past_treatment_benefit(int(treatment_years))
+        st.markdown("## ⏪ これまでの治療で得られた利益")
+        st.caption(
+            f"治療開始から現在までの{int(treatment_years)}年間を、最初から薬を使わなかった場合と比較した推定です。"
+        )
+        life_years = past_benefit["estimated_life_years_gained"]
+        life_days = life_years * 365.25
+        st.metric(
+            "推定で保持できた生存期間",
+            f"約{life_days:.0f}日",
+            delta=f"{life_years:.3f}年相当",
+        )
+        st.caption("全死亡の生存曲線差を治療期間内で積分した集団平均のモデル推定です。個人の寿命を断定する値ではありません。")
+
+        benefit_cols = st.columns(3)
+        for index, outcome in enumerate(OUTCOME_DISPLAY_ORDER):
+            benefit = past_benefit[outcome]
+            benefit_cols[index % 3].metric(
                 OUTCOME_META[outcome]["label"],
-                f"{data['target_cumulative'][-1]:.1f}%",
-                delta=f"ARR {outcome_arr:.1f} pt",
+                f"{benefit['avoided']:.2f} pt回避",
+                delta=f"無治療 {benefit['untreated'][-1]:.1f}% → 治療あり {benefit['treated'][-1]:.1f}%",
                 delta_color="normal",
             )
 
+        past_outcome = st.selectbox(
+            "過去の累積利益を表示するアウトカム",
+            OUTCOME_DISPLAY_ORDER,
+            format_func=lambda value: OUTCOME_META[value]["label"],
+            key="past_benefit_outcome",
+        )
+        past = past_benefit[past_outcome]
+        past_fig = go.Figure()
+        past_fig.add_trace(go.Scatter(
+            x=past["time"], y=past["untreated"], mode="lines",
+            name="最初から薬なし", line=dict(color="#d34b4b", dash="dash", width=3),
+        ))
+        past_fig.add_trace(go.Scatter(
+            x=past["time"], y=past["treated"], mode="lines",
+            name="治療あり", line=dict(color="#14866d", width=3),
+        ))
+        past_fig.add_vline(x=0, line_dash="dot", line_color="#374151", annotation_text="現在")
+        past_fig.update_layout(
+            title=f"{OUTCOME_META[past_outcome]['label']}：これまでの累積リスク",
+            xaxis_title="現在を0とした年数", yaxis_title="累積リスク（%）",
+            height=390, hovermode="x unified",
+            legend=dict(orientation="h", y=1.12),
+        )
+        st.plotly_chart(past_fig, width="stretch", config={"displayModeBar": False})
+
 st.caption(
-    "※ 薬剤ごとのARRは、既存の薬効・用量・リスクモデルをそのまま使い、"
-    "選択した薬剤を順に加えた際の表示上の差を分解したものです。"
+    "※ 介入ごとのARRは、既存の薬効・運動効果量・リスクモデルを用い、"
+    "選択した介入を順に加えた際の表示上の差を分解したものです。"
+)
+st.caption(
+    "※ 透析・大切断・失明はDM-modelのWeibullモデルを用いた2型糖尿病患者向け推定です。"
+    "個人の発症を断定するものではなく、1型糖尿病には適用しません。"
 )

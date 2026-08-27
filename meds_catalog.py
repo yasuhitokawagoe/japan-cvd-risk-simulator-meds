@@ -101,7 +101,10 @@ def _parse_hba1c_delta_pct(effect_text: Any) -> Tuple[Optional[float], Optional[
     s = _norm(effect_text)
     if not s:
         return None, None, None
-    
+
+    # 「HbA1c」の数字1を平均変化量として誤検出しないよう、先頭ラベルを除く。
+    # 例: "HbA1c -1.0% (95% CI -1.27〜-0.90%)"
+    s = re.sub(r"^HbA1c\s*", "", s, flags=re.I)
     mean, low, high = _parse_ci_triplet_from_text(s)
     return mean, low, high
 
@@ -289,4 +292,3 @@ def apply_meds_to_targets(
         "side_effects_md": side_effects_md,
         "deltas": {"sbp_mmHg": sbp_delta, "ldl_mult": mult, "a1c_pctpt": a1c_delta},
     }
-
