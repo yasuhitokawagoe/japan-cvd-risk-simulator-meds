@@ -337,7 +337,7 @@ with st.container(border=True):
     st.markdown("**患者プロフィール**")
     profile_col1, profile_col2, profile_col3 = st.columns([1, 1, 2.4])
     with profile_col1:
-        sex = st.selectbox("性別", ["male", "female"], format_func=lambda x: "男性" if x == "male" else "女性")
+        sex = st.selectbox("性別（男性・女性）", ["male", "female"], format_func=lambda x: "男性" if x == "male" else "女性")
     with profile_col2:
         age = st.number_input("年齢", 20, 95, 60, step=1)
     with profile_col3:
@@ -358,7 +358,7 @@ with st.container(border=True):
     st.caption("数値を直接入力、または −／＋ で調整できます。")
     now_col1, now_col2, now_col3 = st.columns(3)
     with now_col1:
-        sbp_now = st.number_input("収縮期血圧", 90, 250, 150, step=10, key="sbp_now_input")
+        sbp_now = st.number_input("収縮期血圧（上の血圧）", 90, 250, 150, step=10, key="sbp_now_input")
     with now_col2:
         ldl_now = st.number_input("LDL", 20, 300, 160, step=10, key="ldl_now_input")
     with now_col3:
@@ -405,7 +405,7 @@ with st.container(border=True):
         years_since_quit = st.number_input("禁煙してからの年数", 0, 80, 5, step=1, key="quit_years_compact") if smoking_status == "former" else 0
         quit_today = st.checkbox("今日から禁煙する場合も比較", key="quit_today_compact") if smoking_status == "current" else False
 
-    st.markdown("**体格（未入力なら性別の標準値を使用）**")
+    st.markdown("**体格（未入力時は男性・女性別の標準値を使用）**")
     default_height, default_weight = ((170.0, 65.0) if sex == "male" else (160.0, 55.0))
     body_col1, body_col2, body_col3 = st.columns(3)
     with body_col1:
