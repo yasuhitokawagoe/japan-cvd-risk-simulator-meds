@@ -824,8 +824,8 @@ with result_col:
             if care_mode == "continue":
                 stopping_harm = max(0.0, -outcome_arr)
                 summary_cols[index % 3].metric(
-                    OUTCOME_META[outcome]["label"],
-                    f"継続 {data['baseline_cumulative'][-1]:.1f}%",
+                    f"{OUTCOME_META[outcome]['label']}（継続）",
+                    f"{data['baseline_cumulative'][-1]:.1f}%",
                     delta=f"中止で +{stopping_harm:.1f} pt",
                     delta_color="inverse",
                 )
