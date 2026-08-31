@@ -35,6 +35,8 @@ def extract_public_client_ip(headers) -> str | None:
 
 
 def approximate_region(ip_address: str | None, timeout: float = 1.5) -> tuple[str, str]:
+    if os.environ.get("IP_GEOLOCATION_ENABLED", "false").lower() != "true":
+        return UNKNOWN_LOCATION, UNKNOWN_LOCATION
     if not ip_address:
         return UNKNOWN_LOCATION, UNKNOWN_LOCATION
     url = f"https://ipwho.is/{ip_address}?lang=ja"
