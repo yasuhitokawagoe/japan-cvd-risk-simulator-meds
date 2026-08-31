@@ -3,6 +3,7 @@ import numpy as np
 import plotly.graph_objects as go
 import streamlit as st
 
+from access_analytics import record_visit, total_visits
 from calc_engine_outcomes import OutcomesEngine
 from dm_outcomes import ACR_CATEGORY_MG_G, DIABETES_OUTCOMES, DiabetesOutcomeModel
 from lifestyle_interventions import EXERCISE_EFFECTS, apply_lifestyle_effects
@@ -148,8 +149,20 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+if "access_stats" not in st.session_state:
+    try:
+        request_headers = dict(st.context.headers)
+        st.session_state.access_stats = record_visit(request_headers)
+    except Exception:
+        st.session_state.access_stats = {
+            "total": total_visits(),
+            "prefecture": "不明",
+            "country_code": "不明",
+        }
+access_stats = st.session_state.access_stats
+
 st.markdown(
-    """
+    f"""
     <div class="app-hero">
       <div class="hero-icon" aria-hidden="true">♥</div>
       <div class="hero-copy">
@@ -157,7 +170,7 @@ st.markdown(
         <h1 class="hero-title">生活習慣病療養指導シュミレーター</h1>
         <p class="hero-subtitle">血糖・血圧・腎機能と治療による将来リスクの変化を可視化し、合併症予防の目標を一緒に考えます。教育・共有意思決定支援用。</p>
       </div>
-      <div class="hero-badge">● リアルタイム更新</div>
+      <div class="hero-badge">● 累計 {access_stats['total']:,} アクセス</div>
     </div>
     """,
     unsafe_allow_html=True,
@@ -200,6 +213,45 @@ except Exception as exc:
 
 def _years_from_choice(choice: str) -> int:
     return {"5-year": 5, "10-year": 10, "20-year": 20, "30-year": 30, "50-year": 50}[choice]
+
+
+def _nudge_slider(state_key: str, delta: float, minimum: float, maximum: float, digits: int):
+    current = float(st.session_state[state_key])
+    st.session_state[state_key] = round(min(max(current + delta, minimum), maximum), digits)
+
+
+def slider_with_nudges(
+    label: str,
+    minimum,
+    maximum,
+    initial,
+    *,
+    key: str,
+    nudge: float,
+    step=None,
+):
+    slider_kwargs = {"key": key}
+    if step is not None:
+        slider_kwargs["step"] = step
+    st.slider(label, minimum, maximum, initial, **slider_kwargs)
+    decrease, increase = st.columns(2)
+    digits = 1 if isinstance(initial, float) else 0
+    display_nudge = f"{nudge:.1f}" if digits else f"{int(nudge)}"
+    decrease.button(
+        f"−{display_nudge}",
+        key=f"{key}_decrease",
+        on_click=_nudge_slider,
+        args=(key, -nudge, float(minimum), float(maximum), digits),
+        use_container_width=True,
+    )
+    increase.button(
+        f"＋{display_nudge}",
+        key=f"{key}_increase",
+        on_click=_nudge_slider,
+        args=(key, nudge, float(minimum), float(maximum), digits),
+        use_container_width=True,
+    )
+    return st.session_state[key]
 
 
 def calculate_cumulative_risk_curves(years: int):
@@ -580,9 +632,18 @@ with input_col:
         now_col, target_col = st.columns(2)
         with now_col:
             st.markdown("**現在**")
-            sbp_now = st.slider("収縮期血圧 (mmHg)", 90, 200, 150, key="sbp_now")
-            ldl_now = st.slider("LDL (mg/dL)", 50, 250, 160, key="ldl_now")
-            a1c_now = st.slider("HbA1c (%)", 5.0, 12.0, 8.0, step=0.1, key="a1c_now")
+            sbp_now = slider_with_nudges(
+                "収縮期血圧 (mmHg)", 90, 200, 150,
+                key="sbp_now", nudge=10,
+            )
+            ldl_now = slider_with_nudges(
+                "LDL (mg/dL)", 50, 250, 160,
+                key="ldl_now", nudge=10,
+            )
+            a1c_now = slider_with_nudges(
+                "HbA1c (%)", 5.0, 12.0, 8.0,
+                key="a1c_now", nudge=0.5, step=0.1,
+            )
         with target_col:
             if care_mode == "continue":
                 st.markdown("**全薬中止時（自動推定）**")
@@ -592,9 +653,18 @@ with input_col:
                 a1c_tgt_manual = float(a1c_now)
             else:
                 st.markdown("**目標**")
-                sbp_tgt_manual = st.slider("収縮期血圧 (mmHg)", 90, 160, 130, key="sbp_target")
-                ldl_tgt_manual = st.slider("LDL (mg/dL)", 50, 160, 100, key="ldl_target")
-                a1c_tgt_manual = st.slider("HbA1c (%)", 5.0, 9.0, 7.0, step=0.1, key="a1c_target")
+                sbp_tgt_manual = slider_with_nudges(
+                    "収縮期血圧 (mmHg)", 90, 160, 130,
+                    key="sbp_target", nudge=10,
+                )
+                ldl_tgt_manual = slider_with_nudges(
+                    "LDL (mg/dL)", 50, 160, 100,
+                    key="ldl_target", nudge=10,
+                )
+                a1c_tgt_manual = slider_with_nudges(
+                    "HbA1c (%)", 5.0, 9.0, 7.0,
+                    key="a1c_target", nudge=0.5, step=0.1,
+                )
 
     with st.expander("喫煙・BMI・腎機能・尿アルブミン", expanded=False):
         smoking_status = st.selectbox(
@@ -923,4 +993,8 @@ st.caption(
 st.caption(
     "※ 透析・大切断・失明はDM-modelのWeibullモデルを用いた2型糖尿病患者向け推定です。"
     "個人の発症を断定するものではなく、1型糖尿病には適用しません。"
+)
+st.caption(
+    "※ アクセス解析では、訪問日時とIPから概算した国・都道府県のみを保存し、"
+    "IPアドレスそのものは保存しません。位置情報は実際の所在地と異なる場合があります。"
 )
