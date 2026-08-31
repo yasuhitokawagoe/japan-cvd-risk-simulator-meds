@@ -538,11 +538,8 @@ with input_col:
         st.markdown("#### 患者プロフィール")
         profile_left, profile_right = st.columns(2)
         with profile_left:
-            sex = st.selectbox(
-                "性別",
-                ["male", "female"],
-                format_func=lambda value: "男性" if value == "male" else "女性",
-            )
+            sex_label = st.selectbox("性別", ["男性", "女性"])
+            sex = "male" if sex_label == "男性" else "female"
         with profile_right:
             age = st.number_input("年齢（歳）", 20, 95, 60, step=1)
 
