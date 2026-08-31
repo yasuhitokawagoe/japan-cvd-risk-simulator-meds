@@ -95,6 +95,13 @@ st.markdown(
         content: "性別";
         font-weight: 700;
     }
+    .arr-breakdown-title {
+        margin: 0 0 0.5rem;
+        font-size: 1.25rem;
+        font-weight: 700;
+        line-height: 1.4;
+    }
+    .arr-breakdown-title::before {content: attr(data-title);}
     div[role="radiogroup"][aria-label="表示するアウトカム"]
     label:has(input[value="0"]) [data-testid="stMarkdownContainer"] p {
         font-size: 0;
@@ -809,7 +816,11 @@ with result_col:
 
     if care_mode != "continue":
         with st.container(border=True):
-            st.markdown(f"#### 何がどれくらい下げているか（{horizon}年ARR）")
+            st.markdown(
+                f'<h4 class="arr-breakdown-title" translate="no" '
+                f'data-title="各治療によるリスク減少（{horizon}年ARR）"></h4>',
+                unsafe_allow_html=True,
+            )
             contributions = build_medication_contributions(selected_outcome, horizon)
             if not contributions:
                 st.info("薬剤または運動療法を選ぶと、追加によるリスク低下幅をここに表示します。")
