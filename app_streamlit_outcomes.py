@@ -95,6 +95,15 @@ st.markdown(
         content: "性別";
         font-weight: 700;
     }
+    div[role="radiogroup"][aria-label="表示するアウトカム"]
+    label:has(input[value="0"]) [data-testid="stMarkdownContainer"] p {
+        font-size: 0;
+    }
+    div[role="radiogroup"][aria-label="表示するアウトカム"]
+    label:has(input[value="0"]) [data-testid="stMarkdownContainer"] p::before {
+        content: "全死亡";
+        font-size: 1rem;
+    }
     .contribution-row {
         display: grid;
         grid-template-columns: minmax(150px, 1.5fr) 2fr 70px;
