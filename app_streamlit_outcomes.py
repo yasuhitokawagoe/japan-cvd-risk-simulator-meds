@@ -804,7 +804,7 @@ with result_col:
     else:
         metric_cols[0].metric(f"{horizon}年・現在", f"{baseline_risk:.1f}%")
         metric_cols[1].metric(f"{horizon}年・目標達成時", f"{target_risk:.1f}%")
-        metric_cols[2].metric("絶対リスク減少（ARR）", f"{arr:.1f} pt")
+        metric_cols[2].metric("リスク減少幅", f"{arr:.1f} pt")
 
     st.plotly_chart(
         plot_risk_curve(selected_outcome, selected_data),
@@ -818,7 +818,7 @@ with result_col:
         with st.container(border=True):
             st.markdown(
                 f'<h4 class="arr-breakdown-title" translate="no" '
-                f'data-title="各治療によるリスク減少（{horizon}年ARR）"></h4>',
+                f'data-title="各治療によるリスク減少（{horizon}年間）"></h4>',
                 unsafe_allow_html=True,
             )
             contributions = build_medication_contributions(selected_outcome, horizon)
@@ -838,7 +838,7 @@ with result_col:
                         """,
                         unsafe_allow_html=True,
                     )
-                st.caption("表示順に介入を追加したときの追加ARRです。併用順によって内訳は変わります。")
+                st.caption("表示順に治療を追加したときのリスク減少幅です。併用順によって内訳は変わります。")
     elif selected_meds:
         st.success("現在の良好な検査値と低い将来リスクは、服薬継続で得られている効果です。自己判断で中止せず主治医と相談しましょう。")
     else:
@@ -862,7 +862,7 @@ with result_col:
                 summary_cols[index % 3].metric(
                     OUTCOME_META[outcome]["label"],
                     f"{data['target_cumulative'][-1]:.1f}%",
-                    delta=f"ARR {outcome_arr:.1f} pt",
+                    delta=f"{outcome_arr:.1f} pt減少",
                     delta_color="normal",
                 )
 
@@ -917,7 +917,7 @@ with result_col:
         st.plotly_chart(past_fig, width="stretch", config={"displayModeBar": False})
 
 st.caption(
-    "※ 介入ごとのARRは、既存の薬効・運動効果量・リスクモデルを用い、"
+    "※ 治療ごとのリスク減少幅は、既存の薬効・運動効果量・リスクモデルを用い、"
     "選択した介入を順に加えた際の表示上の差を分解したものです。"
 )
 st.caption(
