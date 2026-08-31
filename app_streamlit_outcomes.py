@@ -91,6 +91,10 @@ st.markdown(
         padding: 0.65rem 0.85rem;
         margin-bottom: 0.8rem;
     }
+    .sex-field-label::before {
+        content: "性別";
+        font-weight: 700;
+    }
     .contribution-row {
         display: grid;
         grid-template-columns: minmax(150px, 1.5fr) 2fr 70px;
@@ -538,7 +542,10 @@ with input_col:
         st.markdown("#### 患者プロフィール")
         profile_left, profile_right = st.columns(2)
         with profile_left:
-            st.markdown("**性別**")
+            st.markdown(
+                '<div class="sex-field-label" translate="no" aria-label="性別"></div>',
+                unsafe_allow_html=True,
+            )
             sex_label = st.selectbox(
                 "性別",
                 ["男性", "女性"],
