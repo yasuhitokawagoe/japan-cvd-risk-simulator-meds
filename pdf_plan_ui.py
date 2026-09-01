@@ -22,6 +22,10 @@ import pdf_fill
 from patient_report_pdf import generate_patient_report_pdf
 from plan_logic import (
     LIFESTYLE_GOALS,
+    PLAN_GOAL_FIELD_CAPACITY,
+    PLAN_GOAL_MAX_ITEMS,
+    build_plan_goal_text,
+    goal_text_width,
     ideal_weight_kg,
     infer_diagnoses,
     suggested_goals,
@@ -41,14 +45,20 @@ _LABEL_MAP = {
     pdf_fill.F_A1C_NOW: "実測HbA1c",
 }
 
+# (指導項目, 達成目標)。達成目標は【①達成目標】欄に印字されるため全角10字以内に保つ
+# （plan_logic.PLAN_GOAL_FIELD_CAPACITY 参照）。指導項目はチェックボックスなので字数制限なし。
 _INTERVENTION_PLAN_ITEMS = {
-    "減塩": (["食塩・調味料を控える"], ["1日食塩6g未満を目指す"]),
-    "糖質制限": (["食事摂取量を適正にする", "間食を減らす"], ["糖質量と甘い飲料を見直す"]),
-    "飽和脂肪制限": (["油を使った料理の摂取を減らす"], ["飽和脂肪を減らし不飽和脂肪へ置き換える"]),
-    "中強度有酸素運動": (["運動処方", "日常生活の活動量を増やす"], ["中強度の有酸素運動を週150分以上行う"]),
-    "有酸素＋筋力トレーニング": (["運動処方", "日常生活の活動量を増やす"], ["有酸素運動に週2〜3回の筋力トレーニングを加える"]),
-    "高強度インターバル運動": (["運動処方", "運動時の注意事項を確認する"], ["医療者と安全性を確認して高強度運動に取り組む"]),
+    "減塩": (["食塩・調味料を控える"], ["食塩1日6g未満"]),
+    "糖質制限": (["食事摂取量を適正にする", "間食を減らす"], ["糖質と甘い飲料を制限"]),
+    "飽和脂肪制限": (["油を使った料理の摂取を減らす"], ["飽和脂肪を減らす"]),
+    "中強度有酸素運動": (["運動処方", "日常生活の活動量を増やす"], ["中強度運動を週150分"]),
+    "有酸素＋筋力トレーニング": (["運動処方", "日常生活の活動量を増やす"], ["有酸素＋筋トレ週2回"]),
+    "高強度インターバル運動": (["運動処方", "運動時の注意事項を確認する"], ["安全確認し高強度運動"]),
 }
+
+# 反実仮想の結果は詳細版を患者さん向け資料へ載せ、達成目標欄には短縮版を入れる
+# （詳細版は49字あり、21.4字の欄には入らないため）。
+_TREATMENT_BENEFIT_PLAN_GOAL = "服薬を続け効果を維持"
 
 
 def _plan_items_for_interventions(labels: tuple[str, ...]) -> tuple[list[str], list[str]]:
@@ -211,7 +221,9 @@ def render_plan_section(
         lifestyle_signature_key = f"{p}_lifestyle_signature"
         if st.session_state.get(lifestyle_signature_key) != lifestyle_signature:
             st.session_state[f"{p}_selected_instructions"] = instruction_candidates
-            st.session_state[f"{p}_selected_goals"] = goal_candidates
+            # 初期値は計画書に入る分だけ。全件入れると既定で溢れ警告が出続け、
+            # 警告そのものが見過ごされるようになるため。追加は医師が行う。
+            st.session_state[f"{p}_selected_goals"] = goal_candidates[:PLAN_GOAL_MAX_ITEMS]
             st.session_state[lifestyle_signature_key] = lifestyle_signature
         selected_instructions = st.multiselect(
             "療養計画書にチェックする指導項目",
@@ -219,15 +231,52 @@ def render_plan_section(
             key=f"{p}_selected_instructions",
         )
         selected_goals = st.multiselect(
-            "療養計画書と患者さん向け資料に反映する目標",
+            f"目標（計画書には上から{PLAN_GOAL_MAX_ITEMS}件・患者さん向け資料には全件）",
             goal_candidates,
             key=f"{p}_selected_goals",
+            help=(
+                "達成目標欄は1行しかないため、計画書に入るのは先に選んだ"
+                f"{PLAN_GOAL_MAX_ITEMS}件だけです。それ以降は資料にのみ載ります。"
+            ),
         )
         additional_goal = st.text_area(
             "追加の達成目標・行動目標",
             key=f"{p}_freetext",
             placeholder="患者さんと相談して決めた内容を追加",
         )
+
+        # 患者さん向け資料には全件・詳細版を載せ、計画書の達成目標欄には収まる分だけ入れる。
+        final_goals = list(selected_goals)
+        if additional_goal and additional_goal.strip():
+            final_goals.append(additional_goal.strip())
+        plan_goals = list(final_goals)
+        if treatment_benefit:
+            years = int(treatment_benefit.get("treatment_years", 0))
+            events = treatment_benefit.get("event_effects", {})
+            mi_stroke = float(events.get("mi", {}).get("avoided", 0.0)) + float(
+                events.get("stroke", {}).get("avoided", 0.0)
+            )
+            final_goals.append(
+                f"服薬継続{years}年で得られた検査値改善と、心筋梗塞・脳卒中の推定回避効果"
+                f"（100人あたり約{mi_stroke:.1f}件）を維持する"
+            )
+            plan_goals.append(_TREATMENT_BENEFIT_PLAN_GOAL)
+        plan_goal_text, dropped_goals = build_plan_goal_text(plan_goals)
+        # 何が印字され何が落ちるかを入力欄の直下で見せる。上限で選択を止めると
+        # 他の候補が見えなくなるため、選択は自由にして印字側だけ絞る。
+        st.caption(
+            f"計画書に印字: {plan_goal_text or '（なし）'}"
+            f"　{goal_text_width(plan_goal_text):.1f}／{PLAN_GOAL_FIELD_CAPACITY:.1f}字"
+        )
+        if dropped_goals:
+            st.caption("患者さん向け資料のみ: " + "／".join(dropped_goals))
+            # 印字されるのは選択順の先頭から。multiselectに並び替えが無いため、
+            # 入れ替え方（外して選び直す）を溢れているときだけ明示する。
+            st.caption(
+                "計画書に載る順番は選んだ順です。入れ替えるには、載せたい目標を"
+                "タグの × で一度外して選び直してください。"
+            )
+
         achievement_status = st.text_area(
             "目標の達成状況（継続の場合のみ）",
             key=f"{p}_achievement",
@@ -314,21 +363,16 @@ def render_plan_section(
     if nutrition_input in pdf_fill.NUTRITION_OPTIONS:
         fv_final.text[pdf_fill.F_NUTRITION] = nutrition_input
         fv_final.checks[pdf_fill.C_NUTRITION] = True
-    final_goals = list(selected_goals)
-    if additional_goal and additional_goal.strip():
-        final_goals.append(additional_goal.strip())
-    if treatment_benefit:
-        years = int(treatment_benefit.get("treatment_years", 0))
-        events = treatment_benefit.get("event_effects", {})
-        mi_stroke = float(events.get("mi", {}).get("avoided", 0.0)) + float(
-            events.get("stroke", {}).get("avoided", 0.0)
+    if plan_goal_text:
+        fv_final.text[pdf_fill.F_PLAN_FREETEXT] = plan_goal_text
+    if dropped_goals:
+        # 溢れた分はPDF上で黙って消えるため、印刷前の確認画面で必ず知らせる。
+        st.warning(
+            "達成目標欄（1行・全角"
+            f"{PLAN_GOAL_FIELD_CAPACITY:.1f}字）に入らないため、次の目標は計画書に"
+            "**印字されません**（患者さん向け資料には載ります）: "
+            + "／".join(dropped_goals)
         )
-        final_goals.append(
-            f"服薬継続{years}年で得られた検査値改善と、心筋梗塞・脳卒中の推定回避効果"
-            f"（100人あたり約{mi_stroke:.1f}件）を維持する"
-        )
-    if final_goals:
-        fv_final.text[pdf_fill.F_PLAN_FREETEXT] = "／".join(final_goals)
     final_achievement = achievement_status.strip() if achievement_status else ""
     if not final_achievement and treatment_plan_status:
         final_achievement = treatment_plan_status
