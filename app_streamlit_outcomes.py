@@ -78,6 +78,9 @@ st.markdown(
         font-weight: 700;
         white-space: nowrap;
     }
+    .hero-badge::before {
+        content: "● 累計 " attr(data-count) " アクセス";
+    }
     [data-testid="stMetric"] {
         background: #f7faf9;
         border: 1px solid #dce8e4;
@@ -103,6 +106,10 @@ st.markdown(
         line-height: 1.4;
     }
     .arr-breakdown-title::before {content: attr(data-title);}
+    .fixed-field-label::before {
+        content: attr(data-title);
+        font-size: 1rem;
+    }
     div[role="radiogroup"][aria-label="表示するアウトカム"]
     label:has(input[value="0"]) [data-testid="stMarkdownContainer"] p {
         font-size: 0;
@@ -170,7 +177,7 @@ st.markdown(
         <h1 class="hero-title">生活習慣病療養指導シュミレーター</h1>
         <p class="hero-subtitle">血糖・血圧・腎機能と治療による将来リスクの変化を可視化し、合併症予防の目標を一緒に考えます。教育・共有意思決定支援用。</p>
       </div>
-      <div class="hero-badge">● 累計 {access_stats['total']:,} アクセス</div>
+      <div class="hero-badge" translate="no" data-count="{access_stats['total']:,}"></div>
     </div>
     """,
     unsafe_allow_html=True,
@@ -229,10 +236,18 @@ def slider_with_nudges(
     key: str,
     nudge: float,
     step=None,
+    fixed_label: str | None = None,
 ):
     slider_kwargs = {"key": key}
     if step is not None:
         slider_kwargs["step"] = step
+    if fixed_label:
+        st.markdown(
+            f'<div class="fixed-field-label" translate="no" '
+            f'data-title="{fixed_label}"></div>',
+            unsafe_allow_html=True,
+        )
+        slider_kwargs["label_visibility"] = "collapsed"
     st.slider(label, minimum, maximum, initial, **slider_kwargs)
     decrease, increase = st.columns(2)
     digits = 1 if isinstance(initial, float) else 0
@@ -634,7 +649,7 @@ with input_col:
             st.markdown("**現在**")
             sbp_now = slider_with_nudges(
                 "収縮期血圧 (mmHg)", 90, 200, 150,
-                key="sbp_now", nudge=10,
+                key="sbp_now", nudge=10, fixed_label="収縮期血圧 (mmHg)",
             )
             ldl_now = slider_with_nudges(
                 "LDL (mg/dL)", 50, 250, 160,
@@ -655,7 +670,7 @@ with input_col:
                 st.markdown("**目標**")
                 sbp_tgt_manual = slider_with_nudges(
                     "収縮期血圧 (mmHg)", 90, 160, 130,
-                    key="sbp_target", nudge=10,
+                    key="sbp_target", nudge=10, fixed_label="収縮期血圧 (mmHg)",
                 )
                 ldl_tgt_manual = slider_with_nudges(
                     "LDL (mg/dL)", 50, 160, 100,
