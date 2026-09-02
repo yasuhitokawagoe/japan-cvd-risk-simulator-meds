@@ -6,7 +6,7 @@ import streamlit as st
 from access_analytics import record_visit, total_visits
 from calc_engine_outcomes import OutcomesEngine
 from dm_outcomes import ACR_CATEGORY_MG_G, DIABETES_OUTCOMES, DiabetesOutcomeModel
-from lifestyle_interventions import EXERCISE_EFFECTS, apply_lifestyle_effects
+from lifestyle_interventions import DIET_EFFECTS, EXERCISE_EFFECTS, apply_lifestyle_effects
 from meds_catalog import apply_meds_to_targets, load_meds_catalog
 from treatment_backcast import reconstruct_untreated_values
 
@@ -435,7 +435,7 @@ def risk_at_horizon(outcome: str, horizon: int, targets: dict) -> float:
 
 def build_medication_contributions(outcome: str, horizon: int):
     ordered_meds = selected_sbp_meds + selected_ldl_meds + selected_a1c_meds
-    if not ordered_meds and exercise_intervention_key is None:
+    if not ordered_meds and not diet_intervention_keys and exercise_intervention_key is None:
         return []
 
     selected = {"sbp": [], "ldl": [], "hba1c": []}
@@ -461,6 +461,29 @@ def build_medication_contributions(outcome: str, horizon: int):
         contributions.append(
             {
                 "name": medication["key"],
+                "delta": max(0.0, (running_risk - next_risk) * 100.0),
+            }
+        )
+        running_risk = next_risk
+        current_targets = next_targets
+
+    for diet_key in diet_intervention_keys:
+        diet_targets = apply_lifestyle_effects(
+            sbp=current_targets["sbp_target"],
+            ldl=current_targets["ldl_target"],
+            a1c=current_targets["a1c_target"],
+            diet_keys=[diet_key],
+            diabetes_context=True,
+        )
+        next_targets = {
+            "sbp_target": diet_targets["sbp"],
+            "ldl_target": diet_targets["ldl"],
+            "a1c_target": diet_targets["a1c"],
+        }
+        next_risk = risk_at_horizon(outcome, horizon, next_targets)
+        contributions.append(
+            {
+                "name": f"食事：{DIET_EFFECTS[diet_key].label}",
                 "delta": max(0.0, (running_risk - next_risk) * 100.0),
             }
         )
@@ -804,6 +827,44 @@ with input_col:
 
     if care_mode != "continue":
       with st.container(border=True):
+        st.markdown("#### 🥗 食事療法")
+        diet_intervention_keys = st.multiselect(
+            "食事プログラム",
+            list(DIET_EFFECTS),
+            format_func=lambda key: DIET_EFFECTS[key].label,
+            key="diet_interventions",
+            placeholder="食事介入を選択",
+        )
+        if diet_intervention_keys:
+            diet_result = apply_lifestyle_effects(
+                sbp=sbp_tgt,
+                ldl=ldl_tgt,
+                a1c=a1c_tgt,
+                diet_keys=diet_intervention_keys,
+                diabetes_context=True,
+            )
+            sbp_tgt = float(diet_result["sbp"])
+            ldl_tgt = float(diet_result["ldl"])
+            a1c_tgt = float(diet_result["a1c"])
+            diet_metrics = st.columns(3)
+            diet_metrics[0].metric("介入後SBP", f"{sbp_tgt:.1f}")
+            diet_metrics[1].metric("介入後LDL", f"{ldl_tgt:.1f}")
+            diet_metrics[2].metric("介入後HbA1c", f"{a1c_tgt:.2f}%")
+            with st.expander("効果量と根拠を確認", expanded=False):
+                for diet_key in diet_intervention_keys:
+                    diet_effect = DIET_EFFECTS[diet_key]
+                    st.markdown(f"**{diet_effect.label}** — {diet_effect.definition}")
+                    st.write(diet_effect.evidence_summary)
+                    st.caption(diet_effect.endpoint_evidence)
+                    st.link_button(
+                        f"{diet_effect.label}の根拠文献を開く",
+                        diet_effect.source_url,
+                        key=f"diet_source_{diet_key}",
+                    )
+        else:
+            st.caption("食事療法を選択すると、予測検査値と6アウトカムへ反映します。")
+
+      with st.container(border=True):
         st.markdown("#### 🏃 運動療法")
         exercise_intervention_key = st.selectbox(
             "運動プログラム",
@@ -837,6 +898,7 @@ with input_col:
         else:
             st.caption("運動療法を選択すると、予測検査値と6アウトカムへ反映します。")
     else:
+        diet_intervention_keys = []
         exercise_intervention_key = None
 
     if care_mode == "continue":
@@ -908,7 +970,7 @@ with result_col:
             )
             contributions = build_medication_contributions(selected_outcome, horizon)
             if not contributions:
-                st.info("薬剤または運動療法を選ぶと、追加によるリスク低下幅をここに表示します。")
+                st.info("薬剤・食事療法・運動療法を選ぶと、追加によるリスク低下幅をここに表示します。")
             else:
                 max_delta = max(max(item["delta"] for item in contributions), 0.01)
                 for item in contributions:
@@ -1002,7 +1064,7 @@ with result_col:
         st.plotly_chart(past_fig, width="stretch", config={"displayModeBar": False})
 
 st.caption(
-    "※ 治療ごとのリスク減少幅は、既存の薬効・運動効果量・リスクモデルを用い、"
+    "※ 治療ごとのリスク減少幅は、既存の薬効・食事・運動効果量・リスクモデルを用い、"
     "選択した介入を順に加えた際の表示上の差を分解したものです。"
 )
 st.caption(
