@@ -8,6 +8,7 @@ from calc_engine_outcomes import OutcomesEngine
 from dm_outcomes import ACR_CATEGORY_MG_G, DIABETES_OUTCOMES, DiabetesOutcomeModel
 from lifestyle_interventions import DIET_EFFECTS, EXERCISE_EFFECTS, apply_lifestyle_effects
 from meds_catalog import apply_meds_to_targets, load_meds_catalog
+import pdf_plan_ui
 from treatment_backcast import reconstruct_untreated_values
 
 
@@ -732,6 +733,18 @@ with input_col:
         with bmi_right:
             bmi_target = st.number_input("目標BMI", 10.0, 50.0, 24.0, 0.1)
 
+        st.markdown("**書類作成に使用する身体情報**")
+        body_left, body_middle, body_right = st.columns(3)
+        with body_left:
+            height_cm = st.number_input("身長 (cm)", 100.0, 220.0, 170.0, 0.1)
+        with body_middle:
+            weight_kg = st.number_input(
+                "体重 (kg)", 20.0, 250.0,
+                round(float(bmi_now) * (float(height_cm) / 100.0) ** 2, 1), 0.1,
+            )
+        with body_right:
+            dbp_now = st.number_input("拡張期血圧 (mmHg)", 40, 140, 90, 1)
+
         st.markdown("**糖尿病合併症予測に使用する腎指標**")
         egfr_left, egfr_right = st.columns(2)
         with egfr_left:
@@ -1095,3 +1108,45 @@ st.caption(
     "保存するのはIPから概算した国・都道府県のみで、IPアドレスそのものは保存しません。"
     "位置情報は実際の所在地と異なる場合があります。"
 )
+
+st.divider()
+if st.button(
+    "📄 書類作成へ進む",
+    type="primary",
+    use_container_width=True,
+    key="open_document_creation",
+):
+    st.session_state["show_document_creation"] = True
+
+if st.session_state.get("show_document_creation"):
+    if st.button("書類作成を閉じる", key="close_document_creation"):
+        st.session_state["show_document_creation"] = False
+        st.rerun()
+
+    lifestyle_labels = [DIET_EFFECTS[key].label for key in diet_intervention_keys]
+    if exercise_intervention_key is not None:
+        lifestyle_labels.append(EXERCISE_EFFECTS[exercise_intervention_key].label)
+
+    pdf_plan_ui.render_plan_section(
+        sex=sex,
+        age=age,
+        height_cm=height_cm,
+        weight_kg=weight_kg,
+        sbp_now=sbp_now,
+        dbp_now=dbp_now,
+        ldl_now=ldl_now,
+        a1c_now=a1c_now,
+        sbp_tgt_manual=sbp_tgt_manual,
+        a1c_tgt_manual=a1c_tgt_manual,
+        bmi_target=bmi_target,
+        bp_medications=tuple(med["key"] for med in selected_sbp_meds),
+        lipid_medications=tuple(med["key"] for med in selected_ldl_meds),
+        diabetes_medications=tuple(med["key"] for med in selected_a1c_meds),
+        lifestyle_interventions=tuple(lifestyle_labels),
+        risk_curves=cumulative_data,
+        risk_horizon_years=horizon,
+        sbp_after=sbp_tgt,
+        ldl_after=ldl_tgt,
+        a1c_after=a1c_tgt,
+        key_prefix="dm_care",
+    )

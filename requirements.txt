@@ -4,3 +4,5 @@ numpy
 plotly
 pyyaml
 openpyxl
+pypdf==6.14.2
+reportlab==4.4.3

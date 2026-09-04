@@ -205,3 +205,6 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# 記入済みPDFの生成物（帳票原本 docs/pdf_forms/*.pdf は管理対象）
+out/
