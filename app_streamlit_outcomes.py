@@ -795,17 +795,27 @@ with input_col:
                 )
                 st.caption("SBPは加算 / LDLは%低下を乗算 / HbA1cは加算")
 
-        if use_meds and meds_summary is not None:
+        selected_meds = selected_sbp_meds + selected_ldl_meds + selected_a1c_meds
+        if care_mode == "continue" and use_meds and meds_summary is not None:
             sbp_tgt = float(meds_summary["sbp_target"])
             ldl_tgt = float(meds_summary["ldl_target"])
             a1c_tgt = float(meds_summary["a1c_target"])
             annual_cost_yen = int(meds_summary["annual_cost_yen"])
             side_effects_md = meds_summary["side_effects_md"]
             target_metrics = st.columns(3)
-            metric_prefix = "中止時" if care_mode == "continue" else "目標"
-            target_metrics[0].metric(f"SBP{metric_prefix}", f"{sbp_tgt:.0f}")
-            target_metrics[1].metric(f"LDL{metric_prefix}", f"{ldl_tgt:.0f}")
-            target_metrics[2].metric(f"HbA1c{metric_prefix}", f"{a1c_tgt:.1f}")
+            target_metrics[0].metric("SBP中止時", f"{sbp_tgt:.0f}")
+            target_metrics[1].metric("LDL中止時", f"{ldl_tgt:.0f}")
+            target_metrics[2].metric("HbA1c中止時", f"{a1c_tgt:.1f}")
+        elif selected_meds and use_meds and meds_summary is not None:
+            sbp_tgt = float(meds_summary["sbp_target"])
+            ldl_tgt = float(meds_summary["ldl_target"])
+            a1c_tgt = float(meds_summary["a1c_target"])
+            annual_cost_yen = int(meds_summary["annual_cost_yen"])
+            side_effects_md = meds_summary["side_effects_md"]
+            target_metrics = st.columns(3)
+            target_metrics[0].metric("薬剤介入後SBP", f"{sbp_tgt:.0f}")
+            target_metrics[1].metric("薬剤介入後LDL", f"{ldl_tgt:.0f}")
+            target_metrics[2].metric("薬剤介入後HbA1c", f"{a1c_tgt:.1f}")
         else:
             sbp_tgt = float(sbp_tgt_manual)
             ldl_tgt = float(ldl_tgt_manual)
@@ -813,7 +823,6 @@ with input_col:
             annual_cost_yen = 0
             side_effects_md = ""
 
-        selected_meds = selected_sbp_meds + selected_ldl_meds + selected_a1c_meds
         if use_meds and meds_summary is not None and selected_meds:
             st.divider()
             st.metric("年間薬剤費（合計）", f"{annual_cost_yen:,} 円/年")
@@ -836,6 +845,10 @@ with input_col:
             placeholder="食事介入を選択",
         )
         if diet_intervention_keys:
+            if not selected_meds:
+                sbp_tgt = float(sbp_now)
+                ldl_tgt = float(ldl_now)
+                a1c_tgt = float(a1c_now)
             diet_result = apply_lifestyle_effects(
                 sbp=sbp_tgt,
                 ldl=ldl_tgt,
@@ -875,6 +888,10 @@ with input_col:
             key="exercise_intervention",
         )
         if exercise_intervention_key is not None:
+            if not selected_meds and not diet_intervention_keys:
+                sbp_tgt = float(sbp_now)
+                ldl_tgt = float(ldl_now)
+                a1c_tgt = float(a1c_now)
             exercise_effect = EXERCISE_EFFECTS[exercise_intervention_key]
             st.caption(exercise_effect.definition)
             exercise_result = apply_lifestyle_effects(
@@ -897,6 +914,8 @@ with input_col:
                 st.link_button("根拠文献を開く", exercise_effect.source_url)
         else:
             st.caption("運動療法を選択すると、予測検査値と6アウトカムへ反映します。")
+      if selected_meds or diet_intervention_keys or exercise_intervention_key is not None:
+        st.info("介入を選択中は、手入力した目標値を使わず、現在値に選択した効果だけを反映しています。")
     else:
         diet_intervention_keys = []
         exercise_intervention_key = None
