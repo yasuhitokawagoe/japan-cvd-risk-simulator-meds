@@ -1245,7 +1245,6 @@ with result_col:
             bone_col1, bone_col2 = st.columns(2)
             with bone_col1:
                 prior_fragility_fracture = st.checkbox("脆弱性骨折歴あり")
-                fall_history = st.checkbox("過去1年の転倒歴あり")
                 peripheral_neuropathy = st.checkbox("糖尿病性末梢神経障害あり")
             with bone_col2:
                 glucocorticoid_use = st.checkbox("長期ステロイド使用あり")
@@ -1313,13 +1312,12 @@ with result_col:
                     st.warning("高度腎機能低下ではビスホスホネートの適否を個別に確認してください。")
             st.caption(
                 "2型糖尿病RR 1.33と、骨折歴がある場合は既往骨折HR 1.82を反映。"
-                "転倒・神経障害・ステロイドは注意喚起だけに使い、未検証の上乗せはしません。"
+                "神経障害・ステロイドは注意喚起だけに使い、未検証の上乗せはしません。"
             )
         bone_flags = bone_health_flags(
             age=float(age), sex=sex, bmi=float(bmi_now), egfr=float(egfr_now),
             diabetes_medications=selected_a1c_meds,
             prior_fragility_fracture=prior_fragility_fracture,
-            fall_history=fall_history,
             peripheral_neuropathy=peripheral_neuropathy,
             glucocorticoid_use=glucocorticoid_use,
             t_score=t_score,

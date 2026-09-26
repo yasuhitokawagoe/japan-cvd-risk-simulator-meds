@@ -117,7 +117,7 @@ def bone_density_category(t_score: float | None) -> str:
 def bone_health_flags(
     *, age: float, sex: str, bmi: float, egfr: float,
     diabetes_medications: Iterable[Mapping],
-    prior_fragility_fracture: bool = False, fall_history: bool = False,
+    prior_fragility_fracture: bool = False,
     peripheral_neuropathy: bool = False, glucocorticoid_use: bool = False,
     t_score: float | None = None,
 ) -> list[str]:
@@ -131,8 +131,6 @@ def bone_health_flags(
         flags.append("腎機能低下があり、骨・ミネラル代謝の評価を検討")
     if prior_fragility_fracture:
         flags.append("脆弱性骨折歴があり、二次骨折予防の評価を優先")
-    if fall_history:
-        flags.append("過去1年の転倒歴があり、転倒予防介入を検討")
     if peripheral_neuropathy:
         flags.append("末梢神経障害があり、転倒・骨折リスク評価を検討")
     if glucocorticoid_use:
