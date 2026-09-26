@@ -60,11 +60,36 @@ ExaltoらのDiabetes Specific Dementia Risk Score開発コホートで報告さ�
 - Cheng HW et al. Diabetes Metab Res Rev. 2025;41. DOI: 10.1002/dmrr.70058. [Consensus](https://consensus.app/papers/impact-of-glucagon%E2%80%90like-peptide%E2%80%901-receptor-agonists-on-cheng-yang/89acae5b8222597b836f4beedcfe34d8/)
 - Li ZL et al. Alzheimers Res Ther. 2024;16. DOI: 10.1186/s13195-024-01645-y. [Consensus](https://consensus.app/papers/antidiabetic-agents-and-the-risks-of-dementia-in-patients-li-lin/9856bad4379c53e1acf01068f0233af3/)
 
+#### スタチン
+
+- 採用値: 0.87（観察研究）
+- 観察研究55件、700万人超のメタ解析で全体HR 0.86（95%CI 0.82–0.91）、2型糖尿病サブグループHR 0.87（95%CI 0.85–0.89）。
+- RCTでは認知症予防効果が確立していないため、画面上で観察研究由来と明示する。同一クラスの複数選択は重複計上しない。
+
+出典: Westphal F et al. Alzheimers Dement (N Y). 2025;11. DOI: 10.1002/trc2.70039. [Consensus](https://consensus.app/papers/statin-use-and-dementia-risk-a-systematic-review-and-westphal-lopes/ee237a45c6cc5bcd9113cdfa6f85426f/)
+
+#### SGLT2阻害薬
+
+- 採用値: 0.56（観察研究）
+- 41観察研究、3,307,483人のネットワークメタ解析で、非使用者に対する全認知症OR 0.56（95%CI 0.45–0.69）。RCTでは薬剤間・プラセボ間の認知症リスク差は確立していない。
+
+#### ビグアナイド（メトホルミン）
+
+- 採用値: 0.89（観察研究の保守値）
+- 同ネットワークメタ解析で全認知症OR 0.89（95%CI 0.80–0.99）。別の20コホート、3,463,100人のメタ解析では非使用者比HR 0.76だったが、I² 98.9%と異質性が高いため0.89を使用する。
+
+出典:
+
+- Li ZL et al. Alzheimers Res Ther. 2024;16. DOI: 10.1186/s13195-024-01645-y. [Consensus](https://consensus.app/papers/antidiabetic-agents-and-the-risks-of-dementia-in-patients-li-lin/9856bad4379c53e1acf01068f0233af3/)
+- Tang C et al. Diabetes Obes Metab. 2025;27:1992-2001. DOI: 10.1111/dom.16192. [Consensus](https://consensus.app/papers/association-of-metformin-use-with-risk-of-dementia-in-tang-hao/92b46ddd42815880a49c1f15d978e5e5/)
+
 ### 曲線へ採用しない関連
 
-- スタチン: 観察研究55件・700万人超では認知症HR 0.86、糖尿病群HR 0.87だが、脂質低下療法のRCTでは有意な認知症予防効果が確立していない。交絡の可能性が残るため曲線を動かさない。
 - HbA1c強化: 厳格血糖管理RCTでは認知機能低下予防が一貫せず、低血糖の害も考慮し、HbA1c低下量から認知症効果を推定しない。
-- 併用: 降圧とGLP-1の直接的な併用効果試験はない。両方選択時は独立・乗算を仮定するため、その旨を画面に表示する。
+- DPP-4阻害薬: Alzheimer病ではOR 0.73が報告されたが、全認知症の有意な予防効果が示されていないため採用しない。
+- GIP/GLP-1受容体作動薬: GLP-1単独の結果をチルゼパチドへ外挿しない。
+- PCSK9阻害薬・吸収阻害薬: 認知症予防の直接的な効果量を採用できる根拠がない。
+- 併用: 異なる薬剤クラスの直接的な併用効果試験はない。選択時は独立・乗算を仮定し、同一クラスは1回だけ計上する。
 
 ## 骨粗鬆症・骨折
 

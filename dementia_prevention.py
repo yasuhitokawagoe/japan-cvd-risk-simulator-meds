@@ -52,10 +52,58 @@ GLP1_EVIDENCE = DementiaEvidence(
     ),
 )
 
+STATIN_EVIDENCE = DementiaEvidence(
+    key="statin",
+    label="スタチン",
+    relative_effect="認知症発症ハザード 約13%低下（観察研究）",
+    estimate=0.87,
+    estimate_type="HR",
+    evidence_summary=(
+        "観察研究55件・700万人超のメタ解析。2型糖尿病サブグループで認知症 HR 0.87"
+        "（95%CI 0.85–0.89）。RCTでは予防効果未確立のため観察研究由来として表示。"
+    ),
+    source_url=(
+        "https://consensus.app/papers/statin-use-and-dementia-risk-a-systematic-review-and-"
+        "westphal-lopes/ee237a45c6cc5bcd9113cdfa6f85426f/"
+    ),
+)
+
+SGLT2_EVIDENCE = DementiaEvidence(
+    key="sglt2",
+    label="SGLT2阻害薬",
+    relative_effect="認知症オッズ 約44%低下（観察研究）",
+    estimate=0.56,
+    estimate_type="OR",
+    evidence_summary=(
+        "2型糖尿病の観察研究ネットワークメタ解析（41研究・3,307,483人）で、"
+        "非使用者に対する認知症 OR 0.56（95%CI 0.45–0.69）。RCTでは未確立。"
+    ),
+    source_url=(
+        "https://consensus.app/papers/antidiabetic-agents-and-the-risks-of-dementia-in-patients-"
+        "li-lin/9856bad4379c53e1acf01068f0233af3/"
+    ),
+)
+
+METFORMIN_EVIDENCE = DementiaEvidence(
+    key="metformin",
+    label="ビグアナイド（メトホルミン）",
+    relative_effect="認知症オッズ 約11%低下（観察研究）",
+    estimate=0.89,
+    estimate_type="OR",
+    evidence_summary=(
+        "2型糖尿病の観察研究ネットワークメタ解析で、非使用者に対する認知症 OR 0.89"
+        "（95%CI 0.80–0.99）。別メタ解析ではHR 0.76だが異質性が高く、保守値を採用。"
+    ),
+    source_url=(
+        "https://consensus.app/papers/antidiabetic-agents-and-the-risks-of-dementia-in-patients-"
+        "li-lin/9856bad4379c53e1acf01068f0233af3/"
+    ),
+)
+
 
 STATIN_EVIDENCE_URL = (
-    "https://consensus.app/papers/association-of-lipidlowering-therapy-with-dementia-and-"
-    "reddin-stankard/d0fb13490ace5644b6f64e7e9da308ae/"
+    "https://consensus.app/papers/statin-use-and-dementia-risk-a-systematic-review-and-"
+    "westphal-lopes/ee237a45c6cc5bcd9113cdfa6f85426f/"
 )
 
 GLUCOSE_CONTROL_EVIDENCE_URL = (
@@ -112,6 +160,10 @@ def selected_dementia_evidence(
     if bp:
         supported.append(BP_LOWERING_EVIDENCE)
 
+    has_statin = any("スタチン" in str(med.get("category", "")) for med in lipid)
+    if has_statin:
+        supported.append(STATIN_EVIDENCE)
+
     has_glp1 = any(
         str(med.get("category", "")).startswith("GLP-1受容体作動薬")
         for med in diabetes
@@ -119,8 +171,22 @@ def selected_dementia_evidence(
     if has_glp1:
         supported.append(GLP1_EVIDENCE)
 
-    has_statin = any("スタチン" in str(med.get("category", "")) for med in lipid)
-    has_other_glucose_drug = bool(diabetes) and not has_glp1
+    has_sglt2 = any("SGLT2阻害薬" in str(med.get("category", "")) for med in diabetes)
+    if has_sglt2:
+        supported.append(SGLT2_EVIDENCE)
+
+    has_metformin = any("ビグアナイド" in str(med.get("category", "")) for med in diabetes)
+    if has_metformin:
+        supported.append(METFORMIN_EVIDENCE)
+
+    supported_glucose_categories = ("GLP-1受容体作動薬", "SGLT2阻害薬", "ビグアナイド")
+    has_other_glucose_drug = any(
+        not any(
+            str(med.get("category", "")).startswith(category)
+            for category in supported_glucose_categories
+        )
+        for med in diabetes
+    )
 
     return {
         "supported": supported,

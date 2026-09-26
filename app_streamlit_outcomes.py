@@ -13,9 +13,7 @@ from bone_health import (
 )
 from calc_engine_outcomes import OutcomesEngine
 from dementia_prevention import (
-    BP_LOWERING_EVIDENCE,
     DSDRS_EVIDENCE_URL,
-    GLP1_EVIDENCE,
     GLUCOSE_CONTROL_EVIDENCE_URL,
     STATIN_EVIDENCE_URL,
     dementia_curve,
@@ -503,29 +501,21 @@ def build_medication_contributions(outcome: str, horizon: int):
         running_risk = dementia_curve(age=float(age), years=horizon)["risk"][-1]
         running_hr = 1.0
         contributions = []
-        if selected_sbp_meds:
-            next_hr = running_hr * BP_LOWERING_EVIDENCE.estimate
+        evidence_set = selected_dementia_evidence(
+            bp_medications=selected_sbp_meds,
+            lipid_medications=selected_ldl_meds,
+            diabetes_medications=selected_a1c_meds,
+        )
+        for evidence in evidence_set["supported"]:
+            next_hr = running_hr * evidence.estimate
             next_risk = dementia_curve(
                 age=float(age), years=horizon, hazard_ratio=next_hr,
             )["risk"][-1]
             contributions.append({
-                "name": "降圧治療（選択した降圧薬全体）",
+                "name": evidence.label,
                 "delta": max(0.0, (running_risk - next_risk) * 100.0),
             })
             running_risk, running_hr = next_risk, next_hr
-        has_glp1 = any(
-            str(med.get("category", "")).startswith("GLP-1受容体作動薬")
-            for med in selected_a1c_meds
-        )
-        if has_glp1:
-            next_hr = running_hr * GLP1_EVIDENCE.estimate
-            next_risk = dementia_curve(
-                age=float(age), years=horizon, hazard_ratio=next_hr,
-            )["risk"][-1]
-            contributions.append({
-                "name": "GLP-1受容体作動薬",
-                "delta": max(0.0, (running_risk - next_risk) * 100.0),
-            })
         return contributions
 
     selected = {"sbp": [], "ldl": [], "hba1c": []}
@@ -1159,25 +1149,29 @@ with result_col:
             )
             supported = dementia_evidence["supported"]
             if supported:
-                evidence_columns = st.columns(len(supported))
-                for column, evidence in zip(evidence_columns, supported):
+                evidence_columns = st.columns(min(3, len(supported)))
+                for index, evidence in enumerate(supported):
+                    column = evidence_columns[index % len(evidence_columns)]
                     column.metric(evidence.label, evidence.relative_effect)
                     column.caption(evidence.evidence_summary)
-                    column.link_button("根拠論文", evidence.source_url)
+                    column.link_button(
+                        "根拠論文", evidence.source_url,
+                        key=f"dementia_evidence_{evidence.key}",
+                    )
 
             else:
                 st.info("降圧薬またはGLP-1受容体作動薬を選ぶと、認知症予防の研究結果を表示します。")
 
             if dementia_evidence["has_statin"]:
-                st.warning(
-                    "スタチンは観察研究では認知症リスク低下が示されていますが、"
-                    "RCTメタ解析では有意な予防効果が確認されていないため、効果量には加えていません。"
+                st.info(
+                    "スタチンは2型糖尿病サブグループの観察研究HR 0.87を曲線へ反映しています。"
+                    "RCTでは認知症予防効果が確立していないため、観察研究由来の推定です。"
                 )
-                st.link_button("脂質低下療法のRCTメタ解析", STATIN_EVIDENCE_URL)
+                st.link_button("スタチンの観察研究メタ解析", STATIN_EVIDENCE_URL)
             if dementia_evidence["has_other_glucose_drug"]:
                 st.warning(
-                    "HbA1cを厳格に下げること自体は、RCTメタ解析で認知機能低下予防が"
-                    "一貫して確認されていないため、効果量には加えていません。"
+                    "選択したその他の糖尿病薬は、全認知症の予防効果が確立していないため"
+                    "曲線へ加えていません。HbA1c低下量だけから認知症効果は推定しません。"
                 )
                 st.link_button("厳格血糖管理のRCTメタ解析", GLUCOSE_CONTROL_EVIDENCE_URL)
 

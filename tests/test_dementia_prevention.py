@@ -10,15 +10,29 @@ def test_bp_and_glp1_are_returned_as_supported_evidence():
     assert [item.key for item in result["supported"]] == ["bp_lowering", "glp1_ra"]
 
 
-def test_statin_and_hba1c_lowering_are_not_counted_as_preventive_effects():
+def test_statin_is_counted_but_unsupported_dpp4_is_not():
     result = selected_dementia_evidence(
         bp_medications=[],
         lipid_medications=[{"category": "スタチン"}],
         diabetes_medications=[{"category": "DPP-4阻害薬"}],
     )
-    assert result["supported"] == []
+    assert [item.key for item in result["supported"]] == ["statin"]
     assert result["has_statin"] is True
     assert result["has_other_glucose_drug"] is True
+
+
+def test_sglt2_and_metformin_are_returned_once_per_class():
+    result = selected_dementia_evidence(
+        bp_medications=[],
+        lipid_medications=[],
+        diabetes_medications=[
+            {"category": "SGLT2阻害薬"},
+            {"category": "SGLT2阻害薬"},
+            {"category": "ビグアナイド"},
+        ],
+    )
+    assert [item.key for item in result["supported"]] == ["sglt2", "metformin"]
+    assert result["has_other_glucose_drug"] is False
 
 
 def test_dual_gip_glp1_is_not_extrapolated_from_glp1_trials():
