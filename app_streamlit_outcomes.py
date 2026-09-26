@@ -5,6 +5,11 @@ import streamlit as st
 
 from access_analytics import record_visit, total_visits
 from calc_engine_outcomes import OutcomesEngine
+from dementia_prevention import (
+    GLUCOSE_CONTROL_EVIDENCE_URL,
+    STATIN_EVIDENCE_URL,
+    selected_dementia_evidence,
+)
 from dm_outcomes import ACR_CATEGORY_MG_G, DIABETES_OUTCOMES, DiabetesOutcomeModel
 from lifestyle_interventions import DIET_EFFECTS, EXERCISE_EFFECTS, apply_lifestyle_effects
 from meds_catalog import apply_meds_to_targets, load_meds_catalog
@@ -1044,6 +1049,41 @@ with result_col:
                     delta=f"{outcome_arr:.1f} pt減少",
                     delta_color="normal",
                 )
+
+    if care_mode != "continue":
+        dementia_evidence = selected_dementia_evidence(
+            bp_medications=selected_sbp_meds,
+            lipid_medications=selected_ldl_meds,
+            diabetes_medications=selected_a1c_meds,
+        )
+        with st.container(border=True):
+            st.markdown("#### 🧠 認知症予防（研究エビデンス）")
+            st.caption(
+                "患者別の認知症発症率ではなく、無作為化試験で報告された研究集団の"
+                "相対効果です。既存の6アウトカムとは合算しません。"
+            )
+            supported = dementia_evidence["supported"]
+            if supported:
+                evidence_columns = st.columns(len(supported))
+                for column, evidence in zip(evidence_columns, supported):
+                    column.metric(evidence.label, evidence.relative_effect)
+                    column.caption(evidence.evidence_summary)
+                    column.link_button("根拠論文", evidence.source_url)
+            else:
+                st.info("降圧薬またはGLP-1受容体作動薬を選ぶと、認知症予防の研究結果を表示します。")
+
+            if dementia_evidence["has_statin"]:
+                st.warning(
+                    "スタチンは観察研究では認知症リスク低下が示されていますが、"
+                    "RCTメタ解析では有意な予防効果が確認されていないため、効果量には加えていません。"
+                )
+                st.link_button("脂質低下療法のRCTメタ解析", STATIN_EVIDENCE_URL)
+            if dementia_evidence["has_other_glucose_drug"]:
+                st.warning(
+                    "HbA1cを厳格に下げること自体は、RCTメタ解析で認知機能低下予防が"
+                    "一貫して確認されていないため、効果量には加えていません。"
+                )
+                st.link_button("厳格血糖管理のRCTメタ解析", GLUCOSE_CONTROL_EVIDENCE_URL)
 
     if care_mode == "continue" and selected_meds and treatment_years > 0:
         past_benefit = calculate_past_treatment_benefit(int(treatment_years))
