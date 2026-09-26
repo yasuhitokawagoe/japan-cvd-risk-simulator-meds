@@ -242,7 +242,7 @@ except Exception as exc:
 
 
 def medication_selector(label: str, medications: list[dict], key_prefix: str) -> list[dict]:
-    """薬剤クラス → 種類 → 用量の順で選ぶ。同一クラスは1剤まで。"""
+    """薬剤クラス → 種類（複数可） → 薬剤ごとの用量の順で選ぶ。"""
     categories = list(dict.fromkeys(med["category"] for med in medications))
     selected_categories = st.multiselect(
         "1. 薬剤クラス",
@@ -256,24 +256,25 @@ def medication_selector(label: str, medications: list[dict], key_prefix: str) ->
         drug_names = list(dict.fromkeys(med["drug_name"] for med in class_meds))
         with st.container(border=True):
             st.markdown(f"**{category}**")
-            drug_column, dose_column = st.columns(2)
-            with drug_column:
-                drug_name = st.selectbox(
-                    "2. 種類",
-                    drug_names,
-                    key=f"{key_prefix}_{category}_drug",
-                )
-            matching_meds = [med for med in class_meds if med["drug_name"] == drug_name]
-            dose_labels = [med["dose_label"] for med in matching_meds]
-            with dose_column:
+            selected_drug_names = st.multiselect(
+                "2. 種類（複数選択可）",
+                drug_names,
+                key=f"{key_prefix}_{category}_drugs",
+                placeholder="薬剤を選択",
+            )
+            for drug_name in selected_drug_names:
+                matching_meds = [
+                    med for med in class_meds if med["drug_name"] == drug_name
+                ]
+                dose_labels = [med["dose_label"] for med in matching_meds]
                 dose_label = st.selectbox(
-                    "3. 用量",
+                    f"3. {drug_name}の用量",
                     dose_labels,
                     key=f"{key_prefix}_{category}_{drug_name}_dose",
                 )
-            selected.append(
-                next(med for med in matching_meds if med["dose_label"] == dose_label)
-            )
+                selected.append(
+                    next(med for med in matching_meds if med["dose_label"] == dose_label)
+                )
     return selected
 
 

@@ -232,9 +232,14 @@ def load_meds_catalog(
     for m in meds:
         out[m.domain].append(m.to_dict())
     
-    # 画面で見やすいように、カテゴリ→薬剤名でソート
+    # 画面で見やすいように、カテゴリ→薬剤名→用量でソート
     def sort_key(d):
-        return (d.get("category", ""), d.get("key", ""))
+        dose_match = re.match(r"\d+(?:\.\d+)?", d.get("dose_label", ""))
+        dose_value = float(dose_match.group()) if dose_match else float("inf")
+        return (
+            d.get("category", ""), d.get("drug_name", ""),
+            dose_value, d.get("dose_label", ""),
+        )
     
     for k in out:
         out[k] = sorted(out[k], key=sort_key)
