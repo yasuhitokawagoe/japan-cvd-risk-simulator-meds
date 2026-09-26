@@ -3,7 +3,7 @@ import numpy as np
 import plotly.graph_objects as go
 import streamlit as st
 
-from access_analytics import record_visit, total_visits
+from access_analytics import record_visit, total_visits, visit_counts
 from bone_health import (
     DIABETES_DRUG_FRACTURE_URL,
     DIABETES_FRACTURE_MODEL_URL,
@@ -192,6 +192,12 @@ if "access_stats" not in st.session_state:
             "country_code": "不明",
         }
 access_stats = st.session_state.access_stats
+try:
+    # Refresh the cumulative count without creating another visit on widget reruns.
+    access_stats = {**access_stats, **visit_counts()}
+except Exception:
+    pass
+access_count_label = ("約 " if access_stats.get("historical_estimate", 0) else "") + f"{access_stats['total']:,}"
 
 st.markdown(
     f"""
@@ -202,7 +208,7 @@ st.markdown(
         <h1 class="hero-title">生活習慣病療養指導シュミレーター</h1>
         <p class="hero-subtitle">血糖・血圧・腎機能と治療による将来リスクの変化を可視化し、合併症予防の目標を一緒に考えます。教育・共有意思決定支援用。</p>
       </div>
-      <div class="hero-badge" translate="no" data-count="{access_stats['total']:,}"></div>
+      <div class="hero-badge" translate="no" data-count="{access_count_label}"></div>
     </div>
     """,
     unsafe_allow_html=True,
@@ -1522,6 +1528,9 @@ st.caption(
     "保存するのはIPから概算した国・都道府県のみで、IPアドレスそのものは保存しません。"
     "位置情報は実際の所在地と異なる場合があります。"
 )
+
+if access_stats.get("historical_estimate", 0):
+    st.caption(f"※ 累計アクセスは過去約{access_stats['historical_estimate']:,}件への概算補正を含みます。補正後の訪問は別途実測で加算しています。")
 
 st.divider()
 if st.button(
