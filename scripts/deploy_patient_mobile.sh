@@ -15,6 +15,7 @@ mobile_revision=$(git rev-parse --short HEAD)
 mobile_stage=$(mktemp -d /private/tmp/dm-care-mobile.XXXXXX)
 git archive HEAD | tar -x -C "$mobile_stage"
 cp "$mobile_stage/railway.mobile.json" "$mobile_stage/railway.json"
+cp "$mobile_stage/Dockerfile.mobile" "$mobile_stage/Dockerfile"
 printf 'Deploying commit %s from %s\n' "$mobile_revision" "$mobile_stage"
 railway up "$mobile_stage" --path-as-root \
   --project 9aff4332-215b-452a-a15d-3311a749b8f4 \

@@ -74,6 +74,12 @@ bash scripts/deploy_patient_mobile.sh
 ```
 
 コミット済みブランチを一時ディレクトリに展開し、その中だけで
-`railway.mobile.json` を `railway.json` にコピーする。既存PC用の
+`railway.mobile.json` を `railway.json`、`Dockerfile.mobile` を `Dockerfile` にコピーする。既存PC用の
 `railway.json`/Dockerfileは変更しない。スクリプト内の公開先はスマホサービスIDに固定。
 公開後はヘルスチェックと実画面の両方を確認する。
+
+2026-09-26の初回公開では、新規サービスで旧形式のconfig-as-codeの起動指定が
+適用されず、DockerfileのPC用CMDで起動した。既存2サービスは変更していない。
+スマホ専用DockerfileのCMDにも明示し、設定ファイルの適用有無に依存しないよう修正。
+新規サービスの旧形式ヘルスチェック設定にも依存せず、公開後に実際の
+`/_stcore/health` とブラウザ上の入口・結果を確認する。
