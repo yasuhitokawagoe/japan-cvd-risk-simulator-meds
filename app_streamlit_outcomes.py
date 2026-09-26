@@ -241,6 +241,42 @@ except Exception as exc:
     catalog_error = str(exc)
 
 
+def medication_selector(label: str, medications: list[dict], key_prefix: str) -> list[dict]:
+    """薬剤クラス → 種類 → 用量の順で選ぶ。同一クラスは1剤まで。"""
+    categories = list(dict.fromkeys(med["category"] for med in medications))
+    selected_categories = st.multiselect(
+        "1. 薬剤クラス",
+        categories,
+        key=f"{key_prefix}_categories",
+        placeholder=f"{label}のクラスを選択",
+    )
+    selected: list[dict] = []
+    for category in selected_categories:
+        class_meds = [med for med in medications if med["category"] == category]
+        drug_names = list(dict.fromkeys(med["drug_name"] for med in class_meds))
+        with st.container(border=True):
+            st.markdown(f"**{category}**")
+            drug_column, dose_column = st.columns(2)
+            with drug_column:
+                drug_name = st.selectbox(
+                    "2. 種類",
+                    drug_names,
+                    key=f"{key_prefix}_{category}_drug",
+                )
+            matching_meds = [med for med in class_meds if med["drug_name"] == drug_name]
+            dose_labels = [med["dose_label"] for med in matching_meds]
+            with dose_column:
+                dose_label = st.selectbox(
+                    "3. 用量",
+                    dose_labels,
+                    key=f"{key_prefix}_{category}_{drug_name}_dose",
+                )
+            selected.append(
+                next(med for med in matching_meds if med["dose_label"] == dose_label)
+            )
+    return selected
+
+
 def _years_from_choice(choice: str) -> int:
     return {"5-year": 5, "10-year": 10, "20-year": 20, "30-year": 30, "50-year": 50}[choice]
 
@@ -911,16 +947,29 @@ with input_col:
             st.caption(catalog_error)
             use_meds = False
         elif use_meds and meds_catalog:
-            sbp_options = [med["key"] for med in meds_catalog["sbp"]]
-            ldl_options = [med["key"] for med in meds_catalog["ldl"]]
-            a1c_options = [med["key"] for med in meds_catalog["hba1c"]]
             med_label_prefix = "現在の" if care_mode == "continue" else ""
-            sbp_keys = st.multiselect(f"{med_label_prefix}降圧薬", sbp_options, key="current_sbp_meds")
-            ldl_keys = st.multiselect(f"{med_label_prefix}脂質薬", ldl_options, key="current_ldl_meds")
-            a1c_keys = st.multiselect(f"{med_label_prefix}糖尿病薬", a1c_options, key="current_a1c_meds")
-            selected_sbp_meds = [med for med in meds_catalog["sbp"] if med["key"] in sbp_keys]
-            selected_ldl_meds = [med for med in meds_catalog["ldl"] if med["key"] in ldl_keys]
-            selected_a1c_meds = [med for med in meds_catalog["hba1c"] if med["key"] in a1c_keys]
+            sbp_tab, ldl_tab, a1c_tab = st.tabs([
+                f"{med_label_prefix}降圧薬",
+                f"{med_label_prefix}脂質薬",
+                f"{med_label_prefix}糖尿病薬",
+            ])
+            with sbp_tab:
+                selected_sbp_meds = medication_selector(
+                    "降圧薬", meds_catalog["sbp"], "current_sbp_meds",
+                )
+            with ldl_tab:
+                selected_ldl_meds = medication_selector(
+                    "脂質薬", meds_catalog["ldl"], "current_ldl_meds",
+                )
+            with a1c_tab:
+                selected_a1c_meds = medication_selector(
+                    "糖尿病薬", meds_catalog["hba1c"], "current_a1c_meds",
+                )
+            all_selected_labels = [med["key"] for med in (
+                selected_sbp_meds + selected_ldl_meds + selected_a1c_meds
+            )]
+            if all_selected_labels:
+                st.caption("選択中: " + " / ".join(all_selected_labels))
             if care_mode == "continue":
                 untreated = reconstruct_untreated_values(
                     sbp_now=float(sbp_now), ldl_now=float(ldl_now), a1c_now=float(a1c_now),

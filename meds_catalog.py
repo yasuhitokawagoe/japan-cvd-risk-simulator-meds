@@ -22,6 +22,19 @@ def _norm(s: Any) -> str:
     s = s.replace("\u3000", " ").strip()     # 全角スペース→半角
     return s
 
+
+def split_medication_key(key: str) -> Tuple[str, str]:
+    """「薬剤名 用量」を3段階選択用の薬剤名と用量に分ける。"""
+    normalized = _norm(key)
+    match = re.search(
+        r"(?:\s+|(?<=[）)]))(?=\d+(?:\.\d+)?(?:/\d+(?:\.\d+)?)?\s*(?:mg|g|μg|µg|単位)(?:\b|/))",
+        normalized,
+        flags=re.I,
+    )
+    if not match:
+        return normalized, "標準用量"
+    return normalized[:match.start()].strip(), normalized[match.end():].strip()
+
 def _parse_yen_per_year(x: Any) -> Optional[int]:
     """'4,088 円/年' などから整数円を返す"""
     if x is None:
@@ -125,9 +138,12 @@ class Med:
     ref: str
     
     def to_dict(self) -> Dict[str, Any]:
+        drug_name, dose_label = split_medication_key(self.key)
         return {
             "key": self.key,
             "category": self.category,
+            "drug_name": drug_name,
+            "dose_label": dose_label,
             "domain": self.domain,
             "effect": {"mean": self.mean, "low": self.low, "high": self.high},
             "annual_cost_yen": self.annual_cost_yen,
