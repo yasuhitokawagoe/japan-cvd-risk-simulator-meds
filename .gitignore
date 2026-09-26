@@ -208,3 +208,7 @@ __marimo__/
 
 # 記入済みPDFの生成物（帳票原本 docs/pdf_forms/*.pdf は管理対象）
 out/
+
+# Local Codex build and review artifacts
+.codex_tmp_*/
+outputs/
