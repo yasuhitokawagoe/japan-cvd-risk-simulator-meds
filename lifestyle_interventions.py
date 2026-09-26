@@ -51,33 +51,38 @@ DIET_EFFECTS = {
 }
 
 
+# Michielsen et al., Fig. 3 (DOI: 10.1186/s12933-025-03048-1).
+# LDL: mmol/L * 38.67 -> mg/dL, rounded to two decimals.
+# CAT SBP is -1.24 in Fig. 3 / abstract; the prose reports -1.14 (inconsistent).
+EXERCISE_SOURCE_URL = "https://pmc.ncbi.nlm.nih.gov/articles/PMC12859889/"
+
 EXERCISE_EFFECTS = {
     "aerobic_moderate": LifestyleEffect(
         key="aerobic_moderate", label="中強度有酸素運動",
         definition="3.0-5.9 METs、週150-210分（速歩など）",
-        sbp_delta=-1.24, ldl_delta_mg=-6.96, a1c_delta=-0.62,
+        sbp_delta=-1.24, ldl_delta_mg=-7.35, a1c_delta=-0.62,
         population="2型糖尿病成人", requires_diabetes=True,
-        evidence_summary="100 RCT・7,195人。持続的有酸素運動でHbA1c -0.62%。SBP/LDLは保守的下限。",
+        evidence_summary="100 RCT・7,195人の解析。運動種別の平均値：SBP -1.24 mmHg、LDL -7.35 mg/dL、HbA1c -0.62ポイント（図3）。個人の効果を保証する値ではない。",
         endpoint_evidence="死亡率データは主に観察研究のため直接RRは掛けない。",
-        source_url="https://consensus.app/papers/the-effect-of-exercise-characteristics-on-hba1c-and-other-michielsen-yagiz/64edf5b242b4590abba16d5d9d958843/",
+        source_url=EXERCISE_SOURCE_URL,
     ),
     "combined": LifestyleEffect(
         key="combined", label="有酸素＋筋力トレーニング",
         definition="中強度有酸素運動＋週2-3回の筋力トレーニング、計150-210分/週",
-        sbp_delta=-1.24, ldl_delta_mg=-6.96, a1c_delta=-0.74,
+        sbp_delta=-2.94, ldl_delta_mg=-11.99, a1c_delta=-0.74,
         population="2型糖尿病成人", requires_diabetes=True,
-        evidence_summary="100 RCT・7,195人。複合運動でHbA1c -0.74%（最も大きい）。SBP/LDLは保守的下限。",
+        evidence_summary="100 RCT・7,195人の解析。運動種別の平均値：SBP -2.94 mmHg、LDL -11.99 mg/dL、HbA1c -0.74ポイント（図3）。個人の効果を保証する値ではない。",
         endpoint_evidence="死亡率データは主に観察研究のため直接RRは掛けない。",
-        source_url="https://consensus.app/papers/the-effect-of-exercise-characteristics-on-hba1c-and-other-michielsen-yagiz/64edf5b242b4590abba16d5d9d958843/",
+        source_url=EXERCISE_SOURCE_URL,
     ),
     "hiit": LifestyleEffect(
         key="hiit", label="高強度インターバル運動",
         definition="6 METs以上の高強度区間と回復区間を反復（医療者確認が必要）",
-        sbp_delta=-1.24, ldl_delta_mg=-6.96, a1c_delta=-0.71,
+        sbp_delta=-2.64, ldl_delta_mg=-11.21, a1c_delta=-0.71,
         population="2型糖尿病成人", requires_diabetes=True,
-        evidence_summary="100 RCT・7,195人。HIITでHbA1c -0.71%。SBP/LDLは保守的下限。",
+        evidence_summary="100 RCT・7,195人の解析。運動種別の平均値：SBP -2.64 mmHg、LDL -11.21 mg/dL、HbA1c -0.71ポイント（図3）。個人の効果を保証する値ではない。",
         endpoint_evidence="中強度より死亡率をさらに下げる確証なし。直接RRは掛けない。",
-        source_url="https://consensus.app/papers/do-vigorousintensity-and-moderateintensity-physical-lopez-sabag/23c6bd3a32d054b7bdebecfc8282dbb4/",
+        source_url=EXERCISE_SOURCE_URL,
     ),
 }
 
