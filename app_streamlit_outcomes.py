@@ -18,10 +18,8 @@ from bone_health import (
 from calc_engine_outcomes import OutcomesEngine
 from dementia_prevention import (
     DSDRS_EVIDENCE_URL,
-    GLUCOSE_CONTROL_EVIDENCE_URL,
     JAPAN_DEMENTIA_COHORT_URL,
     LDL_LEVEL_EVIDENCE_URL,
-    STATIN_EVIDENCE_URL,
     dementia_biomarker_hazard_ratio,
     dementia_curve,
     selected_dementia_evidence,
@@ -1313,46 +1311,6 @@ with result_col:
                     delta=f"{outcome_arr:.1f} pt減少",
                     delta_color="normal",
                 )
-
-    if care_mode != "continue":
-        dementia_evidence = selected_dementia_evidence(
-            bp_medications=selected_sbp_meds,
-            lipid_medications=selected_ldl_meds,
-            diabetes_medications=selected_a1c_meds,
-        )
-        with st.container(border=True):
-            st.markdown("#### 🧠 認知症予防の根拠")
-            st.caption(
-                "認知症は上のアウトカム選択から、ほかの合併症と同じ形式で確認できます。"
-                "以下は曲線へ反映した相対効果の根拠です。"
-            )
-            supported = dementia_evidence["supported"]
-            if supported:
-                evidence_columns = st.columns(min(3, len(supported)))
-                for index, evidence in enumerate(supported):
-                    column = evidence_columns[index % len(evidence_columns)]
-                    column.metric(evidence.label, evidence.relative_effect)
-                    column.caption(evidence.evidence_summary)
-                    column.link_button(
-                        "根拠論文", evidence.source_url,
-                        key=f"dementia_evidence_{evidence.key}",
-                    )
-
-            else:
-                st.info("降圧薬またはGLP-1受容体作動薬を選ぶと、認知症予防の研究結果を表示します。")
-
-            if dementia_evidence["has_statin"]:
-                st.info(
-                    "スタチンは2型糖尿病サブグループの観察研究HR 0.87を曲線へ反映しています。"
-                    "RCTでは認知症予防効果が確立していないため、観察研究由来の推定です。"
-                )
-                st.link_button("スタチンの観察研究メタ解析", STATIN_EVIDENCE_URL)
-            if dementia_evidence["has_other_glucose_drug"]:
-                st.warning(
-                    "選択したその他の糖尿病薬は、全認知症の予防効果が確立していないため"
-                    "曲線へ加えていません。HbA1c低下量だけから認知症効果は推定しません。"
-                )
-                st.link_button("厳格血糖管理のRCTメタ解析", GLUCOSE_CONTROL_EVIDENCE_URL)
 
     with st.container(border=True):
         st.markdown("#### 🦴 骨の健康（参考）")
