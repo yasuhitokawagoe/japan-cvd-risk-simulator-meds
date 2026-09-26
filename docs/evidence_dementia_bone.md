@@ -4,6 +4,16 @@
 
 この文書は、アプリで採用した数値、採用しなかった関連、限界を再現可能な形で残すための記録である。文献探索にはConsensusを使用し、効果量は原著またはメタ解析の記載に基づく。
 
+## 薬剤カタログの追加
+
+### ネクセトール（ベムペド酸）
+
+- 2026-09-26に脂質低下薬へ180 mg 1日1回を追加した。日本では2025年9月承認、2025年11月薬価収載・発売。薬価371.50円/錠から年間薬価を135,598円とした。
+- CLEAR Outcomesのスタチン不耐容患者で、6か月時点のプラセボ調整LDL差は−21.1%（95%CI −21.9〜−20.3%）、4項目MACEはHR 0.87（95%CI 0.79–0.96）だった。アプリではMACE HRを別途上乗せせず、選択後のLDL値を通じて既存リスクモデルへ反映する。
+- 注意事項は高尿酸血症・痛風、肝酵素上昇、胆石症。電子添文に基づき、スタチン治療が適さない場合を除きスタチンとの併用が原則であること、スタチン血中濃度上昇とCK、尿酸値の確認が必要であることに留意する。
+
+出典: Nissen SE et al. *Bempedoic Acid and Cardiovascular Outcomes in Statin-Intolerant Patients.* N Engl J Med. 2023;388:1353-1364. DOI: 10.1056/NEJMoa2215024. [原著](https://www.nejm.org/doi/full/10.1056/NEJMoa2215024) / [PMDA電子添文](https://www.pmda.go.jp/PmdaSearch/iyakuDetail/ResultDataSetPDF/180078_2189022F1023_1_01) / [承認・薬価情報](https://www.otsuka.co.jp/company/newsreleases/2025/20251121_1.html)
+
 ## 認知症
 
 ### 構成
