@@ -42,6 +42,7 @@ from non_diabetic_outcomes import (
     KFRE_URL, JAGES_URL, GENERAL_STATIN_URL, kidney_reference,
     dementia_reference, general_dementia_curve, general_dementia_effects,
 )
+from dementia_uncertainty import add_dementia_uncertainty
 import pdf_plan_ui
 from treatment_backcast import reconstruct_untreated_values
 
@@ -773,6 +774,7 @@ def plot_risk_curve(outcome: str, data: dict, hr_mode: bool = False):
     post_opacity = 0.62 if outcome == "dementia" else 0.35
     baseline_color = "#14866d" if care_mode == "continue" else "#d34b4b"
     target_color = "#d34b4b" if care_mode == "continue" else "#14866d"
+    uncertainty_label = data.get("uncertainty_label", "95%CI")
     fig = go.Figure()
     fig.add_trace(
         go.Scatter(
@@ -791,10 +793,12 @@ def plot_risk_curve(outcome: str, data: dict, hr_mode: bool = False):
             mode="lines",
             fill="tonexty",
             line=dict(width=0),
-            name="基準（1.00）" if hr_mode else "現在 95%CI",
+            name="基準（1.00）" if hr_mode else (
+                ("服薬継続 " if care_mode == "continue" else "現在 ") + uncertainty_label
+            ),
             showlegend=not hr_mode,
             hoverinfo="skip",
-            fillcolor="rgba(211, 75, 75, 0.10)",
+            fillcolor="rgba(20, 134, 109, 0.10)" if care_mode == "continue" else "rgba(211, 75, 75, 0.10)",
         )
     )
     fig.add_trace(
@@ -815,9 +819,9 @@ def plot_risk_curve(outcome: str, data: dict, hr_mode: bool = False):
             fill="tonexty",
             line=dict(width=0),
             name=("HR相当の参考幅" if hr_mode else "心肺体力込み・95%推定幅" if fitness_active else
-                  "全薬中止時 95%CI" if care_mode == "continue" else "目標達成時 95%CI"),
+                  ("全薬中止時 " if care_mode == "continue" else "目標達成時 ") + uncertainty_label),
             hoverinfo="skip",
-            fillcolor="rgba(20, 134, 109, 0.11)",
+            fillcolor="rgba(211, 75, 75, 0.11)" if care_mode == "continue" else "rgba(20, 134, 109, 0.11)",
         )
     )
     fig.add_trace(
@@ -1341,6 +1345,20 @@ cumulative_data = calculate_cumulative_risk_curves(
     horizon, has_type2_diabetes=has_type2_diabetes, renal_uacr_mg_g=renal_uacr_mg_g,
     ckd_confirmed=renal_ckd_confirmed, egfr_method=renal_egfr_method,
 )
+# PC-only display intervals. Shared point models and mobile output stay unchanged.
+pc_dementia_evidence = selected_dementia_evidence(
+    bp_medications=selected_sbp_meds, lipid_medications=selected_ldl_meds,
+    diabetes_medications=selected_a1c_meds,
+)
+cumulative_data["dementia"] = add_dementia_uncertainty(
+    cumulative_data["dementia"], age=float(age), sex=sex,
+    has_type2_diabetes=has_type2_diabetes, continuing=care_mode == "continue",
+    sbp_before=float(sbp_tgt if care_mode == "continue" else sbp_now),
+    sbp_after=float(sbp_now if care_mode == "continue" else sbp_tgt),
+    ldl_before=float(ldl_tgt if care_mode == "continue" else ldl_now),
+    ldl_after=float(ldl_now if care_mode == "continue" else ldl_tgt),
+    medication_keys=[item.key for item in pc_dementia_evidence["supported"]],
+)
 available_outcomes = tuple(key for key in OUTCOME_DISPLAY_ORDER if key in cumulative_data)
 for selection_key in ("display_outcome", "past_benefit_outcome"):
     if st.session_state.get(selection_key) not in available_outcomes:
@@ -1449,6 +1467,30 @@ with result_col:
                 width="stretch",
                 config={"displayModeBar": False},
             )
+        if selected_outcome == "dementia" and selected_data.get("has_uncertainty"):
+            if not hr_mode:
+                current_label = "服薬継続" if care_mode == "continue" else "現在"
+                target_label = "全薬中止時" if care_mode == "continue" else "目標達成時"
+                st.caption(
+                    f"{displayed_horizon}年・認知症の95%推定幅（近似）："
+                    f"{current_label} {selected_data['baseline_ci_lower'][-1]:.1f}–"
+                    f"{selected_data['baseline_ci_upper'][-1]:.1f}% ／ "
+                    f"{target_label} {selected_data['target_ci_lower'][-1]:.1f}–"
+                    f"{selected_data['target_ci_upper'][-1]:.1f}%"
+                )
+            st.caption(
+                "帯は基礎発症率と確認済みの介入効果の不確実性を独立と仮定した、条件付きの95%推定幅です。"
+                "検証済みの95%信頼区間や個人の発症範囲ではありません。"
+                "日本への較正・死亡率・効果の持続・観察研究の交絡などの不確実性は含みません。"
+                "点線部分の長期外挿が検証されたという意味ではありません。"
+            )
+            if selected_data.get("model") == "jages":
+                st.caption(
+                    "一般住民の基礎率の幅は、公表人数と発症割合から症例数を概算したPoisson近似です。"
+                    "多重代入・丸め・集団差の不確実性は再現できず、原著の95%CIそのものではありません。"
+                )
+            if selected_data["uncertainty_omitted"]:
+                st.caption("この幅に含めていない要素：" + "、".join(selected_data["uncertainty_omitted"]))
         if selected_outcome == "mortality":
             st.caption(MORTALITY_ALL_CAUSE_DEATH_CAPTION)
             if fitness_projection is not None:
@@ -1467,7 +1509,7 @@ with result_col:
             st.caption(
                 "JAGESの65歳以上・年齢別／性別発症率を使い、日本の死亡率を競合リスクとして加えた独自の近似です。"
                 "開始時年齢層の発症率を固定し、9年超は外挿として点線にします。85歳以上は一括した発症率です。"
-                "基礎率・組み合わせモデルの95%幅は算出できないため表示しません。"
+                "帯は上記の仮定による95%推定幅で、組み合わせモデルは未検証です。"
                 "血圧低下はRCTのORをハザード倍率に近似し、LDL・スタチンは観察研究の関連を探索的に換算します。"
                 "LDLとスタチンは効果の大きい一方のみを採用し、降圧との乗算を仮定します。"
                 "この組み合わせや長期の予防効果は未検証で、糖尿病薬の認知症効果は流用していません。"

@@ -165,25 +165,43 @@ class PCDiabetesUITests(unittest.TestCase):
         probe = self.probe(app)
         dementia = probe["curves"]["dementia"]
         self.assertEqual(dementia["model"], "jages")
-        self.assertFalse(dementia["has_uncertainty"])
+        self.assertTrue(dementia["has_uncertainty"])
         self.assertAlmostEqual(
             sum(c["delta"] for c in probe["dementia_contributions"]),
             dementia["baseline_cumulative"][-1] - dementia["target_cumulative"][-1],
         )
         figure = json.loads(app.get("plotly_chart")[0].proto.spec)
-        self.assertEqual(len(figure["data"]), 4)
+        self.assertEqual(len(figure["data"]), 8)
         self.assertTrue(any(t["line"].get("dash") == "dot" for t in figure["data"]))
-        self.assertFalse(any("95%" in t.get("name", "") for t in figure["data"]))
+        self.assertEqual(len([t for t in figure["data"] if "95%推定幅（近似）" in t.get("name", "")]), 2)
+        self.assertFalse(any("95%CI" in t.get("name", "") for t in figure["data"]))
+        self.assertTrue(any("認知症の95%推定幅（近似）" in c.value for c in app.caption))
+        self.assertLess(dementia["baseline_ci_lower"][-1], dementia["baseline_ci_upper"][-1])
         self.assertTrue(any("非糖尿病の人だけで検証された個人予測ではありません" in w.value for w in app.warning))
         app.checkbox(key="show_hazard_ratio").check().run()
         self.probe(app)
         self.assertFalse(app.get("plotly_chart"))
-        self.assertFalse(any("HR相当の参考幅：" in c.value for c in app.caption))
+        self.assertTrue(any("HR相当の参考幅：" in c.value for c in app.caption))
         self.assertEqual(len([m for m in app.metric if "HR相当" in m.label]), 5)
         next(n for n in app.number_input if n.label == "年齢（歳）").set_value(64).run()
         self.assertIn("unavailable_reason", self.probe(app)["curves"]["dementia"])
         self.assertEqual(app.radio(key="display_outcome").value, "dementia")
         self.assertTrue(any("65歳未満は未算出" in i.value for i in app.info))
+
+    def test_diabetes_dementia_intervals_are_displayed_without_claiming_validated_ci(self):
+        app = self.make_app()
+        app.radio(key="display_outcome").set_value("dementia").run()
+        dementia = self.probe(app)["curves"]["dementia"]
+        self.assertTrue(dementia["has_uncertainty"])
+        for side in ("baseline", "target"):
+            self.assertLess(dementia[f"{side}_ci_lower"][-1], dementia[f"{side}_cumulative"][-1])
+            self.assertLess(dementia[f"{side}_cumulative"][-1], dementia[f"{side}_ci_upper"][-1])
+        self.assertTrue(any("検証済みの95%信頼区間" in c.value for c in app.caption))
+        figure = json.loads(app.get("plotly_chart")[0].proto.spec)
+        self.assertEqual(len([t for t in figure["data"] if t.get("fill") == "tonexty"]), 2)
+        app.checkbox(key="show_hazard_ratio").check().run()
+        self.probe(app)
+        self.assertFalse(app.get("plotly_chart"))
 
     def test_kfre_requires_real_inputs_and_has_no_intervention_or_hr(self):
         app = self.make_app(5.5)
