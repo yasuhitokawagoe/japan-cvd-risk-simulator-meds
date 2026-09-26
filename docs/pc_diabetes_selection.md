@@ -47,3 +47,14 @@
 
 検証結果：既存分を含む `tests/` 全体で **107 passed / 25 subtests passed**。
 ローカルCondaの`readline`ネイティブモジュールがpytest起動時にクラッシュするため、テスト起動時のみ`sys.modules["readline"] = None`として対話入力補助を無効化した。テストや計算関数は差し替えていない。pytestは一時フォルダへ導入し、アプリの依存関係は変更していない。
+
+## 公開確認
+
+- ブランチ：`codex/pc-diabetes-selection`
+- 公開コード：`e9c1025`
+- URL：https://dm-care-med-selector-preview-production.up.railway.app/
+- Railway service：`6858e7fd-3732-47d9-b499-0c94bf826206`
+- Deployment：`7d7e40bc-09b7-436e-8ab3-9c26f0dc76a4`、`SUCCESS`
+- 公開画面で、初期HbA1c 8.0%でチェックオン・7アウトカム、手動オフで3アウトカム、現在値8.5%への変更後も手動オフが維持されることを確認。検証入力は架空のサンプル。
+- 旧PC URLのdeploymentは `cc543bdc-eb03-4c52-bfb6-6036dbb1c76c` のまま。
+- スマホ版のdeploymentは `91e1ae18-a6d0-427f-ae66-d11529b7fc3d` のまま。
