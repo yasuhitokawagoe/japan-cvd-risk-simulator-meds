@@ -691,6 +691,7 @@ def build_medication_contributions(outcome: str, horizon: int):
 
 
 def plot_risk_curve(outcome: str, data: dict):
+    fitness_active = outcome == "mortality" and "fitness_scenario" in data
     t = np.asarray(data["time"], dtype=float)
     baseline = np.asarray(data["baseline_cumulative"], dtype=float)
     target = np.asarray(data["target_cumulative"], dtype=float)
@@ -746,7 +747,8 @@ def plot_risk_curve(outcome: str, data: dict):
             mode="lines",
             fill="tonexty",
             line=dict(width=0),
-            name="全薬中止時 95%CI" if care_mode == "continue" else "目標達成時 95%CI",
+            name=("心肺体力込み・95%推定幅" if fitness_active else
+                  "全薬中止時 95%CI" if care_mode == "continue" else "目標達成時 95%CI"),
             hoverinfo="skip",
             fillcolor="rgba(20, 134, 109, 0.11)",
         )
@@ -777,7 +779,8 @@ def plot_risk_curve(outcome: str, data: dict):
             x=t[:cut_idx],
             y=target[:cut_idx],
             mode="lines",
-            name="今日から全薬中止" if care_mode == "continue" else "薬剤／目標達成時",
+            name=("目標達成時・心肺体力込み（推定）" if fitness_active else
+                  "今日から全薬中止" if care_mode == "continue" else "薬剤／目標達成時"),
             line=dict(color=target_color, width=3),
             hovertemplate="%{x:.0f}年：%{y:.2f}%<extra></extra>",
         )
@@ -793,13 +796,6 @@ def plot_risk_curve(outcome: str, data: dict):
             hovertemplate="%{x:.0f}年：%{y:.2f}%<extra></extra>",
         )
     )
-    if outcome == "mortality" and "fitness_scenario" in data:
-        fig.add_trace(go.Scatter(
-            x=t, y=data["fitness_scenario"]["risk"], mode="lines",
-            name="心肺体力も考慮（探索的推定）",
-            line=dict(color="#8054b3", width=3, dash="dot"),
-            hovertemplate="%{x:.0f}年：%{y:.2f}%（探索的推定）<extra></extra>",
-        ))
     fig.update_layout(
         title=OUTCOME_META[outcome]["title"],
         xaxis_title="年数",
@@ -1143,7 +1139,7 @@ with input_col:
                     "観察研究の関連を上乗せした探索的シナリオです。"
                     "運動による追加の死亡予防効果が証明された値ではありません。"
                     "血圧・血糖等の改善との重複により、利益を過大評価する可能性があります。"
-                    "通常推計は残し、全死亡のグラフに点線を追加します。"
+                    "全死亡の介入後曲線・数値を心肺体力込みに置き換え、95%推定幅を表示します。"
                 )
                 st.link_button("心肺体力と死亡の関連（観察研究）", FITNESS_MORTALITY_SOURCE)
                 st.link_button("運動による心肺体力改善（RCT解析）", FITNESS_TRAINING_SOURCE)
@@ -1183,12 +1179,21 @@ with input_col:
 
 horizon = _years_from_choice(horizon_choice)
 cumulative_data = calculate_cumulative_risk_curves(horizon)
+# Preserve ordinary results only for document export; the screen uses the selected scenario.
+document_risk_curves = {key: dict(value) for key, value in cumulative_data.items()}
 fitness_projection = fitness_scenario(
     cumulative_data["mortality"]["target_cumulative"], exercise_intervention_key,
     enabled=include_fitness and care_mode != "continue",
+    lower_percent=cumulative_data["mortality"]["target_ci_lower"],
+    upper_percent=cumulative_data["mortality"]["target_ci_upper"],
 )
 if fitness_projection is not None:
-    cumulative_data["mortality"]["fitness_scenario"] = fitness_projection
+    mortality_data = cumulative_data["mortality"]
+    fitness_projection["additional_arr"] = mortality_data["target_cumulative"][-1] - fitness_projection["risk"][-1]
+    mortality_data["fitness_scenario"] = fitness_projection
+    mortality_data["target_cumulative"] = fitness_projection["risk"]
+    mortality_data["target_ci_lower"] = fitness_projection["lower"]
+    mortality_data["target_ci_upper"] = fitness_projection["upper"]
 
 with result_col:
     st.markdown('<div class="result-anchor" aria-hidden="true"></div>', unsafe_allow_html=True)
@@ -1217,7 +1222,10 @@ with result_col:
         metric_cols[2].metric("中止によるリスク増加", f"+{harm:.1f} pt")
     else:
         metric_cols[0].metric(f"{displayed_horizon}年・現在", f"{baseline_risk:.1f}%")
-        metric_cols[1].metric(f"{displayed_horizon}年・目標達成時", f"{target_risk:.1f}%")
+        target_label = f"{displayed_horizon}年・目標達成時"
+        if selected_outcome == "mortality" and fitness_projection is not None:
+            target_label += "（心肺体力込み・推定）"
+        metric_cols[1].metric(target_label, f"{target_risk:.1f}%")
         metric_cols[2].metric("リスク減少幅", f"{arr:.1f} pt")
 
     st.plotly_chart(
@@ -1228,17 +1236,12 @@ with result_col:
     if selected_outcome == "mortality":
         st.caption(MORTALITY_ALL_CAUSE_DEATH_CAPTION)
         if fitness_projection is not None:
-            fitness_risk = fitness_projection["risk"][-1]
-            st.metric(
-                f"{displayed_horizon}年・心肺体力も考慮した全死亡（探索的推定）",
-                f"{fitness_risk:.2f}%",
-                delta=f"通常推計から −{target_risk - fitness_risk:.2f} pt（推定上乗せ）",
-                delta_color="normal",
-            )
             st.caption(
-                "紫の点線は観察研究のRR 0.89/METをハザード倍率として近似した未検証の外挿です。"
-                "通常曲線の95%CIは点線には適用できません。"
-                "上の通常推計・7アウトカム比較・治療内訳・書類には上乗せしていません。"
+                f"{displayed_horizon}年・全死亡の95%推定幅："
+                f"{fitness_projection['lower'][-1]:.2f}–{fitness_projection['upper'][-1]:.2f}%。"
+                "モデル上の仮定を含む元の予測幅・心肺体力改善量・観察研究のRRの不確実性を独立と仮定して合成した近似幅です。"
+                "検証済みの95%信頼区間ではなく、交絡や効果重複による偏りは含みません。"
+                "グラフ・全死亡の数値・減少幅・治療内訳に反映しています。書類は通常推計です。"
             )
     elif selected_outcome == "dementia":
         st.caption(
@@ -1260,6 +1263,11 @@ with result_col:
                 unsafe_allow_html=True,
             )
             contributions = build_medication_contributions(selected_outcome, horizon)
+            if selected_outcome == "mortality" and fitness_projection is not None:
+                contributions.append({
+                    "name": "運動：心肺体力の追加効果（探索的推定）",
+                    "delta": fitness_projection["additional_arr"],
+                })
             if not contributions:
                 st.info("薬剤・食事療法・運動療法を選ぶと、追加によるリスク低下幅をここに表示します。")
             else:
@@ -1298,7 +1306,9 @@ with result_col:
                 )
             else:
                 summary_cols[index % 3].metric(
-                    OUTCOME_META[outcome]["label"],
+                    OUTCOME_META[outcome]["label"] + (
+                        "（心肺体力込み・推定）" if outcome == "mortality" and fitness_projection is not None else ""
+                    ),
                     f"{data['target_cumulative'][-1]:.1f}%",
                     delta=f"{outcome_arr:.1f} pt減少",
                     delta_color="normal",
@@ -1548,7 +1558,7 @@ if st.session_state.get("show_document_creation"):
         lipid_medications=tuple(med["key"] for med in selected_ldl_meds),
         diabetes_medications=tuple(med["key"] for med in selected_a1c_meds),
         lifestyle_interventions=tuple(lifestyle_labels),
-        risk_curves=cumulative_data,
+        risk_curves=document_risk_curves,
         risk_horizon_years=horizon,
         sbp_after=sbp_tgt,
         ldl_after=ldl_tgt,
