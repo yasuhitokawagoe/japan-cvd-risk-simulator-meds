@@ -1106,12 +1106,13 @@ with input_col:
                 bmi_target = float(diet_result["bmi"])
             for reason in diet_result["skip_reasons"]:
                 st.warning(reason)
-            diet_metrics = st.columns(3)
+            diet_metrics = st.columns(2 if diet_pattern is not None else 3)
             diet_metrics[0].metric("介入後SBP", f"{sbp_tgt:.1f}")
             diet_metrics[1].metric("介入後LDL", f"{ldl_tgt:.1f}")
-            diet_metrics[2].metric("介入後HbA1c", f"{a1c_tgt:.2f}%")
             if diet_pattern is not None:
-                st.metric("食事介入後BMI（推定）", f"{bmi_target:.2f}", f"{bmi_target - float(bmi_now):+.2f}", delta_color="off")
+                body_metrics = st.columns(2)
+                body_metrics[0].metric("介入後HbA1c", f"{a1c_tgt:.2f}%")
+                body_metrics[1].metric("食事介入後BMI（推定）", f"{bmi_target:.2f}", f"{bmi_target - float(bmi_now):+.2f}", delta_color="off")
                 st.caption(
                     "対照食との差を1回反映し、維持する推定です。BMI低下は現在BMI 25以上のみ。"
                     "グラフの幅には食事効果量・長期維持の不確実性を含みません。"
@@ -1120,6 +1121,8 @@ with input_col:
                     st.caption("通常の減量食に対する追加差の設定です。低血糖や栄養不足を避けるため医療者と調整してください。高齢者では筋量・フレイルにも注意が必要です。")
                 if diet_pattern == "dash":
                     st.caption("腎機能低下・高カリウム血症がある場合、食品の内容や量は医療者と調整してください。")
+            else:
+                diet_metrics[2].metric("介入後HbA1c", f"{a1c_tgt:.2f}%")
             with st.expander("効果量と根拠を確認", expanded=False):
                 if diet_pattern is not None:
                     st.caption(
@@ -1129,6 +1132,7 @@ with input_col:
                 for diet_key in diet_intervention_keys:
                     diet_effect = DIET_EFFECTS[diet_key]
                     st.markdown(f"**{diet_effect.label}** — {diet_effect.definition}")
+                    st.caption(f"対象：{diet_effect.population}")
                     st.write(diet_effect.evidence_summary)
                     st.caption(diet_effect.endpoint_evidence)
                     st.link_button(
