@@ -1,4 +1,4 @@
-from dementia_prevention import selected_dementia_evidence, trial_arm_curve
+from dementia_prevention import dementia_curve, selected_dementia_evidence
 
 
 def test_bp_and_glp1_are_returned_as_supported_evidence():
@@ -30,11 +30,13 @@ def test_dual_gip_glp1_is_not_extrapolated_from_glp1_trials():
     assert result["supported"] == []
 
 
-def test_trial_arm_curves_match_published_endpoint_risks():
-    bp = trial_arm_curve("bp_lowering")
-    assert round(bp["control"][-1], 1) == 7.5
-    assert round(bp["intervention"][-1], 1) == 7.0
+def test_dementia_curve_uses_age_specific_incidence_and_intervention_effect():
+    untreated = dementia_curve(age=65, years=10)
+    treated = dementia_curve(age=65, years=10, hazard_ratio=0.87)
+    assert untreated["risk"][0] == 0
+    assert untreated["risk"][-1] > treated["risk"][-1] > 0
 
-    glp1 = trial_arm_curve("glp1_ra")
-    assert round(glp1["control"][-1], 3) == round(32 / 7913 * 100, 3)
-    assert round(glp1["intervention"][-1], 3) == round(15 / 7907 * 100, 3)
+
+def test_dementia_curve_does_not_extrapolate_source_below_age_60():
+    curve = dementia_curve(age=55, years=5)
+    assert curve["risk"][-1] == 0

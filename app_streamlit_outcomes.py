@@ -6,10 +6,13 @@ import streamlit as st
 from access_analytics import record_visit, total_visits
 from calc_engine_outcomes import OutcomesEngine
 from dementia_prevention import (
+    BP_LOWERING_EVIDENCE,
+    DSDRS_EVIDENCE_URL,
+    GLP1_EVIDENCE,
     GLUCOSE_CONTROL_EVIDENCE_URL,
     STATIN_EVIDENCE_URL,
+    dementia_curve,
     selected_dementia_evidence,
-    trial_arm_curve,
 )
 from dm_outcomes import ACR_CATEGORY_MG_G, DIABETES_OUTCOMES, DiabetesOutcomeModel
 from lifestyle_interventions import DIET_EFFECTS, EXERCISE_EFFECTS, apply_lifestyle_effects
@@ -198,7 +201,7 @@ MORTALITY_ALL_CAUSE_DEATH_CAPTION = (
 )
 CARDIOVASCULAR_OUTCOMES = ("mortality", "mi", "stroke")
 DIABETES_OUTCOME_KEYS = tuple(DIABETES_OUTCOMES)
-OUTCOME_DISPLAY_ORDER = CARDIOVASCULAR_OUTCOMES + DIABETES_OUTCOME_KEYS
+OUTCOME_DISPLAY_ORDER = CARDIOVASCULAR_OUTCOMES + DIABETES_OUTCOME_KEYS + ("dementia",)
 OUTCOME_META = {
     "mortality": {"label": "全死亡", "title": "全死亡", "color": "#d95656"},
     "mi": {"label": "心筋梗塞", "title": "心筋梗塞", "color": "#e07b39"},
@@ -206,6 +209,7 @@ OUTCOME_META = {
     "esrd": {"label": "透析", "title": "透析（末期腎不全）", "color": "#3f7f9f"},
     "amputation": {"label": "大切断", "title": "大切断", "color": "#9c6b3f"},
     "blindness": {"label": "失明", "title": "失明", "color": "#3e7c58"},
+    "dementia": {"label": "認知症", "title": "認知症", "color": "#66558f"},
 }
 
 BP_XLSX_PATH = "降圧薬詳細_Ca-ARNI_薬価付き_日本語表_英語タイトル引用付き.xlsx"
@@ -348,6 +352,29 @@ def calculate_cumulative_risk_curves(years: int):
             "target_ci_lower": (target["lower"] * 100.0).tolist(),
             "target_ci_upper": (target["upper"] * 100.0).tolist(),
         }
+
+    dementia_evidence = selected_dementia_evidence(
+        bp_medications=selected_sbp_meds,
+        lipid_medications=selected_ldl_meds,
+        diabetes_medications=selected_a1c_meds,
+    )
+    treatment_hr = float(np.prod([item.estimate for item in dementia_evidence["supported"]]))
+    current_hr, target_hr = (
+        (treatment_hr, 1.0) if care_mode == "continue" else (1.0, treatment_hr)
+    )
+    dementia_current = dementia_curve(age=float(age), years=years, hazard_ratio=current_hr)
+    dementia_target = dementia_curve(age=float(age), years=years, hazard_ratio=target_hr)
+    current_risk = dementia_current["risk"] * 100.0
+    target_risk = dementia_target["risk"] * 100.0
+    cumulative_data["dementia"] = {
+        "time": dementia_current["time"].tolist(),
+        "baseline_cumulative": current_risk.tolist(),
+        "target_cumulative": target_risk.tolist(),
+        "baseline_ci_lower": current_risk.tolist(),
+        "baseline_ci_upper": current_risk.tolist(),
+        "target_ci_lower": target_risk.tolist(),
+        "target_ci_upper": target_risk.tolist(),
+    }
     return cumulative_data
 
 
@@ -398,6 +425,23 @@ def calculate_past_treatment_benefit(years: int) -> dict:
             "avoided": max(0.0, untreated_curve[-1] - treated_curve[-1]),
         }
 
+    dementia_evidence = selected_dementia_evidence(
+        bp_medications=selected_sbp_meds,
+        lipid_medications=selected_ldl_meds,
+        diabetes_medications=selected_a1c_meds,
+    )
+    treatment_hr = float(np.prod([item.estimate for item in dementia_evidence["supported"]]))
+    untreated_dementia = dementia_curve(age=float(start_age), years=int(years))["risk"] * 100.0
+    treated_dementia = dementia_curve(
+        age=float(start_age), years=int(years), hazard_ratio=treatment_hr,
+    )["risk"] * 100.0
+    result["dementia"] = {
+        "time": list(range(-int(years), 1)),
+        "untreated": untreated_dementia.tolist(),
+        "treated": treated_dementia.tolist(),
+        "avoided": max(0.0, untreated_dementia[-1] - treated_dementia[-1]),
+    }
+
     mortality = result["mortality"]
     survival_gain = np.asarray(mortality["untreated"]) - np.asarray(mortality["treated"])
     result["estimated_life_years_gained"] = max(
@@ -444,6 +488,35 @@ def build_medication_contributions(outcome: str, horizon: int):
     ordered_meds = selected_sbp_meds + selected_ldl_meds + selected_a1c_meds
     if not ordered_meds and not diet_intervention_keys and exercise_intervention_key is None:
         return []
+
+    if outcome == "dementia":
+        running_risk = dementia_curve(age=float(age), years=horizon)["risk"][-1]
+        running_hr = 1.0
+        contributions = []
+        if selected_sbp_meds:
+            next_hr = running_hr * BP_LOWERING_EVIDENCE.estimate
+            next_risk = dementia_curve(
+                age=float(age), years=horizon, hazard_ratio=next_hr,
+            )["risk"][-1]
+            contributions.append({
+                "name": "降圧治療（選択した降圧薬全体）",
+                "delta": max(0.0, (running_risk - next_risk) * 100.0),
+            })
+            running_risk, running_hr = next_risk, next_hr
+        has_glp1 = any(
+            str(med.get("category", "")).startswith("GLP-1受容体作動薬")
+            for med in selected_a1c_meds
+        )
+        if has_glp1:
+            next_hr = running_hr * GLP1_EVIDENCE.estimate
+            next_risk = dementia_curve(
+                age=float(age), years=horizon, hazard_ratio=next_hr,
+            )["risk"][-1]
+            contributions.append({
+                "name": "GLP-1受容体作動薬",
+                "delta": max(0.0, (running_risk - next_risk) * 100.0),
+            })
+        return contributions
 
     selected = {"sbp": [], "ldl": [], "hba1c": []}
     current_targets = {
@@ -894,7 +967,7 @@ with input_col:
                         key=f"diet_source_{diet_key}",
                     )
         else:
-            st.caption("食事療法を選択すると、予測検査値と6アウトカムへ反映します。")
+            st.caption("食事療法を選択すると、予測検査値と各アウトカムへ反映します。")
 
       with st.container(border=True):
         st.markdown("#### 🏃 運動療法")
@@ -932,7 +1005,7 @@ with input_col:
                 st.caption(exercise_effect.endpoint_evidence)
                 st.link_button("根拠文献を開く", exercise_effect.source_url)
         else:
-            st.caption("運動療法を選択すると、予測検査値と6アウトカムへ反映します。")
+            st.caption("運動療法を選択すると、予測検査値と各アウトカムへ反映します。")
       if selected_meds or diet_intervention_keys or exercise_intervention_key is not None:
         st.info("介入を選択中は、手入力した目標値を使わず、現在値に選択した効果だけを反映しています。")
     else:
@@ -998,6 +1071,12 @@ with result_col:
     )
     if selected_outcome == "mortality":
         st.caption(MORTALITY_ALL_CAUSE_DEATH_CAPTION)
+    elif selected_outcome == "dementia":
+        st.caption(
+            "2型糖尿病患者（60歳以上）の年齢別発症率から作成した参考推定です。"
+            "60歳未満の期間は元研究の適用範囲外です。介入併用時は相対効果の乗算を仮定しています。"
+        )
+        st.link_button("認知症基礎曲線の根拠", DSDRS_EVIDENCE_URL)
 
     if care_mode != "continue":
         with st.container(border=True):
@@ -1030,7 +1109,7 @@ with result_col:
         st.info("左側で現在服用中の薬を選ぶと、全薬中止との比較を表示します。")
 
     with st.container(border=True):
-        st.markdown("#### 6アウトカムの比較")
+        st.markdown("#### 7アウトカムの比較")
         summary_cols = st.columns(3)
         for index, outcome in enumerate(OUTCOME_DISPLAY_ORDER):
             data = cumulative_data[outcome]
@@ -1058,10 +1137,10 @@ with result_col:
             diabetes_medications=selected_a1c_meds,
         )
         with st.container(border=True):
-            st.markdown("#### 🧠 認知症予防（研究エビデンス）")
+            st.markdown("#### 🧠 認知症予防の根拠")
             st.caption(
-                "患者別の認知症発症率ではなく、無作為化試験で報告された研究集団の"
-                "相対効果です。既存の6アウトカムとは合算しません。"
+                "認知症は上のアウトカム選択から、ほかの合併症と同じ形式で確認できます。"
+                "以下は曲線へ反映した相対効果の根拠です。"
             )
             supported = dementia_evidence["supported"]
             if supported:
@@ -1071,44 +1150,6 @@ with result_col:
                     column.caption(evidence.evidence_summary)
                     column.link_button("根拠論文", evidence.source_url)
 
-                st.markdown("**試験の対照群から作成した基礎曲線**")
-                for evidence in supported:
-                    trial_curve = trial_arm_curve(evidence.key)
-                    dementia_fig = go.Figure()
-                    dementia_fig.add_trace(go.Scatter(
-                        x=trial_curve["time"],
-                        y=trial_curve["control"],
-                        mode="lines",
-                        name=trial_curve["control_label"],
-                        line=dict(color="#d34b4b", width=3, dash="dash"),
-                    ))
-                    dementia_fig.add_trace(go.Scatter(
-                        x=trial_curve["time"],
-                        y=trial_curve["intervention"],
-                        mode="lines",
-                        name=trial_curve["intervention_label"],
-                        line=dict(color="#14866d", width=3),
-                    ))
-                    dementia_fig.update_layout(
-                        title=trial_curve["title"],
-                        xaxis_title="追跡年数",
-                        yaxis_title="累積発症率（%）",
-                        height=360,
-                        hovermode="x unified",
-                        margin=dict(l=20, r=20, t=55, b=20),
-                        legend=dict(orientation="h", y=1.12),
-                    )
-                    st.plotly_chart(
-                        dementia_fig,
-                        width="stretch",
-                        config={"displayModeBar": False},
-                        key=f"dementia_trial_curve_{evidence.key}",
-                    )
-                    st.caption(trial_curve["population"])
-                    st.caption(
-                        "公表された追跡終了時の両群発症率に一致する一定ハザード曲線です。"
-                        + trial_curve["caution"]
-                    )
             else:
                 st.info("降圧薬またはGLP-1受容体作動薬を選ぶと、認知症予防の研究結果を表示します。")
 

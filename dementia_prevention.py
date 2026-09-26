@@ -1,8 +1,4 @@
-"""認知症予防に関する介入エビデンスの表示判定。
-
-患者別の認知症絶対リスクを推定するモジュールではない。無作為化試験で
-認知症発症との関連が示された介入だけを、研究集団での相対効果として返す。
-"""
+"""2型糖尿病患者の認知症基礎曲線と介入エビデンス。"""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -68,49 +64,37 @@ GLUCOSE_CONTROL_EVIDENCE_URL = (
 )
 
 
-TRIAL_ARM_CURVES = {
-    "bp_lowering": {
-        "title": "降圧治療：認知症または認知障害",
-        "followup_years": 4.1,
-        "control_risk": 0.075,
-        "intervention_risk": 0.070,
-        "control_label": "対照群",
-        "intervention_label": "降圧治療群",
-        "population": "RCT 12試験・92,135人（平均年齢69歳、平均開始SBP 154 mmHg）",
-        "caution": "複数試験の統合値であり、患者個人の年齢・血圧に合わせた絶対リスクではありません。",
-    },
-    "glp1_ra": {
-        "title": "GLP-1受容体作動薬：認知症",
-        "followup_years": 3.61,
-        "control_risk": 32 / 7913,
-        "intervention_risk": 15 / 7907,
-        "control_label": "プラセボ群",
-        "intervention_label": "GLP-1受容体作動薬群",
-        "population": "心血管アウトカムRCT 3試験・15,820人（2型糖尿病、平均年齢約65歳）",
-        "caution": (
-            "認知症は事前規定された主要評価項目ではなく、有害事象から収集されました。"
-            "絶対発症率が過少評価されている可能性があります。"
-        ),
-    },
-}
+DSDRS_AGE_INCIDENCE_PER_10000 = (
+    (60, 65, 82.9),
+    (65, 70, 169.5),
+    (70, 75, 294.1),
+    (75, 80, 508.1),
+    (80, 85, 815.9),
+    (85, 90, 1001.1),
+    (90, 200, 1152.6),
+)
+
+DSDRS_EVIDENCE_URL = (
+    "https://consensus.app/papers/risk-score-for-prediction-of-10-year-dementia-risk-in-"
+    "exalto-biessels/ba8f28761c10508a89fc8c000e3c93e3/"
+)
 
 
-def trial_arm_curve(key: str, points: int = 50) -> dict:
-    """公表された両群の追跡終了時リスクへ一致する一定ハザード曲線を返す。"""
-    trial = TRIAL_ARM_CURVES[key]
-    followup = float(trial["followup_years"])
-    time = np.linspace(0.0, followup, points + 1)
-
-    def curve(endpoint_risk: float) -> np.ndarray:
-        hazard = -np.log1p(-float(endpoint_risk)) / followup
-        return 1.0 - np.exp(-hazard * time)
-
-    return {
-        **trial,
-        "time": time.tolist(),
-        "control": (curve(float(trial["control_risk"])) * 100.0).tolist(),
-        "intervention": (curve(float(trial["intervention_risk"])) * 100.0).tolist(),
-    }
+def dementia_curve(*, age: float, years: int, hazard_ratio: float = 1.0) -> dict:
+    """年齢別発症率を積算した認知症曲線。元研究の対象外（60歳未満）は外挿しない。"""
+    times = np.arange(0, max(0, int(years)) + 1, dtype=float)
+    survival = 1.0
+    risks = [0.0]
+    for elapsed in range(1, len(times)):
+        attained_age = float(age) + elapsed - 1
+        annual_rate = 0.0
+        for lower, upper, rate in DSDRS_AGE_INCIDENCE_PER_10000:
+            if lower <= attained_age < upper:
+                annual_rate = rate / 10000.0
+                break
+        survival *= np.exp(-annual_rate * float(hazard_ratio))
+        risks.append(1.0 - survival)
+    return {"time": times, "risk": np.asarray(risks, dtype=float)}
 
 
 def selected_dementia_evidence(
