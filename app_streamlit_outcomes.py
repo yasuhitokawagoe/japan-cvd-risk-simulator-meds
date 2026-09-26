@@ -29,6 +29,7 @@ from dementia_prevention import (
 from dm_outcomes import ACR_CATEGORY_MG_G, DIABETES_OUTCOMES, DiabetesOutcomeModel
 from lifestyle_interventions import DIET_EFFECTS, EXERCISE_EFFECTS, apply_lifestyle_effects
 from meds_catalog import apply_meds_to_targets, load_meds_catalog
+from medical_cost_ui import render_medication_costs
 import pdf_plan_ui
 from treatment_backcast import reconstruct_untreated_values
 
@@ -1031,20 +1032,9 @@ with input_col:
         if use_meds and meds_summary is not None and selected_meds:
             st.divider()
             cost_complete = bool(meds_summary.get("cost_complete", True))
-            cost_label = "年間薬剤費（合計）" if cost_complete else "年間薬剤費（登録済み分）"
-            st.metric(cost_label, f"{annual_cost_yen:,} 円/年")
             if not cost_complete:
                 st.caption("薬価未登録: " + " / ".join(meds_summary.get("missing_cost_labels", [])))
-            if any("インクリシラン" in m.get("key", "") for m in selected_meds):
-                st.caption("レクビオは維持期の年2回分で計算。初年度は3回投与で1,184,274円です。")
-            with st.expander("薬剤費の内訳・計算方法", expanded=False):
-                st.caption("薬剤料の概算です。診察・調剤・注射手技・針代などは含みません。")
-                for med in selected_meds:
-                    cost = med.get("annual_cost_yen")
-                    amount = f"{cost:,} 円/年" if cost is not None else "薬価未登録"
-                    st.write(f"{med['key']}: {amount}")
-                    if med.get("cost_basis"):
-                        st.caption(med["cost_basis"])
+            render_medication_costs(selected_meds, age=int(age), continuing=care_mode == "continue")
             with st.expander("主な副作用を確認", expanded=False):
                 if side_effects_md.strip():
                     st.markdown(side_effects_md)

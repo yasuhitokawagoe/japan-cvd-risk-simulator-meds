@@ -206,6 +206,21 @@
     {
       "workbook": "LDL_HbA1c_用量別_薬価付き_日本語表_英語タイトル引用付き.xlsx",
       "sheet": "LDL用量別（薬価付き）",
+      "row": 10,
+      "key": "レパーサ（エボロクマブ）140 mg 隔週注",
+      "code": "2189401G2026",
+      "product": "レパーサ皮下注１４０ｍｇペン",
+      "specification": "１４０ｍｇ１ｍＬ１キット",
+      "price_yen": 24302.0,
+      "annual_units": 26,
+      "annual_cost_yen": 631852,
+      "calculation": "140mgペン 1回/2週 × 26回（カタログの52週換算。保険試算では暦日別に計上）",
+      "first_year_cost_yen": null,
+      "source_file": "tp20260813-01_02.xlsx"
+    },
+    {
+      "workbook": "LDL_HbA1c_用量別_薬価付き_日本語表_英語タイトル引用付き.xlsx",
+      "sheet": "LDL用量別（薬価付き）",
       "row": 12,
       "key": "ロスバスタチン 2.5 mg",
       "code": "2189017F1014",

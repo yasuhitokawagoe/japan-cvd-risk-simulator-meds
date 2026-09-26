@@ -1,4 +1,4 @@
-"""Extract the exact MHLW rows used to fill the 36 previously unpriced doses.
+"""Extract official prices for 36 added doses and the Repatha correction.
 
 Usage: python scripts/resolve_medication_prices.py oral.xlsx injection.xlsx
 Outputs the auditable JSON price manifest; does not author workbooks.
@@ -32,6 +32,7 @@ GROUPS = [
         (44, "2133001F1018", 365, "1錠/日 × 365日"),
     ]),
     (OTHER, "LDL用量別（薬価付き）", [
+        (10, "2189401G2026", 26, "140mgペン 1回/2週 × 26回（カタログの52週換算。保険試算では暦日別に計上）"),
         (12, "2189017F1014", 365, "2.5mg錠 1錠/日 × 365日"),
         (13, "2189015F1015", 365, "5mg錠 1錠/日 × 365日"),
         (14, "2189016F1010", 365, "1mg錠 1錠/日 × 365日"),
