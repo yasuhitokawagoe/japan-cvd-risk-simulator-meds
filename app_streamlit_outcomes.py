@@ -57,19 +57,6 @@ st.markdown(
         background: linear-gradient(135deg, #f4fbf9 0%, #ffffff 58%, #f7faf9 100%);
         box-shadow: 0 8px 28px rgba(15, 92, 76, 0.07);
     }
-    .hero-icon {
-        width: 58px;
-        height: 58px;
-        flex: 0 0 58px;
-        display: grid;
-        place-items: center;
-        border-radius: 16px;
-        color: white;
-        background: linear-gradient(145deg, #16876f, #0b6554);
-        box-shadow: 0 8px 18px rgba(20, 134, 109, 0.24);
-        font-size: 1.8rem;
-        line-height: 1;
-    }
     .hero-copy {min-width: 0;}
     .hero-kicker {
         margin-bottom: 0.2rem;
@@ -168,7 +155,6 @@ st.markdown(
         .contribution-row {grid-template-columns: 1fr 70px;}
         .contribution-track {grid-column: 1 / -1; grid-row: 2;}
         .app-hero {align-items: flex-start; padding: 1rem;}
-        .hero-icon {width: 48px; height: 48px; flex-basis: 48px; border-radius: 14px;}
         .hero-badge {display: none;}
         div[data-testid="stHorizontalBlock"]:has(.live-note):has(.result-anchor) > div:nth-child(2) {
             position: static;
@@ -202,7 +188,6 @@ access_count_label = ("約 " if access_stats.get("historical_estimate", 0) else 
 st.markdown(
     f"""
     <div class="app-hero">
-      <div class="hero-icon" aria-hidden="true">♥</div>
       <div class="hero-copy">
         <div class="hero-kicker">DIABETES CARE &amp; COMPLICATION PREVENTION</div>
         <h1 class="hero-title">生活習慣病療養指導シュミレーター</h1>
