@@ -83,3 +83,18 @@ bash scripts/deploy_patient_mobile.sh
 スマホ専用DockerfileのCMDにも明示し、設定ファイルの適用有無に依存しないよう修正。
 新規サービスの旧形式ヘルスチェック設定にも依存せず、公開後に実際の
 `/_stcore/health` とブラウザ上の入口・結果を確認する。
+
+## 公開確認
+
+- URL: https://dm-care-patient-mobile-preview-production.up.railway.app/
+- アプリコミット: `bd53009`（起動修正を含む）。
+- 成功したdeployment: `b0352621-3010-4ae1-8efb-c1fb4b4425c9`、状態 `SUCCESS`。
+- `/_stcore/health`: `ok`。公開画面のタイトル・薬ありの入力から結果までを確認。
+- 架空データ60歳男性・血圧140・LDL130・HbA1c7.5、アムロジピン2.5 mg:
+  薬なし逆算 vs 現在治療継続の10年心筋梗塞は、表示1.6% vs 1.4%。
+  これは検証用入力であり、実患者の記録ではない。
+- 幅390pxのローカル薬なし導線と、幅375pxの公開薬あり導線で横はみ出しなし。
+  結果のドキュメント幅はそれぞれ390px/375px。薬名・用量・結果を視覚確認。
+- PC既存サービスのdeploymentは変更なし:
+  original `cc543bdc-eb03-4c52-bfb6-6036dbb1c76c`、
+  med-selector `7a286309-b4a3-45bb-8c7a-f3c258d6f3a4`。
