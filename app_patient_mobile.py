@@ -241,15 +241,15 @@ def draw_curve(curve, comparison, outcome):
         ("target", comparison["after_label"], "#147d70", "rgba(20,125,112,.16)"),
     ):
         if outcome != "dementia":
-            fig.add_trace(go.Scatter(x=curve["time"], y=curve[f"{side}_ci_upper"], line=dict(width=0), showlegend=False, hoverinfo="skip"))
-            fig.add_trace(go.Scatter(x=curve["time"], y=curve[f"{side}_ci_lower"], line=dict(width=0), fill="tonexty", fillcolor=shade, showlegend=False, hoverinfo="skip"))
-        fig.add_trace(go.Scatter(x=curve["time"], y=curve[f"{side}_cumulative"], name=label,
+            fig.add_trace(go.Scatter(x=curve["time"], y=curve[f"{side}_ci_upper"], mode="lines", line=dict(width=0), showlegend=False, hoverinfo="skip"))
+            fig.add_trace(go.Scatter(x=curve["time"], y=curve[f"{side}_ci_lower"], mode="lines", line=dict(width=0), fill="tonexty", fillcolor=shade, showlegend=False, hoverinfo="skip"))
+        fig.add_trace(go.Scatter(x=curve["time"], y=curve[f"{side}_cumulative"], name=label, mode="lines",
                                 line=dict(color=color, width=3, dash="dot" if outcome == "dementia" else "solid"),
                                 hovertemplate="%{x:.0f}年後：%{y:.1f}%<extra>%{fullData.name}</extra>"))
     fig.update_layout(height=340, margin=dict(l=8, r=8, t=15, b=8),
                       legend=dict(orientation="h", y=-0.25, x=0, font=dict(size=11)),
                       xaxis=dict(title="今からの年数", fixedrange=True, dtick=5),
-                      yaxis=dict(title="発症する割合（%）", rangemode="tozero", fixedrange=True),
+                      yaxis=dict(title="推定される割合（%）", rangemode="tozero", fixedrange=True),
                       font=dict(size=12), paper_bgcolor="white", plot_bgcolor="white")
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False, "scrollZoom": False})
 

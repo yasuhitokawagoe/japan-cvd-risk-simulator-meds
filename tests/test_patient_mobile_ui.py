@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 import unittest
 from streamlit.testing.v1 import AppTest
 
@@ -35,6 +36,8 @@ class PatientMobileUITests(unittest.TestCase):
         app.button(key="lifestyle_next").click().run()
         self.assertFalse(app.exception)
         self.assertEqual(len(app.get("plotly_chart")), 1)
+        traces = json.loads(app.get("plotly_chart")[0].proto.spec)["data"]
+        self.assertTrue(all(trace["mode"] == "lines" for trace in traces))
         self.assertAlmostEqual(app.session_state["pm_result"]["targets"]["sbp"], 133.12)
         app.checkbox(key="pmw_hr").check().run()
         self.assertFalse(app.get("plotly_chart"))
