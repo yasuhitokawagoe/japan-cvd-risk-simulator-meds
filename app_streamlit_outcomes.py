@@ -1210,7 +1210,7 @@ with result_col:
             "現在（継続モードでは服薬継続）を1とした期間平均のHR相当値です。"
             "−log(1−介入後リスク) / −log(1−現在リスク) で換算しています。"
             "瞬間的なHRや臨床試験のCox HRではなく、比例ハザードが成り立つ場合にHRと一致します。"
-            "帯は元の上下限から換算した参考幅で、HRの95%信頼区間ではありません。"
+            "参考幅は元の上下限から換算した範囲で、HRの95%信頼区間ではありません。"
             "0年やリスクが0%・100%で計算できない箇所は表示しません。書類は絶対リスク表示のままです。"
         )
     selected_outcome = st.radio(
@@ -1257,11 +1257,12 @@ with result_col:
         metric_cols[1].metric(target_label, f"{target_risk:.1f}%")
         metric_cols[2].metric("リスク減少幅", f"{arr:.1f} pt")
 
-    st.plotly_chart(
-        plot_risk_curve(selected_outcome, selected_data, hr_mode=hr_mode),
-        width="stretch",
-        config={"displayModeBar": False},
-    )
+    if not hr_mode:
+        st.plotly_chart(
+            plot_risk_curve(selected_outcome, selected_data),
+            width="stretch",
+            config={"displayModeBar": False},
+        )
     if selected_outcome == "mortality":
         st.caption(MORTALITY_ALL_CAUSE_DEATH_CAPTION)
         if fitness_projection is not None:
@@ -1505,7 +1506,8 @@ with result_col:
             height=390, hovermode="x unified",
             legend=dict(orientation="h", y=1.12),
         )
-        st.plotly_chart(past_fig, width="stretch", config={"displayModeBar": False})
+        if not hr_mode:
+            st.plotly_chart(past_fig, width="stretch", config={"displayModeBar": False})
 
 st.caption(
     "※ 治療ごとのリスク減少幅は、既存の薬効・食事・運動効果量・リスクモデルを用い、"

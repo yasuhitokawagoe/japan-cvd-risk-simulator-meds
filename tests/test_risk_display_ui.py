@@ -1,4 +1,3 @@
-import json
 import unittest
 from pathlib import Path
 from streamlit.testing.v1 import AppTest
@@ -19,19 +18,20 @@ class RiskDisplayUITests(unittest.TestCase):
         for outcome in ("mortality", "mi", "stroke", "esrd", "amputation", "blindness", "dementia"):
             a.radio(key="display_outcome").set_value(outcome).run()
             self.assertFalse(a.exception)
-            spec = json.loads(a.get("plotly_chart")[0].proto.spec)
-            self.assertIn("HR相当", spec["layout"]["yaxis"]["title"]["text"])
-            self.assertTrue(all("%" not in t.get("hovertemplate", "").replace("%{", "") for t in spec["data"]))
+            self.assertEqual(len(a.get("plotly_chart")), 0)
         a.radio(key="display_outcome").set_value("mortality").run()
         a.checkbox(key="include_exercise_fitness").check().run()
+        self.assertEqual(len(a.get("plotly_chart")), 0)
         self.assertLess(float(next(m.value for m in a.metric if m.label == "全死亡 HR相当（心肺体力込み・推定）")), float(mortality_hr))
         a.checkbox(key="include_exercise_fitness").uncheck().run()
         a.checkbox(key="show_hazard_ratio").uncheck().run()
         self.assertEqual(next(m.value for m in a.metric if m.label == "全死亡"), absolute)
+        self.assertGreater(len(a.get("plotly_chart")), 0)
         a.checkbox(key="show_hazard_ratio").check().run()
         a.session_state["care_mode"] = "continue"
         a.run()
         self.assertFalse(a.exception)
+        self.assertEqual(len(a.get("plotly_chart")), 0)
         self.assertTrue(any(m.label == "服薬継続（基準）" and m.value == "1.00" for m in a.metric))
 
 
