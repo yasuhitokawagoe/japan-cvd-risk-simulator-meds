@@ -9,6 +9,24 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple, Any
 import pandas as pd
 
+# User-selected display order, not prescribing priority or utilization rankings.
+MEDICATION_CLASS_ORDER = {
+    "sbp": (
+        "Ca拮抗薬", "ARB", "ACE阻害薬", "β遮断薬", "ARNI",
+        "サイアザイド系利尿薬", "ステロイド型MRA", "非ステロイド型MRA",
+    ),
+    "ldl": (
+        "スタチン", "吸収阻害薬", "PCSK9阻害薬",
+        "siRNA（PCSK9合成阻害）", "ACL阻害薬",
+    ),
+    "hba1c": (
+        "ビグアナイド", "DPP-4阻害薬", "SGLT2阻害薬",
+        "GLP-1受容体作動薬（経口）", "GLP-1受容体作動薬（皮下）",
+        "GIP/GLP-1受容体作動薬", "ミトコンドリア機能改善薬",
+        "チアゾリジン薬", "スルホニル尿素薬",
+    ),
+}
+
 # -------------------------
 # Parsers
 # -------------------------
@@ -241,12 +259,15 @@ def load_meds_catalog(
     for m in meds:
         out[m.domain].append(m.to_dict())
     
-    # 画面で見やすいように、カテゴリ→薬剤名→用量でソート
+    # 合意したクラス表示順→薬剤名→用量。未登録の新クラスは末尾に残す。
     def sort_key(d):
+        order = MEDICATION_CLASS_ORDER.get(d.get("domain"), ())
+        category = d.get("category", "")
+        class_rank = order.index(category) if category in order else len(order)
         dose_match = re.match(r"\d+(?:\.\d+)?", d.get("dose_label", ""))
         dose_value = float(dose_match.group()) if dose_match else float("inf")
         return (
-            d.get("category", ""), d.get("drug_name", ""),
+            class_rank, category, d.get("drug_name", ""),
             dose_value, d.get("dose_label", ""),
         )
     
