@@ -28,6 +28,9 @@ from dementia_prevention import (
 )
 from dm_outcomes import ACR_CATEGORY_MG_G, DIABETES_OUTCOMES, DiabetesOutcomeModel
 from lifestyle_interventions import DIET_EFFECTS, EXERCISE_EFFECTS, apply_lifestyle_effects
+from exercise_fitness import (
+    FITNESS_MORTALITY_SOURCE, FITNESS_TRAINING_SOURCE, fitness_scenario,
+)
 from meds_catalog import apply_meds_to_targets, load_meds_catalog
 from medical_cost_ui import render_medication_costs
 import pdf_plan_ui
@@ -790,6 +793,13 @@ def plot_risk_curve(outcome: str, data: dict):
             hovertemplate="%{x:.0f}年：%{y:.2f}%<extra></extra>",
         )
     )
+    if outcome == "mortality" and "fitness_scenario" in data:
+        fig.add_trace(go.Scatter(
+            x=t, y=data["fitness_scenario"]["risk"], mode="lines",
+            name="心肺体力も考慮（探索的推定）",
+            line=dict(color="#8054b3", width=3, dash="dot"),
+            hovertemplate="%{x:.0f}年：%{y:.2f}%（探索的推定）<extra></extra>",
+        ))
     fig.update_layout(
         title=OUTCOME_META[outcome]["title"],
         xaxis_title="年数",
@@ -802,6 +812,7 @@ def plot_risk_curve(outcome: str, data: dict):
     return fig
 
 
+include_fitness = False
 input_col, result_col = st.columns([0.38, 0.62], gap="large")
 
 with input_col:
@@ -1117,6 +1128,25 @@ with input_col:
             exercise_metrics[0].metric("介入後SBP", f"{sbp_tgt:.1f}")
             exercise_metrics[1].metric("介入後LDL", f"{ldl_tgt:.1f}")
             exercise_metrics[2].metric("介入後HbA1c", f"{a1c_tgt:.2f}%")
+            include_fitness = st.checkbox(
+                "心肺体力の改善も考慮する（探索的推定・全死亡のみ）",
+                value=False, key="include_exercise_fitness",
+            )
+            if include_fitness:
+                fitness_info = fitness_scenario([0], exercise_intervention_key, enabled=True)
+                st.caption(
+                    f"心肺体力の平均改善：VO₂peak +{fitness_info['vo2_gain']:.2f} mL/kg/分"
+                    f"（+{fitness_info['met_gain']:.2f} MET）。"
+                    "この改善を達成し、予測期間中維持する仮定です。毎年加算はしません。"
+                )
+                st.warning(
+                    "観察研究の関連を上乗せした探索的シナリオです。"
+                    "運動による追加の死亡予防効果が証明された値ではありません。"
+                    "血圧・血糖等の改善との重複により、利益を過大評価する可能性があります。"
+                    "通常推計は残し、全死亡のグラフに点線を追加します。"
+                )
+                st.link_button("心肺体力と死亡の関連（観察研究）", FITNESS_MORTALITY_SOURCE)
+                st.link_button("運動による心肺体力改善（RCT解析）", FITNESS_TRAINING_SOURCE)
             with st.expander("効果量と根拠を確認", expanded=False):
                 st.write(exercise_effect.evidence_summary)
                 st.caption(exercise_effect.endpoint_evidence)
@@ -1153,6 +1183,12 @@ with input_col:
 
 horizon = _years_from_choice(horizon_choice)
 cumulative_data = calculate_cumulative_risk_curves(horizon)
+fitness_projection = fitness_scenario(
+    cumulative_data["mortality"]["target_cumulative"], exercise_intervention_key,
+    enabled=include_fitness and care_mode != "continue",
+)
+if fitness_projection is not None:
+    cumulative_data["mortality"]["fitness_scenario"] = fitness_projection
 
 with result_col:
     st.markdown('<div class="result-anchor" aria-hidden="true"></div>', unsafe_allow_html=True)
@@ -1166,6 +1202,8 @@ with result_col:
         key="display_outcome",
     )
     selected_data = cumulative_data[selected_outcome]
+    if fitness_projection is not None and selected_outcome != "mortality":
+        st.info("心肺体力の推定上乗せは「全死亡」で確認できます。このアウトカムには上乗せしていません。")
     baseline_risk = selected_data["baseline_cumulative"][-1]
     target_risk = selected_data["target_cumulative"][-1]
     arr = baseline_risk - target_risk
@@ -1189,6 +1227,19 @@ with result_col:
     )
     if selected_outcome == "mortality":
         st.caption(MORTALITY_ALL_CAUSE_DEATH_CAPTION)
+        if fitness_projection is not None:
+            fitness_risk = fitness_projection["risk"][-1]
+            st.metric(
+                f"{displayed_horizon}年・心肺体力も考慮した全死亡（探索的推定）",
+                f"{fitness_risk:.2f}%",
+                delta=f"通常推計から −{target_risk - fitness_risk:.2f} pt（推定上乗せ）",
+                delta_color="normal",
+            )
+            st.caption(
+                "紫の点線は観察研究のRR 0.89/METをハザード倍率として近似した未検証の外挿です。"
+                "通常曲線の95%CIは点線には適用できません。"
+                "上の通常推計・7アウトカム比較・治療内訳・書類には上乗せしていません。"
+            )
     elif selected_outcome == "dementia":
         st.caption(
             "2型糖尿病患者（60歳以上）の年齢別発症率を、日本の実測コホートへ部分較正した参考推定です。"
@@ -1471,6 +1522,8 @@ if st.button(
     st.session_state["show_document_creation"] = True
 
 if st.session_state.get("show_document_creation"):
+    if fitness_projection is not None:
+        st.info("書類には通常推計を出力します。心肺体力の探索的上乗せは書類に含めません。")
     if st.button("書類作成を閉じる", key="close_document_creation"):
         st.session_state["show_document_creation"] = False
         st.rerun()
