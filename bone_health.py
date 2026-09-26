@@ -23,6 +23,31 @@ DIABETES_DRUG_FRACTURE_URL = (
     "https://consensus.app/papers/risk-of-fracture-with-dipeptidyl-peptidase4-inhibitors-"
     "chai-liu/3c397c65e77d5d94b942366f34a47365/"
 )
+HIP_FRACTURE_TREATMENT_NMA_URL = (
+    "https://consensus.app/papers/efficacy-of-pharmacological-therapies-for-the-prevention-"
+    "barrionuevo-kapoor/d67b852d53475becb8fcdb77863e699a/"
+)
+
+OSTEOPOROSIS_DRUGS = {
+    "none": {"label": "選択しない", "hip_rr": 1.0, "certainty": "―", "max_years": 10},
+    "alendronate": {"label": "アレンドロネート", "hip_rr": 0.61, "certainty": "有意", "max_years": 10},
+    "risedronate": {"label": "リセドロネート", "hip_rr": 0.73, "certainty": "有意", "max_years": 10},
+    "zoledronate": {"label": "ゾレドロン酸", "hip_rr": 0.60, "certainty": "有意", "max_years": 10},
+    "denosumab": {"label": "デノスマブ", "hip_rr": 0.56, "certainty": "有意", "max_years": 10},
+    "romosozumab_alendronate": {
+        "label": "ロモソズマブ（12か月）", "hip_rr": 0.44, "certainty": "有意", "max_years": 1,
+    },
+    "teriparatide": {
+        "label": "テリパラチド", "hip_rr": 1.0,
+        "certainty": "股関節骨折の確実な数値は未採用",
+        "max_years": 2,
+    },
+    "raloxifene": {
+        "label": "ラロキシフェン（SERM）", "hip_rr": 1.0,
+        "certainty": "椎体骨折効果はあるが股関節骨折の数値は未採用",
+        "max_years": 10,
+    },
+}
 
 JAPAN_HIP_FRACTURE_INCIDENCE_2017 = {
     "male": ((0, 39, 3.3), (40, 49, 10.6), (50, 59, 26.9),
@@ -50,6 +75,7 @@ def annual_hip_fracture_incidence(age: float, sex: str) -> float:
 def hip_fracture_risk(
     *, age: float, sex: str, years: int = 10,
     prior_fragility_fracture: bool = False,
+    treatment_rr: float = 1.0, treatment_years: int = 0,
 ) -> float:
     """死亡を競合リスクとした2型糖尿病患者の大腿骨骨折参考確率。"""
     multiplier = TYPE2_DIABETES_HIP_FRACTURE_RR
@@ -59,8 +85,11 @@ def hip_fracture_risk(
     cumulative_fracture = 0.0
     for elapsed in range(max(0, int(years))):
         attained_age = float(age) + elapsed
+        active_treatment_rr = float(treatment_rr) if elapsed < treatment_years else 1.0
         fracture_probability = min(
-            0.999999, annual_hip_fracture_incidence(attained_age, sex) * multiplier,
+            0.999999,
+            annual_hip_fracture_incidence(attained_age, sex)
+            * multiplier * active_treatment_rr,
         )
         fracture_hazard = -math.log1p(-fracture_probability)
         death_hazard = -math.log1p(

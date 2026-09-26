@@ -8,6 +8,8 @@ from bone_health import (
     DIABETES_DRUG_FRACTURE_URL,
     DIABETES_FRACTURE_MODEL_URL,
     JAPAN_HIP_FRACTURE_URL,
+    HIP_FRACTURE_TREATMENT_NMA_URL,
+    OSTEOPOROSIS_DRUGS,
     OSTEOPOROSIS_TREATMENT_URL,
     bone_density_category,
     bone_health_flags,
@@ -1256,11 +1258,59 @@ with result_col:
                 age=float(age), sex=sex, years=10,
                 prior_fragility_fracture=prior_fragility_fracture,
             )
-            bone_metrics = st.columns(2)
-            bone_metrics[0].metric(
-                "大腿骨近位部骨折・10年参考確率", f"{fracture_risk_10y * 100:.1f}%",
+            st.markdown("**薬物介入（参考試算）**")
+            osteoporosis_drug_key = st.selectbox(
+                "骨粗鬆症薬",
+                list(OSTEOPOROSIS_DRUGS),
+                format_func=lambda key: OSTEOPOROSIS_DRUGS[key]["label"],
+                key="osteoporosis_drug",
             )
-            bone_metrics[1].metric("DXA区分", bone_density_category(t_score))
+            drug_effect = OSTEOPOROSIS_DRUGS[osteoporosis_drug_key]
+            max_treatment_years = int(drug_effect["max_years"])
+            if osteoporosis_drug_key == "none":
+                treatment_duration = 0
+            elif max_treatment_years == 1:
+                treatment_duration = 1
+                st.caption("モデル上の投与期間: 12か月")
+            else:
+                treatment_duration = st.slider(
+                    "治療を継続する期間", 1, max_treatment_years,
+                    min(3, max_treatment_years), 1, format="%d年",
+                )
+            treated_fracture_risk_10y = hip_fracture_risk(
+                age=float(age), sex=sex, years=10,
+                prior_fragility_fracture=prior_fragility_fracture,
+                treatment_rr=float(drug_effect["hip_rr"]),
+                treatment_years=(
+                    int(treatment_duration) if osteoporosis_drug_key != "none" else 0
+                ),
+            )
+            bone_metrics = st.columns(3)
+            bone_metrics[0].metric(
+                "薬物介入なし・10年", f"{fracture_risk_10y * 100:.1f}%",
+            )
+            bone_metrics[1].metric(
+                "選択薬で介入・10年", f"{treated_fracture_risk_10y * 100:.1f}%",
+                delta=f"−{(fracture_risk_10y - treated_fracture_risk_10y) * 100:.1f} pt",
+                delta_color="inverse",
+            )
+            bone_metrics[2].metric("DXA区分", bone_density_category(t_score))
+            if osteoporosis_drug_key != "none":
+                st.caption(
+                    f"{drug_effect['label']}: 股関節骨折RR {drug_effect['hip_rr']:.2f}／"
+                    f"{drug_effect['certainty']}。選択期間中のみ効果が続くと仮定しています。"
+                )
+                if sex == "male":
+                    st.warning("効果量の中心的な根拠は閉経後女性です。男性への適用は外挿です。")
+                if osteoporosis_drug_key == "denosumab":
+                    st.warning("デノスマブは中断・終了時に反跳性骨折を避ける後続治療が必要です。")
+                if osteoporosis_drug_key == "romosozumab_alendronate":
+                    st.warning("ロモソズマブは12か月まで。終了後の抗吸収薬と心血管リスク評価が必要です。")
+                if (
+                    osteoporosis_drug_key in {"alendronate", "risedronate", "zoledronate"}
+                    and egfr_now < 35
+                ):
+                    st.warning("高度腎機能低下ではビスホスホネートの適否を個別に確認してください。")
             st.caption(
                 "2型糖尿病RR 1.33と、骨折歴がある場合は既往骨折HR 1.82を反映。"
                 "転倒・神経障害・ステロイドは注意喚起だけに使い、未検証の上乗せはしません。"
@@ -1284,11 +1334,12 @@ with result_col:
             "参考確率は日本版FRAXや骨粗鬆症診断の代替ではありません。"
             "骨粗鬆症治療薬には骨折予防のRCT根拠があります。"
         )
-        bone_links = st.columns(4)
+        bone_links = st.columns(5)
         bone_links[0].link_button("日本の骨折疫学", JAPAN_HIP_FRACTURE_URL)
         bone_links[1].link_button("糖尿病骨折モデル", DIABETES_FRACTURE_MODEL_URL)
         bone_links[2].link_button("骨粗鬆症治療", OSTEOPOROSIS_TREATMENT_URL)
         bone_links[3].link_button("糖尿病薬と骨折", DIABETES_DRUG_FRACTURE_URL)
+        bone_links[4].link_button("薬剤別股関節骨折効果", HIP_FRACTURE_TREATMENT_NMA_URL)
 
     if care_mode == "continue" and selected_meds and treatment_years > 0:
         past_benefit = calculate_past_treatment_benefit(int(treatment_years))

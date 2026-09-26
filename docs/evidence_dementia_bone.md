@@ -123,6 +123,7 @@ ExaltoらのDiabetes Specific Dementia Risk Scoreで、年齢だけを加点し�
 - 2型糖尿病RR 1.33を反映し、脆弱性骨折歴がある場合は将来の股関節骨折HR 1.82を追加する。厚生労働省2024年生命表による死亡を競合リスクとして扱う。
 - 転倒歴、末梢神経障害、長期ステロイド、DXA大腿骨頸部Tスコアを入力できる。これらは注意喚起とDXA区分に用いるが、未検証の効果量を参考確率へは上乗せしない。
 - 日本版FRAX、主要骨粗鬆症性骨折確率、骨粗鬆症診断の代替にはしない。
+- おまけ欄で骨粗鬆症薬と治療期間を選択し、薬物介入なしと介入時の10年参考確率を比較できる。効果は選択した治療期間中だけ継続すると仮定し、中止後の残存効果は置かない。
 
 ### 根拠
 
@@ -132,6 +133,24 @@ ExaltoらのDiabetes Specific Dementia Risk Scoreで、年齢だけを加点し�
 - 中国の2型糖尿病患者用CDFRモデルは、年齢、性別、既往骨折、インスリン、末梢神経障害、脂質項目を含み、10年主要骨粗鬆症性骨折のC統計量0.803。ただし単施設で外部検証が不足する。Kong XK et al. Osteoporos Int. 2022;33:1957-1967. DOI: 10.1007/s00198-022-06425-8. [Consensus](https://consensus.app/papers/major-osteoporosis-fracture-prediction-in-type-2-diabetes-kong-zhao/ab024f9bfd1552d8a948c9c9bf03a515/)
 - 骨粗鬆症治療薬は69 RCT、8万人超のネットワークメタ解析で骨折予防効果が確認されている。Händel MN et al. BMJ. 2023;381:e068033. DOI: 10.1136/bmj-2021-068033. [Consensus](https://consensus.app/papers/fracture-risk-reduction-and-safety-by-osteoporosis-h%C3%A4ndel-cardoso/ed519e3e91b452beb364985de7d04176/)
 - DPP-4阻害薬、GLP-1受容体作動薬、SGLT2阻害薬は177 RCT、165,081人の解析で全骨折リスクを有意に増加させなかった。ただし追跡中央値26週と短く、骨折予防効果としては使用しない。Chai S et al. Front Pharmacol. 2022;13:825417. DOI: 10.3389/fphar.2022.825417. [Consensus](https://consensus.app/papers/risk-of-fracture-with-dipeptidyl-peptidase4-inhibitors-chai-liu/3c397c65e77d5d94b942366f34a47365/)
+
+### 薬物介入へ採用した股関節骨折効果
+
+閉経後女性107試験、193,987人のネットワークメタ解析で、プラセボに対する股関節骨折RRを採用した。追跡期間中央値は28か月であり、10年試算は選択期間中に同じ相対効果が続く仮定である。
+
+| 薬剤 | 採用RR | 数値への反映 |
+|---|---:|---|
+| アレンドロネート | 0.61 | 反映 |
+| リセドロネート | 0.73 | 反映 |
+| ゾレドロン酸 | 0.60 | 反映 |
+| デノスマブ | 0.56 | 反映 |
+| ロモソズマブ（12か月、終了後は抗吸収薬を要する） | 0.44 | 12か月だけ反映 |
+| テリパラチド | — | 股関節骨折効果の推定が解析間で不安定なため未反映 |
+| ラロキシフェン（SERM） | — | 椎体骨折効果はあるが股関節骨折の有意な効果量がないため未反映 |
+
+出典: Barrionuevo P et al. *Efficacy of Pharmacological Therapies for the Prevention of Fractures in Postmenopausal Women: A Network Meta-Analysis.* J Clin Endocrinol Metab. 2019;104:1623-1630. DOI: 10.1210/jc.2019-00192. [Consensus](https://consensus.app/papers/efficacy-of-pharmacological-therapies-for-the-prevention-barrionuevo-kapoor/d67b852d53475becb8fcdb77863e699a/)
+
+確認資料: Simpson EL et al. Bone. 2020;130:115081. DOI: 10.1016/j.bone.2019.115081. [Consensus](https://consensus.app/papers/clinical-effectiveness-of-denosumab-raloxifene-simpson-james/f12047fe57d35df99aa96ade65bc8de6/)。薬剤効果の主要な試験集団は閉経後女性であり、男性への数値適用は外挿として画面に警告する。ロモソズマブは12か月までとし、その後の抗吸収薬、心血管リスク評価を警告する。デノスマブは中断時の反跳性骨折を避ける後続治療を警告し、ビスホスホネートは高度腎機能低下時に適否確認を促す。
 
 ### 今後の拡張条件
 
