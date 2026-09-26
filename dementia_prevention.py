@@ -81,9 +81,8 @@ DSDRS_EVIDENCE_URL = (
 
 
 def dementia_curve(*, age: float, years: int, hazard_ratio: float = 1.0) -> dict:
-    """年齢別発症率を積算した10年以内の認知症曲線。"""
-    validated_years = min(max(0, int(years)), 10)
-    times = np.arange(0, validated_years + 1, dtype=float)
+    """年齢別発症率を積算する。10年超はUIで外挿として区別する。"""
+    times = np.arange(0, max(0, int(years)) + 1, dtype=float)
     survival = 1.0
     risks = [0.0]
     for elapsed in range(1, len(times)):

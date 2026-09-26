@@ -612,8 +612,11 @@ def plot_risk_curve(outcome: str, data: dict):
     target_low = np.asarray(data["target_ci_lower"], dtype=float)
     target_high = np.asarray(data["target_ci_upper"], dtype=float)
 
-    cutoff_year = max(0.0, 85.0 - float(age))
+    cutoff_year = 10.0 if outcome == "dementia" else max(0.0, 85.0 - float(age))
     cut_idx = int(np.searchsorted(t, cutoff_year, side="right"))
+    post_idx = max(0, cut_idx - 1)
+    post_dash = "dot" if outcome == "dementia" else "solid"
+    post_opacity = 0.62 if outcome == "dementia" else 0.35
     baseline_color = "#14866d" if care_mode == "continue" else "#d34b4b"
     target_color = "#d34b4b" if care_mode == "continue" else "#14866d"
     fig = go.Figure()
@@ -673,12 +676,12 @@ def plot_risk_curve(outcome: str, data: dict):
     )
     fig.add_trace(
         go.Scatter(
-            x=t[cut_idx:],
-            y=baseline[cut_idx:],
+            x=t[post_idx:],
+            y=baseline[post_idx:],
             mode="lines",
             showlegend=False,
-            opacity=0.35,
-            line=dict(color=baseline_color, width=3),
+            opacity=post_opacity,
+            line=dict(color=baseline_color, width=3, dash=post_dash),
             hovertemplate="%{x:.0f}年：%{y:.2f}%<extra></extra>",
         )
     )
@@ -694,12 +697,12 @@ def plot_risk_curve(outcome: str, data: dict):
     )
     fig.add_trace(
         go.Scatter(
-            x=t[cut_idx:],
-            y=target[cut_idx:],
+            x=t[post_idx:],
+            y=target[post_idx:],
             mode="lines",
             showlegend=False,
-            opacity=0.35,
-            line=dict(color=target_color, width=3),
+            opacity=post_opacity,
+            line=dict(color=target_color, width=3, dash=post_dash),
             hovertemplate="%{x:.0f}年：%{y:.2f}%<extra></extra>",
         )
     )
@@ -1084,8 +1087,9 @@ with result_col:
         st.caption(MORTALITY_ALL_CAUSE_DEATH_CAPTION)
     elif selected_outcome == "dementia":
         st.caption(
-            "2型糖尿病患者（60歳以上）の年齢別発症率から作成した10年以内の参考推定です。"
-            "元研究の範囲を越える長期外挿は行いません。介入併用時は相対効果の乗算を仮定しています。"
+            "2型糖尿病患者（60歳以上）の年齢別発症率から作成した参考推定です。"
+            "10年までは実線、10年超は同じ年齢別発症率と治療効果が続く仮定の外挿を点線で表示します。"
+            "介入併用時は相対効果の乗算を仮定しています。"
         )
         st.link_button("認知症基礎曲線の根拠", DSDRS_EVIDENCE_URL)
 

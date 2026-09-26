@@ -42,7 +42,7 @@ def test_dementia_curve_does_not_extrapolate_source_below_age_60():
     assert curve["risk"][-1] == 0
 
 
-def test_dementia_curve_is_capped_at_ten_years():
+def test_dementia_curve_can_be_extrapolated_beyond_ten_years():
     curve = dementia_curve(age=65, years=50)
-    assert curve["time"][-1] == 10
-    assert len(curve["risk"]) == 11
+    assert curve["time"][-1] == 50
+    assert len(curve["risk"]) == 51
