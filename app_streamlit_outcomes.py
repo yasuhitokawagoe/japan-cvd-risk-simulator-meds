@@ -31,6 +31,7 @@ from exercise_fitness import (
 )
 from meds_catalog import apply_meds_to_targets, load_meds_catalog
 from medical_cost_ui import render_medication_costs
+from risk_display import hazard_ratio_curve, format_hr, format_hazard_change
 import pdf_plan_ui
 from treatment_backcast import reconstruct_untreated_values
 
@@ -688,7 +689,9 @@ def build_medication_contributions(outcome: str, horizon: int):
     return contributions
 
 
-def plot_risk_curve(outcome: str, data: dict):
+def plot_risk_curve(outcome: str, data: dict, hr_mode: bool = False):
+    if hr_mode:
+        data = hazard_ratio_curve(data)
     fitness_active = outcome == "mortality" and "fitness_scenario" in data
     t = np.asarray(data["time"], dtype=float)
     baseline = np.asarray(data["baseline_cumulative"], dtype=float)
@@ -723,7 +726,8 @@ def plot_risk_curve(outcome: str, data: dict):
             mode="lines",
             fill="tonexty",
             line=dict(width=0),
-            name="現在 95%CI",
+            name="基準（1.00）" if hr_mode else "現在 95%CI",
+            showlegend=not hr_mode,
             hoverinfo="skip",
             fillcolor="rgba(211, 75, 75, 0.10)",
         )
@@ -745,7 +749,7 @@ def plot_risk_curve(outcome: str, data: dict):
             mode="lines",
             fill="tonexty",
             line=dict(width=0),
-            name=("心肺体力込み・95%推定幅" if fitness_active else
+            name=("HR相当の参考幅" if hr_mode else "心肺体力込み・95%推定幅" if fitness_active else
                   "全薬中止時 95%CI" if care_mode == "continue" else "目標達成時 95%CI"),
             hoverinfo="skip",
             fillcolor="rgba(20, 134, 109, 0.11)",
@@ -794,10 +798,14 @@ def plot_risk_curve(outcome: str, data: dict):
             hovertemplate="%{x:.0f}年：%{y:.2f}%<extra></extra>",
         )
     )
+    if hr_mode:
+        for trace in fig.data:
+            if trace.hoverinfo != "skip":
+                trace.hovertemplate = "%{x:.0f}年：HR相当 %{y:.2f}<extra></extra>"
     fig.update_layout(
         title=OUTCOME_META[outcome]["title"],
         xaxis_title="年数",
-        yaxis_title="累積リスク（%）",
+        yaxis_title="HR相当（累積ハザード比・基準=1）" if hr_mode else "累積リスク（%）",
         hovermode="x unified",
         height=500,
         margin=dict(l=20, r=20, t=55, b=20),
@@ -1196,6 +1204,15 @@ if fitness_projection is not None:
 with result_col:
     st.markdown('<div class="result-anchor" aria-hidden="true"></div>', unsafe_allow_html=True)
     st.subheader("リアルタイム予測")
+    hr_mode = st.checkbox("HR表示に切り替える（累積ハザード比の推定）", key="show_hazard_ratio")
+    if hr_mode:
+        st.caption(
+            "現在（継続モードでは服薬継続）を1とした期間平均のHR相当値です。"
+            "−log(1−介入後リスク) / −log(1−現在リスク) で換算しています。"
+            "瞬間的なHRや臨床試験のCox HRではなく、比例ハザードが成り立つ場合にHRと一致します。"
+            "帯は元の上下限から換算した参考幅で、HRの95%信頼区間ではありません。"
+            "0年やリスクが0%・100%で計算できない箇所は表示しません。書類は絶対リスク表示のままです。"
+        )
     selected_outcome = st.radio(
         "表示するアウトカム",
         OUTCOME_DISPLAY_ORDER,
@@ -1213,7 +1230,21 @@ with result_col:
     displayed_horizon = int(selected_data["time"][-1])
 
     metric_cols = st.columns(3)
-    if care_mode == "continue":
+    if hr_mode:
+        ratio_data = hazard_ratio_curve(selected_data)
+        ratio = ratio_data["target_cumulative"][-1]
+        metric_cols[0].metric("服薬継続（基準）" if care_mode == "continue" else "現在（基準）", "1.00")
+        metric_cols[1].metric(
+            f"{displayed_horizon}年・{'全薬中止' if care_mode == 'continue' else '目標達成時'} HR相当"
+            + ("（心肺体力込み・推定）" if selected_outcome == "mortality" and fitness_projection is not None else ""),
+            format_hr(ratio),
+        )
+        metric_cols[2].metric("ハザードの変化（推定）", format_hazard_change(ratio))
+        st.caption(
+            f"HR相当の参考幅：{format_hr(ratio_data['target_ci_lower'][-1])}–"
+            f"{format_hr(ratio_data['target_ci_upper'][-1])}"
+        )
+    elif care_mode == "continue":
         harm = target_risk - baseline_risk
         metric_cols[0].metric(f"{displayed_horizon}年・服薬継続", f"{baseline_risk:.1f}%")
         metric_cols[1].metric(f"{displayed_horizon}年・今日から全薬中止", f"{target_risk:.1f}%")
@@ -1227,7 +1258,7 @@ with result_col:
         metric_cols[2].metric("リスク減少幅", f"{arr:.1f} pt")
 
     st.plotly_chart(
-        plot_risk_curve(selected_outcome, selected_data),
+        plot_risk_curve(selected_outcome, selected_data, hr_mode=hr_mode),
         width="stretch",
         config={"displayModeBar": False},
     )
@@ -1235,8 +1266,8 @@ with result_col:
         st.caption(MORTALITY_ALL_CAUSE_DEATH_CAPTION)
         if fitness_projection is not None:
             st.caption(
-                f"{displayed_horizon}年・全死亡の95%推定幅："
-                f"{fitness_projection['lower'][-1]:.2f}–{fitness_projection['upper'][-1]:.2f}%。"
+                ("" if hr_mode else f"{displayed_horizon}年・全死亡の95%推定幅："
+                 f"{fitness_projection['lower'][-1]:.2f}–{fitness_projection['upper'][-1]:.2f}%。") +
                 "モデル上の仮定を含む元の予測幅・心肺体力改善量・観察研究のRRの不確実性を独立と仮定して合成した近似幅です。"
                 "検証済みの95%信頼区間ではなく、交絡や効果重複による偏りは含みません。"
                 "グラフ・全死亡の数値・減少幅・治療内訳に反映しています。書類は通常推計です。"
@@ -1253,7 +1284,7 @@ with result_col:
         dementia_links[1].link_button("日本実測の根拠", JAPAN_DEMENTIA_COHORT_URL)
         dementia_links[2].link_button("LDL値と認知症の根拠", LDL_LEVEL_EVIDENCE_URL)
 
-    if care_mode != "continue":
+    if care_mode != "continue" and not hr_mode:
         with st.container(border=True):
             st.markdown(
                 f'<h4 class="arr-breakdown-title" translate="no" '
@@ -1283,9 +1314,9 @@ with result_col:
                         unsafe_allow_html=True,
                     )
                 st.caption("表示順に治療を追加したときのリスク減少幅です。併用順によって内訳は変わります。")
-    elif selected_meds:
+    elif care_mode == "continue" and selected_meds:
         st.success("現在の良好な検査値と低い将来リスクは、服薬継続で得られている効果です。自己判断で中止せず主治医と相談しましょう。")
-    else:
+    elif care_mode == "continue":
         st.info("左側で現在服用中の薬を選ぶと、全薬中止との比較を表示します。")
 
     with st.container(border=True):
@@ -1294,7 +1325,17 @@ with result_col:
         for index, outcome in enumerate(OUTCOME_DISPLAY_ORDER):
             data = cumulative_data[outcome]
             outcome_arr = data["baseline_cumulative"][-1] - data["target_cumulative"][-1]
-            if care_mode == "continue":
+            if hr_mode:
+                outcome_hr = hazard_ratio_curve(data)["target_cumulative"][-1]
+                summary_cols[index % 3].metric(
+                    OUTCOME_META[outcome]["label"] + " HR相当" + (
+                        "（心肺体力込み・推定）" if outcome == "mortality" and fitness_projection is not None else ""
+                    ),
+                    format_hr(outcome_hr),
+                    delta=format_hazard_change(outcome_hr),
+                    delta_color="off",
+                )
+            elif care_mode == "continue":
                 stopping_harm = max(0.0, -outcome_arr)
                 summary_cols[index % 3].metric(
                     f"{OUTCOME_META[outcome]['label']}（継続）",
