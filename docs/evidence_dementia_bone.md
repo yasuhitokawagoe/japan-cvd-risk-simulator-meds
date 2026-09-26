@@ -9,24 +9,25 @@
 ### 構成
 
 - 認知症は全死亡、心筋梗塞、脳卒中、透析、大切断、失明と同列の主要アウトカムとする。
-- 基礎曲線は、2型糖尿病患者の年齢別認知症発症率を年ごとのハザードへ変換して積算する。
+- 基礎曲線は、2型糖尿病患者用DSDRSの年齢点数だけに対応する観察10年リスクへ一致させる。
 - 元研究の検証範囲である10年までは実線とする。10年超は、同じ年齢別発症率と介入の相対効果が続く仮定の外挿として点線で表示する。
 - 元研究の対象外である60歳未満の期間は発症率を外挿しない。
 - 日本人に較正された個人予測ではなく、研究集団からの参考推定として表示する。
 
 ### 基礎曲線
 
-ExaltoらのDiabetes Specific Dementia Risk Score開発コホートで報告された年齢別粗発症率を使用する。単位は1万人年あたり。
+ExaltoらのDiabetes Specific Dementia Risk Scoreで、年齢だけを加点し、未入力の既往症などを加点しない場合の観察10年リスクを使用する。各10年リスクへ一致する一定ハザード曲線とする。
 
-| 年齢 | 発症率 |
+| 年齢 | 10年リスク |
 |---|---:|
-| 60–64 | 82.9 |
-| 65–69 | 169.5 |
-| 70–74 | 294.1 |
-| 75–79 | 508.1 |
-| 80–84 | 815.9 |
-| 85–89 | 1001.1 |
-| 90以上 | 1152.6 |
+| 60–64 | 7.4% |
+| 65–69 | 14.8% |
+| 70–74 | 24.5% |
+| 75–79 | 40.3% |
+| 80–84 | 49.9% |
+| 85以上 | 63.1% |
+
+以前は年齢別粗発症率を到達年齢ごとに積算していたため、60歳の10年リスクが11.9%となり、元モデルの7.4%より高かった。2026-09-26に元モデルへ再較正した。
 
 出典: Exalto LG et al. *Risk score for prediction of 10 year dementia risk in individuals with type 2 diabetes: a cohort study.* Lancet Diabetes Endocrinol. 2013;1:183-190. DOI: 10.1016/S2213-8587(13)70048-2. [Consensus](https://consensus.app/papers/risk-score-for-prediction-of-10-year-dementia-risk-in-exalto-biessels/ba8f28761c10508a89fc8c000e3c93e3/)
 
@@ -47,6 +48,17 @@ ExaltoらのDiabetes Specific Dementia Risk Score開発コホートで報告さ�
 
 - Peters R et al. Eur Heart J. 2022. DOI: 10.1093/eurheartj/ehac584. [Consensus](https://consensus.app/papers/blood-pressure-lowering-and-prevention-of-dementia-an-peters-xu/80e4c462131a5a9da849201e137c347d/)
 - Ding J et al. Lancet Neurol. 2020;19:61-70. DOI: 10.1016/S1474-4422(19)30393-X. [Consensus](https://consensus.app/papers/antihypertensive-medications-and-risk-for-incident-ding-davis-plourde/108f37cf6c6e5c82958f0e80fe039b07/)
+
+血圧低下は薬剤選択の有無ではなく、現在値から介入後値まで10 mmHg低下するごとに0.87を指数換算して反映する。外挿過大を避けるため30 mmHgまでとする。
+
+#### LDL低下
+
+- 採用値: LDL 60 mg/dL低下あたり0.74（観察研究からの探索的換算）
+- LDL 70 mg/dL未満は130 mg/dL超と比較して全認知症が26%少なかった。連続的な用量反応は未確立のため、60 mg/dL差を上限として対数線形換算する。
+- スタチン使用は低LDL群内でも追加13%低下と関連したため、LDL値による効果とスタチン固有の観察研究効果を別に反映する。
+- 薬剤、食事、運動、手入力を問わず、実際のLDL低下量から計算する。
+
+出典: Lee MW et al. J Neurol Neurosurg Psychiatry. 2025;96:981-989. DOI: 10.1136/jnnp-2024-334708. [Consensus](https://consensus.app/papers/lowdensity-lipoprotein-cholesterol-levels-and-risk-of-lee-lee/4bf9a1f3fed25c058b00c34b5a05de67/)
 
 #### GLP-1受容体作動薬
 

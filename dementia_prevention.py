@@ -112,14 +112,15 @@ GLUCOSE_CONTROL_EVIDENCE_URL = (
 )
 
 
-DSDRS_AGE_INCIDENCE_PER_10000 = (
-    (60, 65, 82.9),
-    (65, 70, 169.5),
-    (70, 75, 294.1),
-    (75, 80, 508.1),
-    (80, 85, 815.9),
-    (85, 90, 1001.1),
-    (90, 200, 1152.6),
+# DSDRSの年齢点数だけを用いた場合に対応する観察10年リスク。
+# 既往症など未入力の加点は行わず、基礎曲線の過大推定を避ける。
+DSDRS_10_YEAR_RISK_BY_AGE = (
+    (60, 65, 0.074),
+    (65, 70, 0.148),
+    (70, 75, 0.245),
+    (75, 80, 0.403),
+    (80, 85, 0.499),
+    (85, 200, 0.631),
 )
 
 DSDRS_EVIDENCE_URL = (
@@ -127,22 +128,41 @@ DSDRS_EVIDENCE_URL = (
     "exalto-biessels/ba8f28761c10508a89fc8c000e3c93e3/"
 )
 
+LDL_LEVEL_EVIDENCE_URL = (
+    "https://consensus.app/papers/lowdensity-lipoprotein-cholesterol-levels-and-risk-of-"
+    "lee-lee/4bf9a1f3fed25c058b00c34b5a05de67/"
+)
+
 
 def dementia_curve(*, age: float, years: int, hazard_ratio: float = 1.0) -> dict:
-    """年齢別発症率を積算する。10年超はUIで外挿として区別する。"""
+    """DSDRSの年齢別10年リスクに一致する曲線。10年超は外挿として扱う。"""
     times = np.arange(0, max(0, int(years)) + 1, dtype=float)
+    baseline_age = max(60.0, float(age))
+    ten_year_risk = DSDRS_10_YEAR_RISK_BY_AGE[-1][2]
+    for lower, upper, risk in DSDRS_10_YEAR_RISK_BY_AGE:
+        if lower <= baseline_age < upper:
+            ten_year_risk = risk
+            break
+    annual_hazard = -np.log1p(-ten_year_risk) / 10.0
     survival = 1.0
     risks = [0.0]
     for elapsed in range(1, len(times)):
         attained_age = float(age) + elapsed - 1
-        annual_rate = 0.0
-        for lower, upper, rate in DSDRS_AGE_INCIDENCE_PER_10000:
-            if lower <= attained_age < upper:
-                annual_rate = rate / 10000.0
-                break
-        survival *= np.exp(-annual_rate * float(hazard_ratio))
+        active_hazard = annual_hazard if attained_age >= 60 else 0.0
+        survival *= np.exp(-active_hazard * float(hazard_ratio))
         risks.append(1.0 - survival)
     return {"time": times, "risk": np.asarray(risks, dtype=float)}
+
+
+def dementia_biomarker_hazard_ratio(
+    *, sbp_before: float, sbp_after: float, ldl_before: float, ldl_after: float,
+) -> dict[str, float]:
+    """血圧・LDL低下を方法に依存せず認知症曲線へ反映する探索的換算。"""
+    sbp_drop = min(30.0, max(0.0, float(sbp_before) - float(sbp_after)))
+    ldl_drop = min(60.0, max(0.0, float(ldl_before) - float(ldl_after)))
+    bp_hr = 0.87 ** (sbp_drop / 10.0)
+    ldl_hr = 0.74 ** (ldl_drop / 60.0)
+    return {"bp": bp_hr, "ldl": ldl_hr, "combined": bp_hr * ldl_hr}
 
 
 def selected_dementia_evidence(

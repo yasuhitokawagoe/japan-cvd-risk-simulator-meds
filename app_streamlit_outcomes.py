@@ -15,7 +15,9 @@ from calc_engine_outcomes import OutcomesEngine
 from dementia_prevention import (
     DSDRS_EVIDENCE_URL,
     GLUCOSE_CONTROL_EVIDENCE_URL,
+    LDL_LEVEL_EVIDENCE_URL,
     STATIN_EVIDENCE_URL,
+    dementia_biomarker_hazard_ratio,
     dementia_curve,
     selected_dementia_evidence,
 )
@@ -363,10 +365,22 @@ def calculate_cumulative_risk_curves(years: int):
         lipid_medications=selected_ldl_meds,
         diabetes_medications=selected_a1c_meds,
     )
-    treatment_hr = float(np.prod([item.estimate for item in dementia_evidence["supported"]]))
-    current_hr, target_hr = (
-        (treatment_hr, 1.0) if care_mode == "continue" else (1.0, treatment_hr)
-    )
+    medication_hr = float(np.prod([
+        item.estimate for item in dementia_evidence["supported"]
+        if item.key != "bp_lowering"
+    ]))
+    if care_mode == "continue":
+        biomarker_hr = dementia_biomarker_hazard_ratio(
+            sbp_before=float(sbp_tgt), sbp_after=float(sbp_now),
+            ldl_before=float(ldl_tgt), ldl_after=float(ldl_now),
+        )["combined"]
+        current_hr, target_hr = medication_hr * biomarker_hr, 1.0
+    else:
+        biomarker_hr = dementia_biomarker_hazard_ratio(
+            sbp_before=float(sbp_now), sbp_after=float(sbp_tgt),
+            ldl_before=float(ldl_now), ldl_after=float(ldl_tgt),
+        )["combined"]
+        current_hr, target_hr = 1.0, medication_hr * biomarker_hr
     dementia_current = dementia_curve(age=float(age), years=years, hazard_ratio=current_hr)
     dementia_target = dementia_curve(age=float(age), years=years, hazard_ratio=target_hr)
     current_risk = dementia_current["risk"] * 100.0
@@ -435,7 +449,15 @@ def calculate_past_treatment_benefit(years: int) -> dict:
         lipid_medications=selected_ldl_meds,
         diabetes_medications=selected_a1c_meds,
     )
-    treatment_hr = float(np.prod([item.estimate for item in dementia_evidence["supported"]]))
+    medication_hr = float(np.prod([
+        item.estimate for item in dementia_evidence["supported"]
+        if item.key != "bp_lowering"
+    ]))
+    biomarker_hr = dementia_biomarker_hazard_ratio(
+        sbp_before=float(sbp_tgt), sbp_after=float(sbp_now),
+        ldl_before=float(ldl_tgt), ldl_after=float(ldl_now),
+    )["combined"]
+    treatment_hr = medication_hr * biomarker_hr
     untreated_dementia_result = dementia_curve(age=float(start_age), years=int(years))
     treated_dementia_result = dementia_curve(
         age=float(start_age), years=int(years), hazard_ratio=treatment_hr,
@@ -494,9 +516,6 @@ def risk_at_horizon(outcome: str, horizon: int, targets: dict) -> float:
 
 def build_medication_contributions(outcome: str, horizon: int):
     ordered_meds = selected_sbp_meds + selected_ldl_meds + selected_a1c_meds
-    if not ordered_meds and not diet_intervention_keys and exercise_intervention_key is None:
-        return []
-
     if outcome == "dementia":
         running_risk = dementia_curve(age=float(age), years=horizon)["risk"][-1]
         running_hr = 1.0
@@ -506,7 +525,28 @@ def build_medication_contributions(outcome: str, horizon: int):
             lipid_medications=selected_ldl_meds,
             diabetes_medications=selected_a1c_meds,
         )
+        biomarker_effects = dementia_biomarker_hazard_ratio(
+            sbp_before=float(sbp_now), sbp_after=float(sbp_tgt),
+            ldl_before=float(ldl_now), ldl_after=float(ldl_tgt),
+        )
+        for label, effect in (
+            ("血圧低下（方法を問わず）", biomarker_effects["bp"]),
+            ("LDL低下（方法を問わず）", biomarker_effects["ldl"]),
+        ):
+            if effect >= 0.999999:
+                continue
+            next_hr = running_hr * effect
+            next_risk = dementia_curve(
+                age=float(age), years=horizon, hazard_ratio=next_hr,
+            )["risk"][-1]
+            contributions.append({
+                "name": label,
+                "delta": max(0.0, (running_risk - next_risk) * 100.0),
+            })
+            running_risk, running_hr = next_risk, next_hr
         for evidence in evidence_set["supported"]:
+            if evidence.key == "bp_lowering":
+                continue
             next_hr = running_hr * evidence.estimate
             next_risk = dementia_curve(
                 age=float(age), years=horizon, hazard_ratio=next_hr,
@@ -517,6 +557,9 @@ def build_medication_contributions(outcome: str, horizon: int):
             })
             running_risk, running_hr = next_risk, next_hr
         return contributions
+
+    if not ordered_meds and not diet_intervention_keys and exercise_intervention_key is None:
+        return []
 
     selected = {"sbp": [], "ldl": [], "hba1c": []}
     current_targets = {
@@ -1079,9 +1122,12 @@ with result_col:
         st.caption(
             "2型糖尿病患者（60歳以上）の年齢別発症率から作成した参考推定です。"
             "10年までは実線、10年超は同じ年齢別発症率と治療効果が続く仮定の外挿を点線で表示します。"
+            "血圧・LDL低下は薬剤、食事、運動、手入力のいずれでも低下量から反映します。"
             "介入併用時は相対効果の乗算を仮定しています。"
         )
-        st.link_button("認知症基礎曲線の根拠", DSDRS_EVIDENCE_URL)
+        dementia_links = st.columns(2)
+        dementia_links[0].link_button("認知症基礎曲線の根拠", DSDRS_EVIDENCE_URL)
+        dementia_links[1].link_button("LDL値と認知症の根拠", LDL_LEVEL_EVIDENCE_URL)
 
     if care_mode != "continue":
         with st.container(border=True):

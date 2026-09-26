@@ -1,4 +1,8 @@
-from dementia_prevention import dementia_curve, selected_dementia_evidence
+from dementia_prevention import (
+    dementia_biomarker_hazard_ratio,
+    dementia_curve,
+    selected_dementia_evidence,
+)
 
 
 def test_bp_and_glp1_are_returned_as_supported_evidence():
@@ -48,6 +52,7 @@ def test_dementia_curve_uses_age_specific_incidence_and_intervention_effect():
     untreated = dementia_curve(age=65, years=10)
     treated = dementia_curve(age=65, years=10, hazard_ratio=0.87)
     assert untreated["risk"][0] == 0
+    assert round(float(untreated["risk"][-1]), 3) == 0.148
     assert untreated["risk"][-1] > treated["risk"][-1] > 0
 
 
@@ -60,3 +65,12 @@ def test_dementia_curve_can_be_extrapolated_beyond_ten_years():
     curve = dementia_curve(age=65, years=50)
     assert curve["time"][-1] == 50
     assert len(curve["risk"]) == 51
+
+
+def test_biomarker_lowering_applies_without_requiring_medication():
+    effect = dementia_biomarker_hazard_ratio(
+        sbp_before=150, sbp_after=140, ldl_before=160, ldl_after=100,
+    )
+    assert round(effect["bp"], 2) == 0.87
+    assert round(effect["ldl"], 2) == 0.74
+    assert round(effect["combined"], 4) == round(0.87 * 0.74, 4)
