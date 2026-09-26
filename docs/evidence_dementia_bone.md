@@ -13,10 +13,11 @@
 - 元研究の検証範囲である10年までは実線とする。10年超は、同じ年齢別発症率と介入の相対効果が続く仮定の外挿として点線で表示する。
 - 元研究の対象外である60歳未満の期間は発症率を外挿しない。
 - 日本人に較正された個人予測ではなく、研究集団からの参考推定として表示する。
+- 高齢者で認知症発症前の死亡を無視して累積率が過大にならないよう、厚生労働省「令和6(2024)年簡易生命表」の性・年齢別死亡率を競合リスクとして年ごとに反映する。
 
 ### 基礎曲線
 
-ExaltoらのDiabetes Specific Dementia Risk Scoreで、年齢だけを加点し、未入力の既往症などを加点しない場合の観察10年リスクを使用する。各10年リスクへ一致する一定ハザード曲線とする。
+ExaltoらのDiabetes Specific Dementia Risk Scoreで、年齢だけを加点し、未入力の既往症などを加点しない場合の観察10年リスクを使用する。各10年リスクへ一致する認知症ハザードを置き、同時に日本の生命表死亡ハザードを加えて累積発症関数を計算する。したがって表示値は、死亡を競合リスクとして補正する前の下表より低くなる。生命表の5歳刻み死亡確率は対数線形補間し、100歳超は100歳値を据え置く。
 
 | 年齢 | 10年リスク |
 |---|---:|
@@ -28,6 +29,8 @@ ExaltoらのDiabetes Specific Dementia Risk Scoreで、年齢だけを加点し�
 | 85以上 | 63.1% |
 
 以前は年齢別粗発症率を到達年齢ごとに積算していたため、60歳の10年リスクが11.9%となり、元モデルの7.4%より高かった。2026-09-26に元モデルへ再較正した。
+
+2026-09-26にさらに、認知症発症前の死亡を競合リスクとして追加した。特に高齢者・男性で、生存者だけを前提にした単純な1−生存曲線による過大推定を抑える。死亡率の出典: [厚生労働省 令和6年簡易生命表](https://www.mhlw.go.jp/toukei/saikin/hw/life/life24/)。
 
 出典: Exalto LG et al. *Risk score for prediction of 10 year dementia risk in individuals with type 2 diabetes: a cohort study.* Lancet Diabetes Endocrinol. 2013;1:183-190. DOI: 10.1016/S2213-8587(13)70048-2. [Consensus](https://consensus.app/papers/risk-score-for-prediction-of-10-year-dementia-risk-in-exalto-biessels/ba8f28761c10508a89fc8c000e3c93e3/)
 

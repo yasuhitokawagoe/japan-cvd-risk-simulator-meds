@@ -381,8 +381,12 @@ def calculate_cumulative_risk_curves(years: int):
             ldl_before=float(ldl_now), ldl_after=float(ldl_tgt),
         )["combined"]
         current_hr, target_hr = 1.0, medication_hr * biomarker_hr
-    dementia_current = dementia_curve(age=float(age), years=years, hazard_ratio=current_hr)
-    dementia_target = dementia_curve(age=float(age), years=years, hazard_ratio=target_hr)
+    dementia_current = dementia_curve(
+        age=float(age), years=years, hazard_ratio=current_hr, sex=sex,
+    )
+    dementia_target = dementia_curve(
+        age=float(age), years=years, hazard_ratio=target_hr, sex=sex,
+    )
     current_risk = dementia_current["risk"] * 100.0
     target_risk = dementia_target["risk"] * 100.0
     cumulative_data["dementia"] = {
@@ -458,9 +462,11 @@ def calculate_past_treatment_benefit(years: int) -> dict:
         ldl_before=float(ldl_tgt), ldl_after=float(ldl_now),
     )["combined"]
     treatment_hr = medication_hr * biomarker_hr
-    untreated_dementia_result = dementia_curve(age=float(start_age), years=int(years))
+    untreated_dementia_result = dementia_curve(
+        age=float(start_age), years=int(years), sex=sex,
+    )
     treated_dementia_result = dementia_curve(
-        age=float(start_age), years=int(years), hazard_ratio=treatment_hr,
+        age=float(start_age), years=int(years), hazard_ratio=treatment_hr, sex=sex,
     )
     untreated_dementia = untreated_dementia_result["risk"] * 100.0
     treated_dementia = treated_dementia_result["risk"] * 100.0
@@ -517,7 +523,9 @@ def risk_at_horizon(outcome: str, horizon: int, targets: dict) -> float:
 def build_medication_contributions(outcome: str, horizon: int):
     ordered_meds = selected_sbp_meds + selected_ldl_meds + selected_a1c_meds
     if outcome == "dementia":
-        running_risk = dementia_curve(age=float(age), years=horizon)["risk"][-1]
+        running_risk = dementia_curve(
+            age=float(age), years=horizon, sex=sex,
+        )["risk"][-1]
         running_hr = 1.0
         contributions = []
         evidence_set = selected_dementia_evidence(
@@ -537,7 +545,7 @@ def build_medication_contributions(outcome: str, horizon: int):
                 continue
             next_hr = running_hr * effect
             next_risk = dementia_curve(
-                age=float(age), years=horizon, hazard_ratio=next_hr,
+                age=float(age), years=horizon, hazard_ratio=next_hr, sex=sex,
             )["risk"][-1]
             contributions.append({
                 "name": label,
@@ -549,7 +557,7 @@ def build_medication_contributions(outcome: str, horizon: int):
                 continue
             next_hr = running_hr * evidence.estimate
             next_risk = dementia_curve(
-                age=float(age), years=horizon, hazard_ratio=next_hr,
+                age=float(age), years=horizon, hazard_ratio=next_hr, sex=sex,
             )["risk"][-1]
             contributions.append({
                 "name": evidence.label,

@@ -133,9 +133,49 @@ LDL_LEVEL_EVIDENCE_URL = (
     "lee-lee/4bf9a1f3fed25c058b00c34b5a05de67/"
 )
 
+JAPAN_LIFE_TABLE_2024_URL = (
+    "https://www.mhlw.go.jp/toukei/saikin/hw/life/life24/"
+)
 
-def dementia_curve(*, age: float, years: int, hazard_ratio: float = 1.0) -> dict:
-    """DSDRSの年齢別10年リスクに一致する曲線。10年超は外挿として扱う。"""
+# 厚生労働省「令和6(2024)年簡易生命表」の1年死亡確率 nqx。
+# 5歳刻みの公表値を保持し、中間年齢は対数線形補間する。
+JAPAN_2024_MORTALITY_QX = {
+    "male": (
+        (20, 0.00042), (25, 0.00047), (30, 0.00053), (35, 0.00071),
+        (40, 0.00097), (45, 0.00144), (50, 0.00238), (55, 0.00394),
+        (60, 0.00639), (65, 0.01051), (70, 0.01724), (75, 0.02894),
+        (80, 0.04861), (85, 0.08467), (90, 0.15175), (95, 0.24640),
+        (100, 0.40384),
+    ),
+    "female": (
+        (20, 0.00028), (25, 0.00029), (30, 0.00030), (35, 0.00041),
+        (40, 0.00057), (45, 0.00087), (50, 0.00141), (55, 0.00209),
+        (60, 0.00297), (65, 0.00446), (70, 0.00704), (75, 0.01224),
+        (80, 0.02294), (85, 0.04602), (90, 0.09520), (95, 0.18355),
+        (100, 0.33068),
+    ),
+}
+
+
+def annual_mortality_probability(age: float, sex: str) -> float:
+    """2024年簡易生命表の死亡確率を年齢間で対数線形補間する。"""
+    points = JAPAN_2024_MORTALITY_QX["male" if sex == "male" else "female"]
+    attained_age = float(age)
+    if attained_age <= points[0][0]:
+        return points[0][1]
+    if attained_age >= points[-1][0]:
+        return points[-1][1]
+    for (age0, q0), (age1, q1) in zip(points, points[1:]):
+        if age0 <= attained_age <= age1:
+            weight = (attained_age - age0) / (age1 - age0)
+            return float(np.exp(np.log(q0) + weight * (np.log(q1) - np.log(q0))))
+    return points[-1][1]
+
+
+def dementia_curve(
+    *, age: float, years: int, hazard_ratio: float = 1.0, sex: str = "male",
+) -> dict:
+    """DSDRS発症ハザードに日本の性別死亡を競合リスクとして加えた曲線。"""
     times = np.arange(0, max(0, int(years)) + 1, dtype=float)
     baseline_age = max(60.0, float(age))
     ten_year_risk = DSDRS_10_YEAR_RISK_BY_AGE[-1][2]
@@ -144,13 +184,26 @@ def dementia_curve(*, age: float, years: int, hazard_ratio: float = 1.0) -> dict
             ten_year_risk = risk
             break
     annual_hazard = -np.log1p(-ten_year_risk) / 10.0
-    survival = 1.0
+    event_free_survival = 1.0
+    cumulative_dementia = 0.0
     risks = [0.0]
     for elapsed in range(1, len(times)):
         attained_age = float(age) + elapsed - 1
-        active_hazard = annual_hazard if attained_age >= 60 else 0.0
-        survival *= np.exp(-active_hazard * float(hazard_ratio))
-        risks.append(1.0 - survival)
+        dementia_hazard = (
+            annual_hazard * float(hazard_ratio) if attained_age >= 60 else 0.0
+        )
+        death_probability = annual_mortality_probability(attained_age, sex)
+        death_hazard = -np.log1p(-min(0.999999, death_probability))
+        total_hazard = dementia_hazard + death_hazard
+        if total_hazard > 0:
+            annual_event_probability = 1.0 - np.exp(-total_hazard)
+            cumulative_dementia += (
+                event_free_survival
+                * annual_event_probability
+                * dementia_hazard / total_hazard
+            )
+            event_free_survival *= np.exp(-total_hazard)
+        risks.append(cumulative_dementia)
     return {"time": times, "risk": np.asarray(risks, dtype=float)}
 
 
