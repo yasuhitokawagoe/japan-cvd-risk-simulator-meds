@@ -244,11 +244,11 @@ except Exception as exc:
 def medication_selector(label: str, medications: list[dict], key_prefix: str) -> list[dict]:
     """薬剤クラス → 種類（複数可） → 薬剤ごとの用量の順で選ぶ。"""
     categories = list(dict.fromkeys(med["category"] for med in medications))
-    selected_categories = st.multiselect(
+    selected_categories = st.pills(
         "1. 薬剤クラス",
         categories,
+        selection_mode="multi",
         key=f"{key_prefix}_categories",
-        placeholder=f"{label}のクラスを選択",
     )
     selected: list[dict] = []
     for category in selected_categories:
@@ -256,11 +256,11 @@ def medication_selector(label: str, medications: list[dict], key_prefix: str) ->
         drug_names = list(dict.fromkeys(med["drug_name"] for med in class_meds))
         with st.container(border=True):
             st.markdown(f"**{category}**")
-            selected_drug_names = st.multiselect(
+            selected_drug_names = st.pills(
                 "2. 種類（複数選択可）",
                 drug_names,
+                selection_mode="multi",
                 key=f"{key_prefix}_{category}_drugs",
-                placeholder="薬剤を選択",
             )
             for drug_name in selected_drug_names:
                 matching_meds = [
