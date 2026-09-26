@@ -8,6 +8,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Iterable, Mapping
 
+import numpy as np
+
 
 @dataclass(frozen=True)
 class DementiaEvidence:
@@ -64,6 +66,51 @@ GLUCOSE_CONTROL_EVIDENCE_URL = (
     "https://consensus.app/papers/intensive-glycaemic-control-and-cognitive-decline-in-"
     "tuligenga/f925f67fae395a138ee56e39d5972076/"
 )
+
+
+TRIAL_ARM_CURVES = {
+    "bp_lowering": {
+        "title": "降圧治療：認知症または認知障害",
+        "followup_years": 4.1,
+        "control_risk": 0.075,
+        "intervention_risk": 0.070,
+        "control_label": "対照群",
+        "intervention_label": "降圧治療群",
+        "population": "RCT 12試験・92,135人（平均年齢69歳、平均開始SBP 154 mmHg）",
+        "caution": "複数試験の統合値であり、患者個人の年齢・血圧に合わせた絶対リスクではありません。",
+    },
+    "glp1_ra": {
+        "title": "GLP-1受容体作動薬：認知症",
+        "followup_years": 3.61,
+        "control_risk": 32 / 7913,
+        "intervention_risk": 15 / 7907,
+        "control_label": "プラセボ群",
+        "intervention_label": "GLP-1受容体作動薬群",
+        "population": "心血管アウトカムRCT 3試験・15,820人（2型糖尿病、平均年齢約65歳）",
+        "caution": (
+            "認知症は事前規定された主要評価項目ではなく、有害事象から収集されました。"
+            "絶対発症率が過少評価されている可能性があります。"
+        ),
+    },
+}
+
+
+def trial_arm_curve(key: str, points: int = 50) -> dict:
+    """公表された両群の追跡終了時リスクへ一致する一定ハザード曲線を返す。"""
+    trial = TRIAL_ARM_CURVES[key]
+    followup = float(trial["followup_years"])
+    time = np.linspace(0.0, followup, points + 1)
+
+    def curve(endpoint_risk: float) -> np.ndarray:
+        hazard = -np.log1p(-float(endpoint_risk)) / followup
+        return 1.0 - np.exp(-hazard * time)
+
+    return {
+        **trial,
+        "time": time.tolist(),
+        "control": (curve(float(trial["control_risk"])) * 100.0).tolist(),
+        "intervention": (curve(float(trial["intervention_risk"])) * 100.0).tolist(),
+    }
 
 
 def selected_dementia_evidence(

@@ -9,6 +9,7 @@ from dementia_prevention import (
     GLUCOSE_CONTROL_EVIDENCE_URL,
     STATIN_EVIDENCE_URL,
     selected_dementia_evidence,
+    trial_arm_curve,
 )
 from dm_outcomes import ACR_CATEGORY_MG_G, DIABETES_OUTCOMES, DiabetesOutcomeModel
 from lifestyle_interventions import DIET_EFFECTS, EXERCISE_EFFECTS, apply_lifestyle_effects
@@ -1069,6 +1070,45 @@ with result_col:
                     column.metric(evidence.label, evidence.relative_effect)
                     column.caption(evidence.evidence_summary)
                     column.link_button("根拠論文", evidence.source_url)
+
+                st.markdown("**試験の対照群から作成した基礎曲線**")
+                for evidence in supported:
+                    trial_curve = trial_arm_curve(evidence.key)
+                    dementia_fig = go.Figure()
+                    dementia_fig.add_trace(go.Scatter(
+                        x=trial_curve["time"],
+                        y=trial_curve["control"],
+                        mode="lines",
+                        name=trial_curve["control_label"],
+                        line=dict(color="#d34b4b", width=3, dash="dash"),
+                    ))
+                    dementia_fig.add_trace(go.Scatter(
+                        x=trial_curve["time"],
+                        y=trial_curve["intervention"],
+                        mode="lines",
+                        name=trial_curve["intervention_label"],
+                        line=dict(color="#14866d", width=3),
+                    ))
+                    dementia_fig.update_layout(
+                        title=trial_curve["title"],
+                        xaxis_title="追跡年数",
+                        yaxis_title="累積発症率（%）",
+                        height=360,
+                        hovermode="x unified",
+                        margin=dict(l=20, r=20, t=55, b=20),
+                        legend=dict(orientation="h", y=1.12),
+                    )
+                    st.plotly_chart(
+                        dementia_fig,
+                        width="stretch",
+                        config={"displayModeBar": False},
+                        key=f"dementia_trial_curve_{evidence.key}",
+                    )
+                    st.caption(trial_curve["population"])
+                    st.caption(
+                        "公表された追跡終了時の両群発症率に一致する一定ハザード曲線です。"
+                        + trial_curve["caution"]
+                    )
             else:
                 st.info("降圧薬またはGLP-1受容体作動薬を選ぶと、認知症予防の研究結果を表示します。")
 

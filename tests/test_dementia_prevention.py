@@ -1,4 +1,4 @@
-from dementia_prevention import selected_dementia_evidence
+from dementia_prevention import selected_dementia_evidence, trial_arm_curve
 
 
 def test_bp_and_glp1_are_returned_as_supported_evidence():
@@ -28,3 +28,13 @@ def test_dual_gip_glp1_is_not_extrapolated_from_glp1_trials():
         diabetes_medications=[{"category": "GIP/GLP-1受容体作動薬"}],
     )
     assert result["supported"] == []
+
+
+def test_trial_arm_curves_match_published_endpoint_risks():
+    bp = trial_arm_curve("bp_lowering")
+    assert round(bp["control"][-1], 1) == 7.5
+    assert round(bp["intervention"][-1], 1) == 7.0
+
+    glp1 = trial_arm_curve("glp1_ra")
+    assert round(glp1["control"][-1], 3) == round(32 / 7913 * 100, 3)
+    assert round(glp1["intervention"][-1], 3) == round(15 / 7907 * 100, 3)
