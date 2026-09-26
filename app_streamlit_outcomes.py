@@ -972,6 +972,8 @@ with input_col:
             if all_selected_labels:
                 st.caption("選択中: " + " / ".join(all_selected_labels))
             if care_mode == "continue":
+                all_selected_meds = selected_sbp_meds + selected_ldl_meds + selected_a1c_meds
+                missing_cost_labels = [m.get("key", "") for m in all_selected_meds if m.get("annual_cost_yen") is None]
                 untreated = reconstruct_untreated_values(
                     sbp_now=float(sbp_now), ldl_now=float(ldl_now), a1c_now=float(a1c_now),
                     sbp_meds=selected_sbp_meds, ldl_meds=selected_ldl_meds,
@@ -981,7 +983,9 @@ with input_col:
                     "sbp_target": untreated["sbp"],
                     "ldl_target": untreated["ldl"],
                     "a1c_target": untreated["a1c"],
-                    "annual_cost_yen": sum(int(m.get("annual_cost_yen") or 0) for m in selected_sbp_meds + selected_ldl_meds + selected_a1c_meds),
+                    "annual_cost_yen": sum(int(m.get("annual_cost_yen") or 0) for m in all_selected_meds),
+                    "cost_complete": not missing_cost_labels,
+                    "missing_cost_labels": missing_cost_labels,
                     "side_effects_md": "",
                 }
                 st.caption("選択薬の平均効果を逆算し、全薬中止時の検査値を推定します。")
@@ -1026,7 +1030,11 @@ with input_col:
 
         if use_meds and meds_summary is not None and selected_meds:
             st.divider()
-            st.metric("年間薬剤費（合計）", f"{annual_cost_yen:,} 円/年")
+            cost_complete = bool(meds_summary.get("cost_complete", True))
+            cost_label = "年間薬剤費（合計）" if cost_complete else "年間薬剤費（登録済み分）"
+            st.metric(cost_label, f"{annual_cost_yen:,} 円/年")
+            if not cost_complete:
+                st.caption("薬価未登録: " + " / ".join(meds_summary.get("missing_cost_labels", [])))
             with st.expander("主な副作用を確認", expanded=False):
                 if side_effects_md.strip():
                     st.markdown(side_effects_md)

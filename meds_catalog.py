@@ -284,6 +284,8 @@ def apply_meds_to_targets(
     a1c_target = float(min(max(a1c_target, clip_a1c[0]), clip_a1c[1]))
     
     # cost
+    all_selected = selected_sbp + selected_ldl + selected_a1c
+
     def cost_sum(arr):
         total = 0
         for m in arr:
@@ -293,6 +295,7 @@ def apply_meds_to_targets(
         return total
     
     annual_cost = cost_sum(selected_sbp) + cost_sum(selected_ldl) + cost_sum(selected_a1c)
+    missing_cost_labels = [m.get("key", "") for m in all_selected if m.get("annual_cost_yen") is None]
     
     # side effects: 薬剤ごとに並べる（MVP）
     def side_effect_lines(arr):
@@ -310,6 +313,8 @@ def apply_meds_to_targets(
         "ldl_target": ldl_target,
         "a1c_target": a1c_target,
         "annual_cost_yen": annual_cost,
+        "cost_complete": not missing_cost_labels,
+        "missing_cost_labels": missing_cost_labels,
         "side_effects_md": side_effects_md,
         "deltas": {"sbp_mmHg": sbp_delta, "ldl_mult": mult, "a1c_pctpt": a1c_delta},
     }
