@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 import unittest
 from unittest.mock import patch
 
@@ -18,6 +19,7 @@ st.session_state["pc_diabetes_probe"] = {
     "contributions": build_medication_contributions("mortality", horizon),
     "fitness": fitness_projection,
     "selected_a1c_meds": selected_a1c_meds,
+    "dementia_contributions": build_medication_contributions("dementia", horizon),
 }
 '''
 
@@ -80,11 +82,13 @@ class PCDiabetesUITests(unittest.TestCase):
         with patch("dm_outcomes.DiabetesOutcomeModel.predict_curve_with_ci", side_effect=AssertionError("DM model called")), \
                 patch("dementia_prevention.dementia_curve", side_effect=AssertionError("DM dementia called")):
             probe = self.toggle(app, False)
-        self.assertEqual(set(probe["curves"]), {"mortality", "mi", "stroke"})
+        self.assertEqual(set(probe["curves"]), {"mortality", "mi", "stroke", "esrd", "dementia"})
+        self.assertIn("unavailable_reason", probe["curves"]["esrd"])
+        self.assertIn("unavailable_reason", probe["curves"]["dementia"])
         self.assertEqual(probe["curves"], probe["documents"])
         self.assertEqual(set(probe["past"]), {"mortality", "mi", "stroke", "estimated_life_years_gained"})
         self.assertEqual(app.radio(key="display_outcome").value, "mortality")
-        self.assertTrue(any("3アウトカム" in m.value for m in app.markdown))
+        self.assertTrue(any("5アウトカム" in m.value for m in app.markdown))
         app.checkbox(key="show_hazard_ratio").check().run()
         self.probe(app)
         self.assertFalse(app.get("plotly_chart"))
@@ -153,6 +157,56 @@ class PCDiabetesUITests(unittest.TestCase):
         self.assertEqual(app.selectbox(key="past_benefit_outcome").options, ["全死亡", "心筋梗塞", "脳卒中"])
         self.assertFalse(any(g.key == "current_a1c_meds_categories" for g in app.get("button_group")))
         self.assertEqual(self.probe(app)["selected_a1c_meds"], [])
+
+    def test_general_dementia_curve_hr_and_contributions(self):
+        app = self.make_app(5.5)
+        next(n for n in app.number_input if n.label == "年齢（歳）").set_value(70).run()
+        app.radio(key="display_outcome").set_value("dementia").run()
+        probe = self.probe(app)
+        dementia = probe["curves"]["dementia"]
+        self.assertEqual(dementia["model"], "jages")
+        self.assertFalse(dementia["has_uncertainty"])
+        self.assertAlmostEqual(
+            sum(c["delta"] for c in probe["dementia_contributions"]),
+            dementia["baseline_cumulative"][-1] - dementia["target_cumulative"][-1],
+        )
+        figure = json.loads(app.get("plotly_chart")[0].proto.spec)
+        self.assertEqual(len(figure["data"]), 4)
+        self.assertTrue(any(t["line"].get("dash") == "dot" for t in figure["data"]))
+        self.assertFalse(any("95%" in t.get("name", "") for t in figure["data"]))
+        self.assertTrue(any("非糖尿病の人だけで検証された個人予測ではありません" in w.value for w in app.warning))
+        app.checkbox(key="show_hazard_ratio").check().run()
+        self.probe(app)
+        self.assertFalse(app.get("plotly_chart"))
+        self.assertFalse(any("HR相当の参考幅：" in c.value for c in app.caption))
+        self.assertEqual(len([m for m in app.metric if "HR相当" in m.label]), 5)
+        next(n for n in app.number_input if n.label == "年齢（歳）").set_value(64).run()
+        self.assertIn("unavailable_reason", self.probe(app)["curves"]["dementia"])
+        self.assertEqual(app.radio(key="display_outcome").value, "dementia")
+        self.assertTrue(any("65歳未満は未算出" in i.value for i in app.info))
+
+    def test_kfre_requires_real_inputs_and_has_no_intervention_or_hr(self):
+        app = self.make_app(5.5)
+        app.radio(key="display_outcome").set_value("esrd").run()
+        self.assertIn("unavailable_reason", self.probe(app)["curves"]["esrd"])
+        next(n for n in app.number_input if n.label == "現在のeGFR").set_value(25.0).run()
+        app.number_input(key="pc_kfre_uacr").set_value(300.0).run()
+        app.checkbox(key="pc_kfre_ckd_confirmed").check().run()
+        self.assertIn("unavailable_reason", self.probe(app)["curves"]["esrd"])
+        app.selectbox(key="pc_kfre_egfr_method").select("CKD-EPI").run()
+        renal = self.probe(app)["curves"]["esrd"]
+        self.assertIn("risk_2y", renal)
+        self.assertNotIn("target_cumulative", renal)
+        self.assertFalse(app.get("plotly_chart"))
+        next(n for n in app.number_input if n.label == "目標eGFR").set_value(55.0).run()
+        next(s for s in app.selectbox if s.label == "予測期間").select("50-year").run()
+        self.assertEqual(self.probe(app)["curves"]["esrd"], renal)
+        app.checkbox(key="show_hazard_ratio").check().run()
+        self.probe(app)
+        self.assertFalse(app.get("plotly_chart"))
+        self.assertTrue(any("比較する介入HRは算出しません" in i.value for i in app.info))
+        next(n for n in app.number_input if n.label == "現在のeGFR").set_value(60.0).run()
+        self.assertIn("unavailable_reason", self.probe(app)["curves"]["esrd"])
 
 
 if __name__ == "__main__":

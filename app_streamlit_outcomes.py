@@ -38,6 +38,10 @@ from risk_display import hazard_ratio_curve, format_hr, format_hazard_change
 from pc_diabetes_selection import (
     DIABETES_MODEL_KEY, mark_diabetes_selection_manual, sync_diabetes_selection,
 )
+from non_diabetic_outcomes import (
+    KFRE_URL, JAGES_URL, GENERAL_STATIN_URL, kidney_reference,
+    dementia_reference, general_dementia_curve, general_dementia_effects,
+)
 import pdf_plan_ui
 from treatment_backcast import reconstruct_untreated_values
 
@@ -329,7 +333,10 @@ def slider_with_nudges(
     return st.session_state[key]
 
 
-def calculate_cumulative_risk_curves(years: int, *, has_type2_diabetes: bool = True):
+def calculate_cumulative_risk_curves(
+    years: int, *, has_type2_diabetes: bool = True,
+    renal_uacr_mg_g=None, ckd_confirmed=False, egfr_method=None,
+):
     cumulative_data = {}
     for outcome in CARDIOVASCULAR_OUTCOMES:
         cumulative_data[outcome] = {
@@ -380,6 +387,22 @@ def calculate_cumulative_risk_curves(years: int, *, has_type2_diabetes: bool = T
                     result["upper"][scenario] * 100.0
                 )
     if not has_type2_diabetes:
+        cumulative_data["esrd"] = kidney_reference(
+            age=float(age), sex=sex, egfr=float(egfr_now),
+            uacr_mg_g=renal_uacr_mg_g, ckd_confirmed=ckd_confirmed,
+            egfr_method=egfr_method,
+        )
+        before_sbp, after_sbp = (sbp_tgt, sbp_now) if care_mode == "continue" else (sbp_now, sbp_tgt)
+        before_ldl, after_ldl = (ldl_tgt, ldl_now) if care_mode == "continue" else (ldl_now, ldl_tgt)
+        effects = general_dementia_effects(
+            sbp_before=before_sbp, sbp_after=after_sbp,
+            ldl_before=before_ldl, ldl_after=after_ldl,
+            has_statin=any("スタチン" in m.get("category", "") for m in selected_ldl_meds),
+        )
+        cumulative_data["dementia"] = dementia_reference(
+            age=float(age), sex=sex, years=years, treatment_hr=effects["combined"],
+            continuing=care_mode == "continue",
+        )
         return cumulative_data
 
     dm_common = {
@@ -573,6 +596,32 @@ def risk_at_horizon(outcome: str, horizon: int, targets: dict) -> float:
 
 def build_medication_contributions(outcome: str, horizon: int):
     ordered_meds = selected_sbp_meds + selected_ldl_meds + selected_a1c_meds
+    if not has_type2_diabetes and outcome == "esrd":
+        return []  # KFRE is prognostic; changing its predictors is not a treatment effect.
+    if not has_type2_diabetes and outcome == "dementia":
+        if age < 65:
+            return []
+        effects = general_dementia_effects(
+            sbp_before=sbp_now, sbp_after=sbp_tgt, ldl_before=ldl_now, ldl_after=ldl_tgt,
+            has_statin=any("スタチン" in m.get("category", "") for m in selected_ldl_meds),
+        )
+        running_hr = 1.0
+        running_risk = general_dementia_curve(age=float(age), sex=sex, years=horizon)["risk"][-1]
+        contributions = []
+        for label, factor in (
+            ("血圧低下（探索的換算）", effects["bp"]),
+            ("LDL低下（観察研究・推定）", effects["ldl"]),
+            ("スタチン（LDLと重複しない差分・推定）", effects["statin_increment"]),
+        ):
+            if factor >= 0.999999:
+                continue
+            running_hr *= factor
+            next_risk = general_dementia_curve(
+                age=float(age), sex=sex, years=horizon, hazard_ratio=running_hr,
+            )["risk"][-1]
+            contributions.append({"name": label, "delta": (running_risk - next_risk) * 100})
+            running_risk = next_risk
+        return contributions
     if outcome == "dementia":
         running_risk = dementia_curve(
             age=float(age), years=horizon, sex=sex,
@@ -717,7 +766,7 @@ def plot_risk_curve(outcome: str, data: dict, hr_mode: bool = False):
     target_low = np.asarray(data["target_ci_lower"], dtype=float)
     target_high = np.asarray(data["target_ci_upper"], dtype=float)
 
-    cutoff_year = 10.0 if outcome == "dementia" else max(0.0, 85.0 - float(age))
+    cutoff_year = data.get("extrapolation_after", 10.0) if outcome == "dementia" else max(0.0, 85.0 - float(age))
     cut_idx = int(np.searchsorted(t, cutoff_year, side="right"))
     post_idx = max(0, cut_idx - 1)
     post_dash = "dot" if outcome == "dementia" else "solid"
@@ -818,8 +867,10 @@ def plot_risk_curve(outcome: str, data: dict, hr_mode: bool = False):
         for trace in fig.data:
             if trace.hoverinfo != "skip":
                 trace.hovertemplate = "%{x:.0f}年：HR相当 %{y:.2f}<extra></extra>"
+    if not data.get("has_uncertainty", True):
+        fig.data = tuple(trace for trace in fig.data if trace.hoverinfo != "skip")
     fig.update_layout(
-        title=OUTCOME_META[outcome]["title"],
+        title=("認知症（一般住民の参考推定）" if data.get("model") == "jages" else OUTCOME_META[outcome]["title"]),
         xaxis_title="年数",
         yaxis_title="HR相当（累積ハザード比・基準=1）" if hr_mode else "累積リスク（%）",
         hovermode="x unified",
@@ -831,6 +882,7 @@ def plot_risk_curve(outcome: str, data: dict, hr_mode: bool = False):
 
 
 include_fitness = False
+renal_uacr_mg_g, renal_ckd_confirmed, renal_egfr_method = None, False, None
 input_col, result_col = st.columns([0.38, 0.62], gap="large")
 
 with input_col:
@@ -984,6 +1036,23 @@ with input_col:
                 "尿アルブミン（目標）", ["A1", "A2", "A3"],
                 format_func=lambda value: {"A1": "A1（正常〜軽度）", "A2": "A2（中等度）", "A3": "A3（高度）"}[value],
             )
+        if not has_type2_diabetes:
+            st.markdown("**糖尿病なし：透析・移植リスクの追加情報**")
+            renal_uacr_mg_g = st.number_input(
+                "尿ACR実測値（mg/gCr）", min_value=0.1, max_value=100000.0,
+                value=None, step=1.0, key="pc_kfre_uacr",
+                placeholder="検査結果の数値（尿蛋白/Crとは異なります）",
+                help="A1〜A3の代表値や尿蛋白/Crで代用しません。未測定なら空欄のままにしてください。",
+            )
+            renal_egfr_method = st.selectbox(
+                "現在のeGFRの算出式", ["不明・日本人式", "CKD-EPI"], key="pc_kfre_egfr_method",
+                help="上の「現在のeGFR」がCKD-EPI式の値である場合のみKFREを算出します。自動換算はしません。",
+            )
+            renal_ckd_confirmed = st.checkbox(
+                "CKDが確認済み（3か月以上持続）で、透析・腎移植は未施行",
+                key="pc_kfre_ckd_confirmed",
+            )
+            st.caption("KFREはCKD G3〜G5・eGFR 60未満が対象。2年・5年の腎不全リスクで、薬の効果や長期予測は算出しません。")
 
     with st.container(border=True):
         st.markdown("#### 💊 現在服用中の薬" if care_mode == "continue" else "#### 💊 薬剤")
@@ -1268,7 +1337,10 @@ with input_col:
     )
 
 horizon = _years_from_choice(horizon_choice)
-cumulative_data = calculate_cumulative_risk_curves(horizon, has_type2_diabetes=has_type2_diabetes)
+cumulative_data = calculate_cumulative_risk_curves(
+    horizon, has_type2_diabetes=has_type2_diabetes, renal_uacr_mg_g=renal_uacr_mg_g,
+    ckd_confirmed=renal_ckd_confirmed, egfr_method=renal_egfr_method,
+)
 available_outcomes = tuple(key for key in OUTCOME_DISPLAY_ORDER if key in cumulative_data)
 for selection_key in ("display_outcome", "past_benefit_outcome"):
     if st.session_state.get(selection_key) not in available_outcomes:
@@ -1294,9 +1366,8 @@ with result_col:
     st.subheader("リアルタイム予測")
     if not has_type2_diabetes:
         st.info(
-            "2型糖尿病向けの大切断・失明は表示していません。"
-            "透析と認知症も現在は2型糖尿病用モデルのため数値を表示しません。"
-            "非糖尿病の透析予測には別モデルが必要です。リスクがゼロという意味ではありません。"
+            "糖尿病なしでも透析・認知症を確認できます。透析はCKDの2年・5年予測、"
+            "認知症は65歳以上の日本一般住民の参考推定です。大切断・失明は表示しません。"
         )
     hr_mode = st.checkbox("HR表示に切り替える（累積ハザード比の推定）", key="show_hazard_ratio")
     if hr_mode:
@@ -1316,114 +1387,166 @@ with result_col:
         key="display_outcome",
     )
     selected_data = cumulative_data[selected_outcome]
-    if fitness_projection is not None and selected_outcome != "mortality":
-        st.info("心肺体力の推定上乗せは「全死亡」で確認できます。このアウトカムには上乗せしていません。")
-    baseline_risk = selected_data["baseline_cumulative"][-1]
-    target_risk = selected_data["target_cumulative"][-1]
-    arr = baseline_risk - target_risk
-    displayed_horizon = int(selected_data["time"][-1])
-
-    metric_cols = st.columns(3)
-    if hr_mode:
-        ratio_data = hazard_ratio_curve(selected_data)
-        ratio = ratio_data["target_cumulative"][-1]
-        metric_cols[0].metric("服薬継続（基準）" if care_mode == "continue" else "現在（基準）", "1.00")
-        metric_cols[1].metric(
-            f"{displayed_horizon}年・{'全薬中止' if care_mode == 'continue' else '目標達成時'} HR相当"
-            + ("（心肺体力込み・推定）" if selected_outcome == "mortality" and fitness_projection is not None else ""),
-            format_hr(ratio),
-        )
-        metric_cols[2].metric("ハザードの変化（推定）", format_hazard_change(ratio))
+    if selected_data.get("model") == "kfre":
+        st.markdown("#### 腎不全（透析・腎移植）：KFRE参考予測")
+        if "unavailable_reason" in selected_data:
+            st.info("未算出：" + selected_data["unavailable_reason"])
+        else:
+            renal_cols = st.columns(2)
+            renal_cols[0].metric("2年・現在の腎不全リスク", f"{selected_data['risk_2y'] * 100:.1f}%")
+            renal_cols[1].metric("5年・現在の腎不全リスク", f"{selected_data['risk_5y'] * 100:.1f}%")
         st.caption(
-            f"HR相当の参考幅：{format_hr(ratio_data['target_ci_lower'][-1])}–"
-            f"{format_hr(ratio_data['target_ci_upper'][-1])}"
+            "糖尿病の有無を問わないCKD用KFRE（4変数・非北米補正）です。透析のみでなく腎移植も含みます。"
+            "上で選んだ予測期間にかかわらず2年・5年だけを表示します。"
+            "日本人専用の較正ではなく、死亡との競合を考慮しないため、特に高齢者では過大推定の可能性があります。"
+            "目標検査値の変化を薬効とみなさず、介入後リスク・HR・95%幅・長期曲線は表示しません。"
         )
-    elif care_mode == "continue":
-        harm = target_risk - baseline_risk
-        metric_cols[0].metric(f"{displayed_horizon}年・服薬継続", f"{baseline_risk:.1f}%")
-        metric_cols[1].metric(f"{displayed_horizon}年・今日から全薬中止", f"{target_risk:.1f}%")
-        metric_cols[2].metric("中止によるリスク増加", f"+{harm:.1f} pt")
+        if hr_mode:
+            st.info("KFREは現在の絶対リスクの予測のみです。比較する介入HRは算出しません。")
+        st.link_button("KFREの検証研究", KFRE_URL)
+    elif "unavailable_reason" in selected_data:
+        st.info("未算出：" + selected_data["unavailable_reason"])
     else:
-        metric_cols[0].metric(f"{displayed_horizon}年・現在", f"{baseline_risk:.1f}%")
-        target_label = f"{displayed_horizon}年・目標達成時"
-        if selected_outcome == "mortality" and fitness_projection is not None:
-            target_label += "（心肺体力込み・推定）"
-        metric_cols[1].metric(target_label, f"{target_risk:.1f}%")
-        metric_cols[2].metric("リスク減少幅", f"{arr:.1f} pt")
+        if fitness_projection is not None and selected_outcome != "mortality":
+            st.info("心肺体力の推定上乗せは「全死亡」で確認できます。このアウトカムには上乗せしていません。")
+        baseline_risk = selected_data["baseline_cumulative"][-1]
+        target_risk = selected_data["target_cumulative"][-1]
+        arr = baseline_risk - target_risk
+        displayed_horizon = int(selected_data["time"][-1])
 
-    if not hr_mode:
-        st.plotly_chart(
-            plot_risk_curve(selected_outcome, selected_data),
-            width="stretch",
-            config={"displayModeBar": False},
-        )
-    if selected_outcome == "mortality":
-        st.caption(MORTALITY_ALL_CAUSE_DEATH_CAPTION)
-        if fitness_projection is not None:
-            st.caption(
-                ("" if hr_mode else f"{displayed_horizon}年・全死亡の95%推定幅："
-                 f"{fitness_projection['lower'][-1]:.2f}–{fitness_projection['upper'][-1]:.2f}%。") +
-                "モデル上の仮定を含む元の予測幅・心肺体力改善量・観察研究のRRの不確実性を独立と仮定して合成した近似幅です。"
-                "検証済みの95%信頼区間ではなく、交絡や効果重複による偏りは含みません。"
-                "グラフ・全死亡の数値・減少幅・治療内訳に反映しています。書類は通常推計です。"
+        metric_cols = st.columns(3)
+        if hr_mode:
+            ratio_data = hazard_ratio_curve(selected_data)
+            ratio = ratio_data["target_cumulative"][-1]
+            metric_cols[0].metric("服薬継続（基準）" if care_mode == "continue" else "現在（基準）", "1.00")
+            metric_cols[1].metric(
+                f"{displayed_horizon}年・{'全薬中止' if care_mode == 'continue' else '目標達成時'} HR相当"
+                + ("（心肺体力込み・推定）" if selected_outcome == "mortality" and fitness_projection is not None else ""),
+                format_hr(ratio),
             )
-    elif selected_outcome == "dementia":
-        st.caption(
-            "2型糖尿病患者（60歳以上）の年齢別発症率を、日本の実測コホートへ部分較正した参考推定です。"
-            "10年までは実線、10年超は同じ年齢別発症率と治療効果が続く仮定の外挿を点線で表示します。"
-            "血圧・LDL低下は薬剤、食事、運動、手入力のいずれでも低下量から反映します。"
-            "介入併用時は相対効果の乗算を仮定しています。"
-        )
-        dementia_links = st.columns(3)
-        dementia_links[0].link_button("認知症基礎曲線の根拠", DSDRS_EVIDENCE_URL)
-        dementia_links[1].link_button("日本実測の根拠", JAPAN_DEMENTIA_COHORT_URL)
-        dementia_links[2].link_button("LDL値と認知症の根拠", LDL_LEVEL_EVIDENCE_URL)
-
-    if care_mode != "continue" and not hr_mode:
-        with st.container(border=True):
-            st.markdown(
-                f'<h4 class="arr-breakdown-title" translate="no" '
-                f'data-title="各治療によるリスク減少（{displayed_horizon}年間）"></h4>',
-                unsafe_allow_html=True,
-            )
-            contributions = build_medication_contributions(selected_outcome, horizon)
+            metric_cols[2].metric("ハザードの変化（推定）", format_hazard_change(ratio))
+            if selected_data.get("has_uncertainty", True):
+                st.caption(
+                    f"HR相当の参考幅：{format_hr(ratio_data['target_ci_lower'][-1])}–"
+                    f"{format_hr(ratio_data['target_ci_upper'][-1])}"
+                )
+        elif care_mode == "continue":
+            harm = target_risk - baseline_risk
+            metric_cols[0].metric(f"{displayed_horizon}年・服薬継続", f"{baseline_risk:.1f}%")
+            metric_cols[1].metric(f"{displayed_horizon}年・今日から全薬中止", f"{target_risk:.1f}%")
+            metric_cols[2].metric("中止によるリスク増加", f"+{harm:.1f} pt")
+        else:
+            metric_cols[0].metric(f"{displayed_horizon}年・現在", f"{baseline_risk:.1f}%")
+            target_label = f"{displayed_horizon}年・目標達成時"
             if selected_outcome == "mortality" and fitness_projection is not None:
-                contributions.append({
-                    "name": "運動：心肺体力の追加効果（探索的推定）",
-                    "delta": fitness_projection["additional_arr"],
-                })
-            if not contributions:
-                st.info("薬剤・食事療法・運動療法を選ぶと、追加によるリスク低下幅をここに表示します。")
-            else:
-                max_delta = max(max(item["delta"] for item in contributions), 0.01)
-                for item in contributions:
-                    width = min(100.0, item["delta"] / max_delta * 100.0)
-                    st.markdown(
-                        f"""
-                        <div class="contribution-row">
-                          <div>{item['name']}</div>
-                          <div class="contribution-track"><div class="contribution-fill" style="width:{width:.1f}%"></div></div>
-                          <div class="contribution-value">−{item['delta']:.2f} pt</div>
-                        </div>
-                        """,
-                        unsafe_allow_html=True,
-                    )
-                st.caption("表示順に治療を追加したときのリスク減少幅です。併用順によって内訳は変わります。")
-    elif care_mode == "continue" and selected_meds:
-        st.success("現在の良好な検査値と低い将来リスクは、服薬継続で得られている効果です。自己判断で中止せず主治医と相談しましょう。")
-    elif care_mode == "continue":
-        st.info("左側で現在服用中の薬を選ぶと、全薬中止との比較を表示します。")
+                target_label += "（心肺体力込み・推定）"
+            metric_cols[1].metric(target_label, f"{target_risk:.1f}%")
+            metric_cols[2].metric("リスク減少幅", f"{arr:.1f} pt")
+
+        if not hr_mode:
+            st.plotly_chart(
+                plot_risk_curve(selected_outcome, selected_data),
+                width="stretch",
+                config={"displayModeBar": False},
+            )
+        if selected_outcome == "mortality":
+            st.caption(MORTALITY_ALL_CAUSE_DEATH_CAPTION)
+            if fitness_projection is not None:
+                st.caption(
+                    ("" if hr_mode else f"{displayed_horizon}年・全死亡の95%推定幅："
+                     f"{fitness_projection['lower'][-1]:.2f}–{fitness_projection['upper'][-1]:.2f}%。") +
+                    "モデル上の仮定を含む元の予測幅・心肺体力改善量・観察研究のRRの不確実性を独立と仮定して合成した近似幅です。"
+                    "検証済みの95%信頼区間ではなく、交絡や効果重複による偏りは含みません。"
+                    "グラフ・全死亡の数値・減少幅・治療内訳に反映しています。書類は通常推計です。"
+                )
+        elif selected_data.get("model") == "jages":
+            st.warning(
+                "日本の一般住民（糖尿病の人も含む）の参考推定です。非糖尿病の人だけで検証された個人予測ではありません。"
+                "対象は日常生活に支障のある要介護認知症で、すべての認知症診断とは異なります。"
+            )
+            st.caption(
+                "JAGESの65歳以上・年齢別／性別発症率を使い、日本の死亡率を競合リスクとして加えた独自の近似です。"
+                "開始時年齢層の発症率を固定し、9年超は外挿として点線にします。85歳以上は一括した発症率です。"
+                "基礎率・組み合わせモデルの95%幅は算出できないため表示しません。"
+                "血圧低下はRCTのORをハザード倍率に近似し、LDL・スタチンは観察研究の関連を探索的に換算します。"
+                "LDLとスタチンは効果の大きい一方のみを採用し、降圧との乗算を仮定します。"
+                "この組み合わせや長期の予防効果は未検証で、糖尿病薬の認知症効果は流用していません。"
+            )
+            dementia_links = st.columns(3)
+            dementia_links[0].link_button("日本一般住民の発症率", JAGES_URL)
+            dementia_links[1].link_button("スタチンの観察研究", GENERAL_STATIN_URL)
+            dementia_links[2].link_button("LDL値と認知症の根拠", LDL_LEVEL_EVIDENCE_URL)
+        elif selected_outcome == "dementia":
+            st.caption(
+                "2型糖尿病患者（60歳以上）の年齢別発症率を、日本の実測コホートへ部分較正した参考推定です。"
+                "10年までは実線、10年超は同じ年齢別発症率と治療効果が続く仮定の外挿を点線で表示します。"
+                "血圧・LDL低下は薬剤、食事、運動、手入力のいずれでも低下量から反映します。"
+                "介入併用時は相対効果の乗算を仮定しています。"
+            )
+            dementia_links = st.columns(3)
+            dementia_links[0].link_button("認知症基礎曲線の根拠", DSDRS_EVIDENCE_URL)
+            dementia_links[1].link_button("日本実測の根拠", JAPAN_DEMENTIA_COHORT_URL)
+            dementia_links[2].link_button("LDL値と認知症の根拠", LDL_LEVEL_EVIDENCE_URL)
+
+        if care_mode != "continue" and not hr_mode:
+            with st.container(border=True):
+                st.markdown(
+                    f'<h4 class="arr-breakdown-title" translate="no" '
+                    f'data-title="各治療によるリスク減少（{displayed_horizon}年間）"></h4>',
+                    unsafe_allow_html=True,
+                )
+                contributions = build_medication_contributions(selected_outcome, horizon)
+                if selected_outcome == "mortality" and fitness_projection is not None:
+                    contributions.append({
+                        "name": "運動：心肺体力の追加効果（探索的推定）",
+                        "delta": fitness_projection["additional_arr"],
+                    })
+                if not contributions:
+                    st.info("薬剤・食事療法・運動療法を選ぶと、追加によるリスク低下幅をここに表示します。")
+                else:
+                    max_delta = max(max(item["delta"] for item in contributions), 0.01)
+                    for item in contributions:
+                        width = min(100.0, item["delta"] / max_delta * 100.0)
+                        st.markdown(
+                            f"""
+                            <div class="contribution-row">
+                              <div>{item['name']}</div>
+                              <div class="contribution-track"><div class="contribution-fill" style="width:{width:.1f}%"></div></div>
+                              <div class="contribution-value">−{item['delta']:.2f} pt</div>
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
+                    st.caption("表示順に治療を追加したときのリスク減少幅です。併用順によって内訳は変わります。")
+        elif care_mode == "continue" and selected_data.get("model") == "jages":
+            st.info("認知症の継続・中止の差も探索的な仮定です。服薬中止による実際の変化を実証するものではありません。")
+        elif care_mode == "continue" and selected_meds:
+            st.success("現在の良好な検査値と低い将来リスクは、服薬継続で得られている効果です。自己判断で中止せず主治医と相談しましょう。")
+        elif care_mode == "continue":
+            st.info("左側で現在服用中の薬を選ぶと、全薬中止との比較を表示します。")
 
     with st.container(border=True):
         st.markdown(f"#### {len(available_outcomes)}アウトカムの比較")
         summary_cols = st.columns(3)
         for index, outcome in enumerate(available_outcomes):
             data = cumulative_data[outcome]
+            label = OUTCOME_META[outcome]["label"]
+            if data.get("model") == "jages":
+                label += "（一般住民参考）"
+            if "unavailable_reason" in data:
+                summary_cols[index % 3].metric(label, "未算出", help=data["unavailable_reason"])
+                continue
+            if data.get("model") == "kfre":
+                summary_cols[index % 3].metric(
+                    "腎不全（5年・現在参考）", f"{data['risk_5y'] * 100:.1f}%",
+                    help="透析・移植を含む現在の絶対リスク。HR・目標達成時の値ではありません。",
+                )
+                continue
             outcome_arr = data["baseline_cumulative"][-1] - data["target_cumulative"][-1]
             if hr_mode:
                 outcome_hr = hazard_ratio_curve(data)["target_cumulative"][-1]
                 summary_cols[index % 3].metric(
-                    OUTCOME_META[outcome]["label"] + " HR相当" + (
+                    label + " HR相当" + (
                         "（心肺体力込み・推定）" if outcome == "mortality" and fitness_projection is not None else ""
                     ),
                     format_hr(outcome_hr),
@@ -1433,14 +1556,14 @@ with result_col:
             elif care_mode == "continue":
                 stopping_harm = max(0.0, -outcome_arr)
                 summary_cols[index % 3].metric(
-                    f"{OUTCOME_META[outcome]['label']}（継続）",
+                    f"{label}（継続）",
                     f"{data['baseline_cumulative'][-1]:.1f}%",
                     delta=f"中止で +{stopping_harm:.1f} pt",
                     delta_color="inverse",
                 )
             else:
                 summary_cols[index % 3].metric(
-                    OUTCOME_META[outcome]["label"] + (
+                    label + (
                         "（心肺体力込み・推定）" if outcome == "mortality" and fitness_projection is not None else ""
                     ),
                     f"{data['target_cumulative'][-1]:.1f}%",
@@ -1560,6 +1683,9 @@ with result_col:
 
     if care_mode == "continue" and selected_meds and treatment_years > 0:
         past_benefit = calculate_past_treatment_benefit(int(treatment_years), has_type2_diabetes=has_type2_diabetes)
+        past_available_outcomes = tuple(key for key in available_outcomes if key in past_benefit)
+        if st.session_state.get("past_benefit_outcome") not in past_available_outcomes:
+            st.session_state["past_benefit_outcome"] = past_available_outcomes[0]
         st.markdown("## ⏪ これまでの治療で得られた利益")
         st.caption(
             f"治療開始から現在までの{int(treatment_years)}年間を、最初から薬を使わなかった場合と比較した推定です。"
@@ -1574,7 +1700,9 @@ with result_col:
         st.caption("全死亡の生存曲線差を治療期間内で積分した集団平均のモデル推定です。個人の寿命を断定する値ではありません。")
 
         benefit_cols = st.columns(3)
-        for index, outcome in enumerate(available_outcomes):
+        if not has_type2_diabetes:
+            st.caption("一般住民の認知症・KFREの腎不全推定は、過去の治療利益の逆算には使いません。")
+        for index, outcome in enumerate(past_available_outcomes):
             benefit = past_benefit[outcome]
             benefit_cols[index % 3].metric(
                 OUTCOME_META[outcome]["label"],
@@ -1585,7 +1713,7 @@ with result_col:
 
         past_outcome = st.selectbox(
             "過去の累積利益を表示するアウトカム",
-            available_outcomes,
+            past_available_outcomes,
             format_func=lambda value: OUTCOME_META[value]["label"],
             key="past_benefit_outcome",
         )
@@ -1614,7 +1742,7 @@ st.caption(
     "選択した介入を順に加えた際の表示上の差を分解したものです。"
 )
 st.caption(
-    "※ 透析・大切断・失明はDM-modelのWeibullモデルを用いた2型糖尿病患者向け推定です。"
+    "※ 2型糖尿病にチェックした場合の透析・大切断・失明はDM-modelのWeibullモデルによる推定です。"
     "個人の発症を断定するものではなく、1型糖尿病には適用しません。"
 )
 st.caption(
