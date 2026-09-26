@@ -119,16 +119,20 @@ ExaltoらのDiabetes Specific Dementia Risk Scoreで、年齢だけを加点し�
 ### アプリでの位置付け
 
 - 主要アウトカムではなく「骨の健康（参考）」とする。
-- 骨密度、既往骨折、末梢神経障害、転倒歴などが未入力のため、絶対リスク曲線や骨粗鬆症診断を表示しない。
-- 現在の入力で確認できる年齢、性別、低BMI、腎機能、インスリン使用から、追加評価を検討するフラグのみ表示する。
+- 折りたたみ内のおまけ機能として、2017年日本全国調査の年齢・性別別発生率を基礎に、大腿骨近位部骨折の10年参考確率を表示する。
+- 2型糖尿病RR 1.33を反映し、脆弱性骨折歴がある場合は将来の股関節骨折HR 1.82を追加する。厚生労働省2024年生命表による死亡を競合リスクとして扱う。
+- 転倒歴、末梢神経障害、長期ステロイド、DXA大腿骨頸部Tスコアを入力できる。これらは注意喚起とDXA区分に用いるが、未検証の効果量を参考確率へは上乗せしない。
+- 日本版FRAX、主要骨粗鬆症性骨折確率、骨粗鬆症診断の代替にはしない。
 
 ### 根拠
 
 - 日本の全国調査では2017年の大腿骨近位部骨折は約193,400件と推定され、年齢・性別差が大きい。Takusari E et al. JBMR Plus. 2021;5. DOI: 10.1002/jbm4.10428. [Consensus](https://consensus.app/papers/trends-in-hip-fracture-incidence-in-japan-estimates-based-takusari-sakata/cc4a0b53336757fa9fdd09ee3e2ef9e0/)
+- 2型糖尿病では股関節骨折RR 1.33（95%CI 1.19–1.49）。Vilaca T et al. Bone. 2020;137:115457. DOI: 10.1016/j.bone.2020.115457.
+- 既往骨折は将来の股関節骨折HR 1.82（95%CI 1.62–2.06）。Kanis JA et al. Osteoporos Int. 2023;34:2027–2045. DOI: 10.1007/s00198-023-06870-z.
 - 中国の2型糖尿病患者用CDFRモデルは、年齢、性別、既往骨折、インスリン、末梢神経障害、脂質項目を含み、10年主要骨粗鬆症性骨折のC統計量0.803。ただし単施設で外部検証が不足する。Kong XK et al. Osteoporos Int. 2022;33:1957-1967. DOI: 10.1007/s00198-022-06425-8. [Consensus](https://consensus.app/papers/major-osteoporosis-fracture-prediction-in-type-2-diabetes-kong-zhao/ab024f9bfd1552d8a948c9c9bf03a515/)
 - 骨粗鬆症治療薬は69 RCT、8万人超のネットワークメタ解析で骨折予防効果が確認されている。Händel MN et al. BMJ. 2023;381:e068033. DOI: 10.1136/bmj-2021-068033. [Consensus](https://consensus.app/papers/fracture-risk-reduction-and-safety-by-osteoporosis-h%C3%A4ndel-cardoso/ed519e3e91b452beb364985de7d04176/)
 - DPP-4阻害薬、GLP-1受容体作動薬、SGLT2阻害薬は177 RCT、165,081人の解析で全骨折リスクを有意に増加させなかった。ただし追跡中央値26週と短く、骨折予防効果としては使用しない。Chai S et al. Front Pharmacol. 2022;13:825417. DOI: 10.3389/fphar.2022.825417. [Consensus](https://consensus.app/papers/risk-of-fracture-with-dipeptidyl-peptidase4-inhibitors-chai-liu/3c397c65e77d5d94b942366f34a47365/)
 
-### 将来、数値曲線へ拡張する条件
+### 今後の拡張条件
 
-少なくとも既往骨折、DXA/Tスコア、末梢神経障害、転倒歴、ステロイド、飲酒、骨粗鬆症薬を追加入力し、日本人または日本で較正されたモデルを採用する。条件が揃うまでは、骨折確率を表示しない。
+飲酒、親の大腿骨骨折、関節リウマチ、骨粗鬆症薬と治療期間を追加し、日本版FRAXとの外部比較を行う。検証が済むまでは主要アウトカムへ昇格させない。

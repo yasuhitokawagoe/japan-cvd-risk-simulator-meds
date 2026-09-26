@@ -9,7 +9,9 @@ from bone_health import (
     DIABETES_FRACTURE_MODEL_URL,
     JAPAN_HIP_FRACTURE_URL,
     OSTEOPOROSIS_TREATMENT_URL,
+    bone_density_category,
     bone_health_flags,
+    hip_fracture_risk,
 )
 from calc_engine_outcomes import OutcomesEngine
 from dementia_prevention import (
@@ -1234,12 +1236,43 @@ with result_col:
     with st.container(border=True):
         st.markdown("#### 🦴 骨の健康（参考）")
         st.caption(
-            "骨粗鬆症・骨折は補足情報です。骨密度、既往骨折、末梢神経障害、転倒歴などが"
-            "未入力のため、絶対リスク曲線や診断結果は表示しません。"
+            "主要アウトカムには含めない、おまけのスクリーニング機能です。"
+            "日本の年齢・性別別発生率から大腿骨近位部骨折の10年参考確率を計算します。"
         )
+        with st.expander("骨折リスクを詳しく確認", expanded=False):
+            bone_col1, bone_col2 = st.columns(2)
+            with bone_col1:
+                prior_fragility_fracture = st.checkbox("脆弱性骨折歴あり")
+                fall_history = st.checkbox("過去1年の転倒歴あり")
+                peripheral_neuropathy = st.checkbox("糖尿病性末梢神経障害あり")
+            with bone_col2:
+                glucocorticoid_use = st.checkbox("長期ステロイド使用あり")
+                has_t_score = st.checkbox("大腿骨頸部Tスコアが分かる")
+                t_score = (
+                    st.number_input("大腿骨頸部Tスコア", -6.0, 3.0, -1.0, 0.1)
+                    if has_t_score else None
+                )
+            fracture_risk_10y = hip_fracture_risk(
+                age=float(age), sex=sex, years=10,
+                prior_fragility_fracture=prior_fragility_fracture,
+            )
+            bone_metrics = st.columns(2)
+            bone_metrics[0].metric(
+                "大腿骨近位部骨折・10年参考確率", f"{fracture_risk_10y * 100:.1f}%",
+            )
+            bone_metrics[1].metric("DXA区分", bone_density_category(t_score))
+            st.caption(
+                "2型糖尿病RR 1.33と、骨折歴がある場合は既往骨折HR 1.82を反映。"
+                "転倒・神経障害・ステロイドは注意喚起だけに使い、未検証の上乗せはしません。"
+            )
         bone_flags = bone_health_flags(
             age=float(age), sex=sex, bmi=float(bmi_now), egfr=float(egfr_now),
             diabetes_medications=selected_a1c_meds,
+            prior_fragility_fracture=prior_fragility_fracture,
+            fall_history=fall_history,
+            peripheral_neuropathy=peripheral_neuropathy,
+            glucocorticoid_use=glucocorticoid_use,
+            t_score=t_score,
         )
         if bone_flags:
             st.markdown("**診察時に確認したい項目**")
@@ -1248,8 +1281,8 @@ with result_col:
         else:
             st.info("現在の入力項目から追加の確認フラグはありません。骨折歴や骨密度は別途評価が必要です。")
         st.write(
-            "日本の大腿骨近位部骨折調査と2型糖尿病患者の骨折予測研究はありますが、"
-            "個人の骨折リスク計算には追加情報が必要です。骨粗鬆症治療薬には骨折予防のRCT根拠があります。"
+            "参考確率は日本版FRAXや骨粗鬆症診断の代替ではありません。"
+            "骨粗鬆症治療薬には骨折予防のRCT根拠があります。"
         )
         bone_links = st.columns(4)
         bone_links[0].link_button("日本の骨折疫学", JAPAN_HIP_FRACTURE_URL)
