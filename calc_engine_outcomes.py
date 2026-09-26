@@ -459,7 +459,8 @@ class OutcomesEngine:
                                    egfr_now: float = None,
                                    egfr_target: float = None,
                                    acr_now: str = None,
-                                   acr_target: str = None) -> dict:
+                                   acr_target: str = None,
+                                   apply_hba1c_effect: bool = True) -> dict:
         """信頼区間付きの累積リスク計算"""
         # 性別を正規化
         sex = _norm_sex(sex)
@@ -467,7 +468,9 @@ class OutcomesEngine:
         # 現在の値と目標値の差を計算
         delta_sbp = sbp_now - sbp_target
         delta_ldl_mmol = (ldl_now_mg - ldl_target_mg) / 38.67
-        delta_hba1c = hba1c_now - hba1c_target
+        # Opt-out for populations where the glycaemic model is not applicable.
+        # Do not impute a normal HbA1c or apply the low-HbA1c penalty there.
+        delta_hba1c = hba1c_now - hba1c_target if apply_hba1c_effect else 0.0
         
         pack_years = (cigs_per_day / 20.0) * max(0.0, years_smoked)
         
@@ -503,7 +506,7 @@ class OutcomesEngine:
                 rr_a1c_base = 1.0
                 rr_sbp_target = self.rr_sbp(outcome, delta_sbp)
                 rr_ldl_target = self.rr_ldl(outcome, delta_ldl_mmol)
-                rr_a1c_target = self.rr_hba1c(outcome, delta_hba1c, hba1c_target)
+                rr_a1c_target = self.rr_hba1c(outcome, delta_hba1c, hba1c_target) if apply_hba1c_effect else 1.0
             else:
                 # Baseline は常に RR=1.0（変化なし）。CIは当てない。
                 rr_sbp_base = 1.0
@@ -513,7 +516,8 @@ class OutcomesEngine:
                 # Target のみに効果量の不確実性を反映
                 rr_sbp_ci = self.rr_sbp_with_ci(outcome, delta_sbp, confidence_level)
                 rr_ldl_ci = self.rr_ldl_with_ci(outcome, delta_ldl_mmol, confidence_level)
-                rr_a1c_ci = self.rr_hba1c_with_ci(outcome, delta_hba1c, hba1c_target, confidence_level)
+                rr_a1c_ci = (self.rr_hba1c_with_ci(outcome, delta_hba1c, hba1c_target, confidence_level)
+                             if apply_hba1c_effect else dict(point=1.0, lower=1.0, upper=1.0))
 
                 rr_sbp_target = rr_sbp_ci[scenario]
                 rr_ldl_target = rr_ldl_ci[scenario]

@@ -11,15 +11,17 @@ class PatientMobileUITests(unittest.TestCase):
     def start(self, mode="without"):
         app = AppTest.from_file(str(APP), default_timeout=40).run()
         self.assertFalse(app.exception)
-        self.assertTrue(app.button(key="entry_without").disabled)
-        app.checkbox(key="pm_eligible").check().run()
+        self.assertFalse(app.button(key="entry_without").disabled)
+        self.assertFalse(app.button(key="entry_with").disabled)
+        self.assertFalse(app.checkbox)
         app.button(key=f"entry_{mode}").click().run()
         return app
 
-    def enter_values(self, app):
-        for key, value in (("age", 60), ("sbp", 140.), ("ldl", 130.), ("a1c", 7.5)):
+    def enter_values(self, app, diabetes_status="type2", a1c=7.5):
+        for key, value in (("age", 60), ("sbp", 140.), ("ldl", 130.), ("a1c", a1c)):
             app.number_input(key=f"pmw_{key}").set_value(value)
         app.selectbox(key="pmw_sex").select("male")
+        app.selectbox(key="pmw_diabetes_status").select(diabetes_status)
         app.selectbox(key="pmw_smoking").select("never")
         app.button(key="measurements_next").click().run()
         self.assertFalse(app.exception)
@@ -87,7 +89,6 @@ class PatientMobileUITests(unittest.TestCase):
         app.button(key="meds_next").click().run()
         self.enter_values(app)
         app.button(key="reset_mobile").click().run()
-        app.checkbox(key="pm_eligible").check().run()
         app.button(key="entry_without").click().run()
         self.assertIsNone(app.number_input(key="pmw_age").value)
         self.assertNotIn("current_meds", app.session_state["pm_data"])
@@ -106,6 +107,57 @@ class PatientMobileUITests(unittest.TestCase):
         app.checkbox(key="pmw_proposed_enabled").uncheck().run()
         app.button(key="lifestyle_next").click().run()
         self.assertEqual(app.session_state["pm_result"]["targets"]["sbp"], 140.)
+
+    def test_non_diabetic_patient_reaches_results_without_hba1c(self):
+        app = self.start()
+        self.enter_values(app, diabetes_status="none", a1c=None)
+        self.assertEqual(app.session_state["pm_step"], "lifestyle")
+        app.selectbox(key="pmw_diet_pattern").select("dash").run()
+        app.button(key="lifestyle_next").click().run()
+        self.assertFalse(app.exception)
+        result = app.session_state["pm_result"]
+        self.assertEqual(set(result["lifestyle"]["curves"]), {"mi", "stroke", "mortality"})
+        self.assertIsNone(result["targets"]["a1c"])
+        self.assertAlmostEqual(result["targets"]["sbp"], 136.06)
+        self.assertTrue(any("未入力" in m.value and "HbA1c" in m.value for m in app.markdown))
+        app.button(key="results_lifestyle").click().run()
+        app.selectbox(key="pmw_diet_pattern").select(None).run()
+        app.selectbox(key="pmw_exercise").select("combined").run()
+        app.button(key="lifestyle_next").click().run()
+        self.assertFalse(app.exception)
+        self.assertTrue(any("数値化できません" in item.value for item in app.info))
+
+    def test_change_diagnosis_resets_outcome_and_recalculates_without_old_effects(self):
+        app = self.start()
+        self.enter_values(app)
+        app.selectbox(key="pmw_diet_pattern").select("mediterranean").run()
+        app.selectbox(key="pmw_exercise").select("combined").run()
+        app.button(key="lifestyle_next").click().run()
+        app.selectbox(key="pmw_outcome").select("dementia").run()
+        app.button(key="results_measurements").click().run()
+        app.selectbox(key="pmw_diabetes_status").select("none").run()
+        app.number_input(key="pmw_a1c").set_value(None).run()
+        app.button(key="measurements_next").click().run()
+        app.button(key="lifestyle_next").click().run()
+        self.assertFalse(app.exception)
+        self.assertEqual(app.selectbox(key="pmw_outcome").value, "mi")
+        result = app.session_state["pm_result"]
+        self.assertEqual(result["targets"]["sbp"], 140.)
+        self.assertEqual(result["targets"]["ldl"], 130.)
+        self.assertIsNone(result["targets"]["a1c"])
+        self.assertFalse(result["applied"])
+
+    def test_unknown_diagnosis_is_allowed_but_type2_requires_its_input(self):
+        app = self.start()
+        self.enter_values(app, diabetes_status="unknown", a1c=None)
+        app.button(key="lifestyle_next").click().run()
+        self.assertFalse(app.exception)
+        self.assertEqual(len(app.session_state["pm_result"]["lifestyle"]["curves"]), 3)
+        app.button(key="results_measurements").click().run()
+        app.selectbox(key="pmw_diabetes_status").select("type2").run()
+        app.button(key="measurements_next").click().run()
+        self.assertTrue(app.error)
+        self.assertEqual(app.session_state["pm_step"], "measurements")
 
 
 if __name__ == "__main__":

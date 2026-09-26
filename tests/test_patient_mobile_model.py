@@ -1,6 +1,7 @@
 import ast
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 
@@ -8,6 +9,8 @@ from calc_engine_outcomes import OutcomesEngine
 from dementia_prevention import dementia_biomarker_hazard_ratio, dementia_curve, selected_dementia_evidence
 from dm_outcomes import ACR_CATEGORY_MG_G, DIABETES_OUTCOMES, DiabetesOutcomeModel
 from meds_catalog import load_meds_catalog
+from meds_catalog import apply_meds_to_targets
+from treatment_backcast import reconstruct_untreated_values
 from patient_mobile_model import (
     BP_CATALOG, LIPID_CATALOG, PatientInputs, calculate_mobile_scenarios, group_medications, swap_sides,
 )
@@ -23,7 +26,7 @@ class PatientMobileModelTests(unittest.TestCase):
         cls.catalog = load_meds_catalog(str(ROOT / BP_CATALOG), str(ROOT / LIPID_CATALOG))
 
     def patient(self, **kwargs):
-        return PatientInputs(**(dict(age=60, sex="male", sbp=140., ldl=130., a1c=7.5, bmi=27., egfr=80., acr="A1") | kwargs))
+        return PatientInputs(**(dict(age=60, sex="male", sbp=140., ldl=130., a1c=7.5, bmi=27., egfr=80., acr="A1", diabetes_status="type2") | kwargs))
 
     def calc(self, patient=None, **kwargs):
         return calculate_mobile_scenarios(patient or self.patient(), engine=self.engine, **kwargs)
@@ -116,6 +119,75 @@ class PatientMobileModelTests(unittest.TestCase):
         result = self.calc(patient, mode="with", current_medications=meds, medications_complete=True)
         pc = self.pc_function(patient, result["untreated"], group_medications(meds), "continue")
         self.assertEqual(result["medication"]["curves"], swap_sides(pc))
+
+    def test_non_diabetes_unknown_and_other_do_not_call_diabetes_engines(self):
+        for status in ("none", "unknown", "other"):
+            with self.subTest(status=status), patch("patient_mobile_model.DiabetesOutcomeModel", side_effect=AssertionError), \
+                    patch("patient_mobile_model.dementia_curve", side_effect=AssertionError):
+                result = self.calc(self.patient(diabetes_status=status, a1c=None), mode="without", diet_keys=["dash"])
+            self.assertEqual(set(result["lifestyle"]["curves"]), {"mi", "stroke", "mortality"})
+            self.assertIsNone(result["targets"]["a1c"])
+            self.assertAlmostEqual(result["targets"]["sbp"], 136.06)
+            self.assertEqual(result["applied"], ["dash"])
+
+    def test_non_diabetes_low_hba1c_does_not_cause_artificial_risk_increase(self):
+        reference = None
+        for a1c in (None, 4.8, 5.5, 7.5):
+            result = self.calc(self.patient(diabetes_status="none", a1c=a1c), mode="without")
+            for curve in result["lifestyle"]["curves"].values():
+                self.assertEqual(curve["baseline_cumulative"], curve["target_cumulative"])
+            if reference is not None:
+                self.assertEqual(result["lifestyle"]["curves"], reference)
+            reference = result["lifestyle"]["curves"]
+            self.assertEqual(result["targets"]["a1c"], a1c)
+
+    def test_non_diabetes_bp_lipid_medications_work_without_hba1c(self):
+        patient = self.patient(diabetes_status="none", a1c=None)
+        meds = [self.catalog[d][0] for d in ("sbp", "ldl")]
+        result = self.calc(patient, mode="with", current_medications=meds, medications_complete=True, diet_keys=["salt"])
+        self.assertIsNotNone(result["medication"])
+        self.assertIsNone(result["untreated"]["a1c"])
+        self.assertAlmostEqual(result["targets"]["sbp"], 135.74)
+        for key, curve in result["medication"]["curves"].items():
+            self.assertEqual(curve["target_cumulative"], result["lifestyle"]["curves"][key]["baseline_cumulative"])
+        result = self.calc(patient, mode="without", proposed_medications=meds)
+        self.assertIsNone(result["targets"]["a1c"])
+        self.assertLess(result["targets"]["sbp"], patient.sbp)
+        self.assertLess(result["targets"]["ldl"], patient.ldl)
+
+    def test_diabetes_diet_exercise_and_drug_coefficients_do_not_leak(self):
+        patient = self.patient(diabetes_status="none", a1c=None)
+        for diet, exercise in ((["carb"], None), (["mediterranean"], None), (["meal_replacement"], None), ([], "combined")):
+            result = self.calc(patient, mode="without", diet_keys=diet, exercise_key=exercise)
+            self.assertEqual(result["targets"], patient.markers)
+            self.assertFalse(result["has_changes"])
+            self.assertTrue(result["has_requested_changes"])
+            self.assertTrue(any("適用しません" in w for w in result["warnings"]))
+        meds = [self.catalog["hba1c"][0]]
+        result = self.calc(patient, mode="with", current_medications=meds, medications_complete=True)
+        self.assertIsNone(result["medication"])
+        result = self.calc(patient, mode="without", proposed_medications=meds)
+        self.assertEqual(result["targets"], patient.markers)
+        self.assertFalse(result["has_changes"])
+        self.assertNotIn("dementia", result["lifestyle"]["curves"])
+
+    def test_unknown_is_default_not_inferred_from_hba1c_or_medications(self):
+        patient = PatientInputs(age=60, sex="male", sbp=140, ldl=130, a1c=9)
+        self.assertEqual(patient.diabetes_status, "unknown")
+        result = self.calc(patient, mode="without", proposed_medications=[self.catalog["hba1c"][0]])
+        self.assertEqual(result["targets"]["a1c"], 9)
+        self.assertEqual(len(result["lifestyle"]["curves"]), 3)
+        with self.assertRaises(ValueError):
+            self.patient(diabetes_status="invalid")
+        with self.assertRaises(ValueError):
+            self.patient(diabetes_status="type2", a1c=None)
+
+    def test_missing_hba1c_is_not_imputed_by_shared_medication_helpers(self):
+        drug = self.catalog["hba1c"][0]
+        with self.assertRaises(ValueError):
+            apply_meds_to_targets(140, 130, None, [], [], [drug])
+        with self.assertRaises(ValueError):
+            reconstruct_untreated_values(sbp_now=140, ldl_now=130, a1c_now=None, a1c_meds=[drug])
 
 
 if __name__ == "__main__":

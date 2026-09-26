@@ -8,7 +8,8 @@ from calc_engine_outcomes import OutcomesEngine
 from lifestyle_interventions import DIET_EFFECTS, DIET_PATTERN_KEYS, EXERCISE_EFFECTS
 from meds_catalog import load_meds_catalog
 from patient_mobile_model import (
-    BP_CATALOG, LIPID_CATALOG, OUTCOME_LABELS, PatientInputs, calculate_mobile_scenarios,
+    BP_CATALOG, LIPID_CATALOG, OUTCOME_LABELS, DIABETES_STATUS_LABELS,
+    PatientInputs, calculate_mobile_scenarios,
 )
 from risk_display import format_hr, hazard_ratio
 
@@ -48,6 +49,7 @@ def data():
 
 
 def remember(name):
+    st.session_state.pop("pm_input_error", None)
     data()[name] = st.session_state[f"pmw_{name}"]
     if name.startswith("current_") and name != "current_confirmed":
         data()["current_confirmed"] = False
@@ -98,9 +100,12 @@ def medication_picker(prefix, catalog):
 
 def patient_from_data():
     values = data()
-    required = ("age", "sex", "sbp", "ldl", "a1c", "smoking")
+    required = ("age", "sex", "sbp", "ldl", "smoking")
     if any(values.get(k) is None for k in required):
-        raise ValueError("年齢・性別・血圧・LDL・HbA1c・喫煙状況を入力してください。")
+        raise ValueError("年齢・性別・血圧・LDL・喫煙状況を入力してください。")
+    diabetes_status = values.get("diabetes_status", "unknown")
+    if diabetes_status == "type2" and values.get("a1c") is None:
+        raise ValueError("2型糖尿病向けの計算にはHbA1cを入力してください。診断状況は実際の内容を選んでください。")
     height, weight = values.get("height"), values.get("weight")
     if (height is None) != (weight is None):
         raise ValueError("身長と体重は両方入力するか、両方を空欄にしてください。")
@@ -112,21 +117,32 @@ def patient_from_data():
                 raise ValueError("喫煙の本数・年数を入力してください。")
             smoke_values[key] = values[key]
     return PatientInputs(
-        age=values["age"], sex=values["sex"], sbp=values["sbp"], ldl=values["ldl"], a1c=values["a1c"],
+        age=values["age"], sex=values["sex"], sbp=values["sbp"], ldl=values["ldl"], a1c=values.get("a1c"),
         bmi=weight / (height / 100) ** 2 if height and weight else None,
-        egfr=values.get("egfr"), acr=values.get("acr"), smoking_status=smoking, **smoke_values,
+        egfr=values.get("egfr"), acr=values.get("acr"), smoking_status=smoking,
+        diabetes_status=diabetes_status, **smoke_values,
     )
+
+
+def advance_from_measurements():
+    """Validate before rendering the next page, without a mid-page rerun."""
+    st.session_state.pop("pm_input_error", None)
+    try:
+        patient_from_data()
+    except ValueError as exc:
+        st.session_state["pm_input_error"] = str(exc)
+    else:
+        navigate("lifestyle")
 
 
 def welcome():
     st.markdown('<p class="mobile-eyebrow">これからの健康 · スマホ試作版</p>', unsafe_allow_html=True)
     st.title("いま、生活習慣病の薬を使っていますか？")
     st.write("血圧・コレステロール・糖尿病の薬。注射も含みます。")
-    st.caption("この試算は、2型糖尿病のある20〜95歳の方向けです。")
-    eligible = st.checkbox("2型糖尿病と診断されています", key="pm_eligible")
+    st.caption("20〜95歳の方向けの参考試算です。糖尿病のない方も使えます。")
     for mode, label in (("without", "使っていない"), ("with", "使っている")):
         if st.button(label, key=f"entry_{mode}", type="primary" if mode == "without" else "secondary",
-                     use_container_width=True, disabled=not eligible):
+                     use_container_width=True):
             st.session_state["pm_mode"] = mode
             navigate("medications" if mode == "with" else "measurements")
             st.rerun()
@@ -158,13 +174,18 @@ def medications():
 def measurements(mode):
     st.header("いまの体の状態")
     st.write("薬を使っている今の検査値を入力してください。" if mode == "with" else "最近の健診・検査結果を入力してください。")
-    st.caption("範囲外の値は近い数字に置き換えず、主治医にご相談ください。空欄のままでは計算しません。")
+    st.caption("年齢・性別・血圧・LDL・喫煙状況を入力してください。範囲外の値は近い数字に置き換えず、主治医にご相談ください。")
     field("number_input", "age", "年齢", min_value=20, max_value=95, value=None, step=1, placeholder="歳")
     field("selectbox", "sex", "性別（計算に用いる項目）", options=["male", "female"], index=None,
           format_func=lambda x: {"male": "男性", "female": "女性"}[x], placeholder="選んでください")
+    diabetes_status = field("selectbox", "diabetes_status", "糖尿病の診断状況", default="unknown",
+                            options=list(DIABETES_STATUS_LABELS), format_func=DIABETES_STATUS_LABELS.get)
+    st.caption("糖尿病の有無で利用を制限するものではありません。一部の推定の適用条件を確認します。")
     field("number_input", "sbp", "上の血圧（mmHg）", min_value=90.0, max_value=200.0, value=None, step=1.0, format="%.0f")
     field("number_input", "ldl", "LDLコレステロール（mg/dL）", min_value=50.0, max_value=250.0, value=None, step=1.0, format="%.0f")
-    field("number_input", "a1c", "HbA1c（%）", min_value=5.0, max_value=12.0, value=None, step=0.1, format="%.1f")
+    field("number_input", "a1c", "HbA1c（%）", min_value=4.0, max_value=12.0, value=None, step=0.1, format="%.1f")
+    st.caption("2型糖尿病の方は入力してください（計算範囲5〜12%）。" if diabetes_status == "type2" else
+               "HbA1cは任意です。空欄でも血圧・脂質などの試算に進めます。この診断状況ではHbA1cによる効果補正は行いません。")
     smoking = field("selectbox", "smoking", "たばこ", options=["never", "current", "former"], index=None,
                     format_func=lambda x: {"never": "吸ったことがない", "current": "今も吸っている", "former": "以前吸っていた"}[x],
                     placeholder="選んでください")
@@ -181,14 +202,10 @@ def measurements(mode):
               format_func=lambda x: {"A1": "30未満（A1）", "A2": "30〜299（A2）", "A3": "300以上（A3）"}[x],
               placeholder="不明の場合は空欄")
         st.caption("尿蛋白とは別の検査です。分からない場合は空欄にしてください。")
-    if st.button("食事・運動を選ぶ", key="measurements_next", type="primary", use_container_width=True):
-        try:
-            patient_from_data()
-        except ValueError as exc:
-            st.error(str(exc))
-        else:
-            navigate("lifestyle")
-            st.rerun()
+    st.button("食事・運動を選ぶ", key="measurements_next", type="primary", use_container_width=True,
+              on_click=advance_from_measurements)
+    if st.session_state.get("pm_input_error"):
+        st.error(st.session_state["pm_input_error"])
     if mode == "with":
         st.button("薬の入力に戻る", key="measurements_back", on_click=navigate, args=("medications",), use_container_width=True)
 
@@ -215,6 +232,8 @@ def lifestyle(mode):
                      placeholder="今は追加しない")
     if exercise:
         st.caption(EXERCISE_EFFECTS[exercise].definition)
+    if data().get("diabetes_status", "unknown") != "type2":
+        st.info("糖尿病のない方にも、減塩・脂身の見直し・野菜や低脂肪乳製品を増やす減塩食は数値に反映します。一方、現在の糖質制限・魚中心の食事・置き換え食・運動の係数は2型糖尿病向けのため、今回は数値に反映しません。効果がないという意味ではありません。")
     st.caption("食事・運動の変更は体調や治療内容に合わせて相談してください。低血糖などのリスクはこの試算には含みません。")
     proposed, missing = [], []
     if mode == "without":
@@ -279,7 +298,8 @@ def results(mode):
     if choice == "medication":
         st.info("「薬がなかった場合」は、今の検査値と薬の平均効果から逆算した参考値です。実際に薬をやめた後の予測ではありません。自己判断で中止しないでください。")
     elif not result["has_changes"]:
-        st.info("生活改善をまだ選んでいないため、比較する2つの値は同じです。")
+        st.info("今回の条件では選んだ内容の効果を数値化できません。差がないことは、効果がないという意味ではありません。"
+                if result["has_requested_changes"] else "生活改善をまだ選んでいないため、比較する2つの値は同じです。")
     for warning in result["warnings"]:
         st.caption(warning)
     outcomes = list(comparison["curves"])
@@ -305,10 +325,15 @@ def results(mode):
         st.caption("点線は探索的な推定です。認知症の95%区間は確立していないため表示していません。" if outcome == "dementia" else
                    "帯は既存モデルの95%推定幅です。食事・運動の効果のばらつきなど、すべての不確実性を含むものではありません。")
     with st.expander("計算に使った数値・選んだ内容"):
-        st.write("現在：" + f"血圧 {patient.sbp:g} / LDL {patient.ldl:g} / HbA1c {patient.a1c:g}")
+        st.write("糖尿病の診断状況：" + DIABETES_STATUS_LABELS[patient.diabetes_status])
+        current_a1c = f"{patient.a1c:g}" if patient.a1c is not None else "未入力"
+        st.write("現在：" + f"血圧 {patient.sbp:g} / LDL {patient.ldl:g} / HbA1c {current_a1c}")
         markers = result["untreated"] if choice == "medication" else result["targets"]
+        target_a1c = f"{markers['a1c']:.2f}" if markers["a1c"] is not None else "未入力"
         st.write(("薬がなかった場合（逆算）：" if choice == "medication" else "選んだ改善後（推定）：") +
-                 f"血圧 {markers['sbp']:.1f} / LDL {markers['ldl']:.1f} / HbA1c {markers['a1c']:.2f}")
+                 f"血圧 {markers['sbp']:.1f} / LDL {markers['ldl']:.1f} / HbA1c {target_a1c}")
+        if not patient.has_type2_diabetes:
+            st.caption("HbA1cは入力値をそのまま保持し、薬・食事・運動による血糖変化やリスク補正を加えていません。")
         st.caption("単位：血圧 mmHg / LDL mg/dL / HbA1c %。これらは治療目標や実測値ではありません。")
         for med in kwargs["current_medications"] + kwargs["proposed_medications"]:
             st.write(med["key"])
@@ -318,7 +343,7 @@ def results(mode):
     with st.expander("根拠と、この試算で分からないこと"):
         st.write("PC版と同じ計算モデル・薬剤カタログ・食事／運動の効果量を使っています。患者さん個人の将来を保証する、検証済みの診断ツールではありません。")
         st.write("短期間の研究で得られた平均の変化が長期間続くと仮定しています。年ごとに効果を足し続ける計算ではありません。薬と生活改善の効果が重なり、利益を大きく見積もる可能性があります。副作用や低血糖との釣り合いは評価していません。")
-        st.write("認知症には観察研究に基づく探索的な効果を含みます。因果関係や薬の予防効果が確定したことを意味しません。病気ごとの値は足し合わせられません。")
+        st.write("糖尿病のない方も使えるアプリですが、透析・足の切断・失明と、現在の認知症の基礎曲線は2型糖尿病向けです。2型糖尿病を確認できない場合は表示しません。認知症には観察研究に基づく探索的な効果を含み、薬の予防効果が確定したことを意味しません。病気ごとの値は足し合わせられません。")
         st.write("不明なBMI・腎臓の検査値を正常値で補いませんが、未補正の推定には限界があります。")
         for key in result["applied"]:
             effect = DIET_EFFECTS.get(key) or EXERCISE_EFFECTS[key]

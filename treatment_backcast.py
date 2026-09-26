@@ -24,12 +24,15 @@ def _by_key(items: Iterable[Mapping]) -> dict[str, Mapping]:
 
 
 def reconstruct_untreated_values(
-    *, sbp_now: float, ldl_now: float, a1c_now: float,
+    *, sbp_now: float, ldl_now: float, a1c_now: float | None,
     sbp_meds: Iterable[Mapping] = (), ldl_meds: Iterable[Mapping] = (),
     a1c_meds: Iterable[Mapping] = (),
-) -> dict[str, float]:
+) -> dict[str, float | None]:
     """薬効を逆向きにたどり、薬を飲まなかった場合の値を推定する。"""
     sbp_effect = sum(float(m["effect"]["mean"]) for m in sbp_meds)
+    a1c_meds = list(a1c_meds)
+    if a1c_now is None and a1c_meds:
+        raise ValueError("血糖の薬の効果を逆算するにはHbA1cが必要です。")
     a1c_effect = sum(float(m["effect"]["mean"]) for m in a1c_meds)
     ldl_factor = 1.0
     for med in ldl_meds:
@@ -37,7 +40,7 @@ def reconstruct_untreated_values(
     return {
         "sbp": min(260.0, max(70.0, float(sbp_now) - sbp_effect)),
         "ldl": min(400.0, max(20.0, float(ldl_now) / max(ldl_factor, 0.05))),
-        "a1c": min(20.0, max(4.0, float(a1c_now) - a1c_effect)),
+        "a1c": min(20.0, max(4.0, float(a1c_now) - a1c_effect)) if a1c_now is not None else None,
     }
 
 

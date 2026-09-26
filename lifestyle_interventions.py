@@ -130,7 +130,7 @@ EXERCISE_EFFECTS = {
 }
 
 
-def apply_lifestyle_effects(*, sbp: float, ldl: float, a1c: float,
+def apply_lifestyle_effects(*, sbp: float, ldl: float, a1c: float | None,
                             diet_keys: Iterable[str] = (), exercise_key: str | None = None,
                             diabetes_context: bool = False, bmi: float | None = None) -> dict:
     selected = [DIET_EFFECTS[k] for k in validate_diet_selection(diet_keys)]
@@ -139,7 +139,8 @@ def apply_lifestyle_effects(*, sbp: float, ldl: float, a1c: float,
     if exercise_key in EXERCISE_EFFECTS:
         selected.append(EXERCISE_EFFECTS[exercise_key])
     applied, skipped = [], []
-    out_sbp, out_ldl, out_a1c = float(sbp), float(ldl), float(a1c)
+    out_sbp, out_ldl = float(sbp), float(ldl)
+    out_a1c = float(a1c) if a1c is not None else None
     out_bmi = float(bmi) if bmi is not None else None
     skip_reasons = []
     for effect in selected:
@@ -153,13 +154,15 @@ def apply_lifestyle_effects(*, sbp: float, ldl: float, a1c: float,
             continue
         out_sbp += effect.sbp_delta
         out_ldl = out_ldl * (1.0 + effect.ldl_relative) + effect.ldl_delta_mg
-        out_a1c += effect.a1c_delta
+        if out_a1c is not None:
+            out_a1c += effect.a1c_delta
         # A conservative applicability guard, not a trial-derived dose response.
         # Do not automatically prescribe weight loss at a normal/low BMI.
         if effect.bmi_delta and out_bmi is not None and bmi >= 25.0:
             out_bmi = max(18.5, out_bmi + effect.bmi_delta)
         applied.append(effect)
     return {
-        "sbp": max(80.0, out_sbp), "ldl": max(20.0, out_ldl), "a1c": max(4.0, out_a1c),
+        "sbp": max(80.0, out_sbp), "ldl": max(20.0, out_ldl),
+        "a1c": max(4.0, out_a1c) if out_a1c is not None else None,
         "bmi": out_bmi, "applied": applied, "skipped": skipped, "skip_reasons": skip_reasons,
     }

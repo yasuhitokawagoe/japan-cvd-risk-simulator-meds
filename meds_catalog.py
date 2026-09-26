@@ -279,7 +279,7 @@ def load_meds_catalog(
 def apply_meds_to_targets(
     sbp_now: float,
     ldl_now_mg: float,
-    a1c_now: float,
+    a1c_now: Optional[float],
     selected_sbp: List[Dict[str, Any]],
     selected_ldl: List[Dict[str, Any]],
     selected_a1c: List[Dict[str, Any]],
@@ -306,12 +306,15 @@ def apply_meds_to_targets(
     
     # HbA1c
     a1c_delta = sum(float(m["effect"]["mean"]) for m in selected_a1c) if selected_a1c else 0.0
-    a1c_target = a1c_now + a1c_delta
+    if a1c_now is None and selected_a1c:
+        raise ValueError("血糖の薬の効果を計算するにはHbA1cが必要です。")
+    a1c_target = a1c_now + a1c_delta if a1c_now is not None else None
     
     # clip
     sbp_target = float(min(max(sbp_target, clip_sbp[0]), clip_sbp[1]))
     ldl_target = float(min(max(ldl_target, clip_ldl[0]), clip_ldl[1]))
-    a1c_target = float(min(max(a1c_target, clip_a1c[0]), clip_a1c[1]))
+    if a1c_target is not None:
+        a1c_target = float(min(max(a1c_target, clip_a1c[0]), clip_a1c[1]))
     
     # cost
     all_selected = selected_sbp + selected_ldl + selected_a1c
