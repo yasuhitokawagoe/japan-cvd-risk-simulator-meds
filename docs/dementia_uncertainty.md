@@ -98,3 +98,13 @@ PC画面テストでDM／一般住民の2つの帯、凡例、数値、HR時の�
 ローカルCondaの既知の`readline`クラッシュ回避として、テスト起動時のみ`sys.modules["readline"] = None`を使用。アプリ計算は差し替えていない。
 
 数値確認（架空例）：70歳男性・一般住民、20年、SBP 150→130、LDL 160→100の場合、現在17.816%（16.660–19.041%）、目標10.485%（7.991–13.687%）。両中心値は変更前と一致。LDL倍率の不確実性は上記の理由でこの幅に含めていない。
+
+## PCプレビューへの展開・実画面確認（2026-09-27）
+
+- 実装コミット：`cd5905c`（`codex/pc-diabetes-selection`）。
+- 対象：[薬剤選択PCプレビュー](https://dm-care-med-selector-preview-production.up.railway.app/)、サービス `dm-care-med-selector-preview`。
+- Railway deployment：`413e2ca2-93ea-4e02-8057-24beafe1299d`、状態 `SUCCESS`。
+- 公開画面の架空入力でDMあり・なしの両方に2つの色付き帯、凡例、選択年の上下限が出ることを確認。
+- DMあり・初期値60歳・20年：現在7.9–11.1%、目標3.9–7.5%。一般住民・70歳・20年：現在16.7–19.0%、目標8.0–13.7%。
+- HR切替後はグラフ0件、HR相当の参考幅0.39–0.81を表示。幅がHRの95%CIではない注記も表示。
+- 元のPC `dm-care-live-preview`（deployment `cc543bdc-eb03-4c52-bfb6-6036dbb1c76c`）とスマホ `dm-care-patient-mobile-preview`（`91e1ae18-a6d0-427f-ae66-d11529b7fc3d`）の展開は変更していない。
