@@ -1,0 +1,14 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "Dockerfile"
+  },
+  "deploy": {
+    "startCommand": "/bin/sh -c \"exec streamlit run app_patient_mobile.py --server.address 0.0.0.0 --server.port $PORT --server.headless true --browser.gatherUsageStats false --theme.base light --theme.primaryColor '#147d70'\"",
+    "healthcheckPath": "/_stcore/health",
+    "healthcheckTimeout": 120,
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 3
+  }
+}
