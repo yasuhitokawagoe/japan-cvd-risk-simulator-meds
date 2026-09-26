@@ -137,6 +137,15 @@ JAPAN_LIFE_TABLE_2024_URL = (
     "https://www.mhlw.go.jp/toukei/saikin/hw/life/life24/"
 )
 
+JAPAN_DEMENTIA_COHORT_URL = (
+    "https://www.jstage.jst.go.jp/article/ehpm/28/0/28_22-00187/_html/-char/en"
+)
+
+# 八尾市コホート（65～74歳・糖尿病あり）の要介護認知症発症率は、
+# 男性12.3、女性13.6/1,000人年。DSDRS年齢曲線の同年代平均は約22.1/1,000人年。
+# アウトカム定義の差を考慮し、両者の対数差の半分だけを縮める部分較正とする。
+JAPAN_DEMENTIA_PARTIAL_CALIBRATION = {"male": 0.75, "female": 0.78}
+
 # 厚生労働省「令和6(2024)年簡易生命表」の1年死亡確率 nqx。
 # 5歳刻みの公表値を保持し、中間年齢は対数線形補間する。
 JAPAN_2024_MORTALITY_QX = {
@@ -183,7 +192,10 @@ def dementia_curve(
         if lower <= baseline_age < upper:
             ten_year_risk = risk
             break
-    annual_hazard = -np.log1p(-ten_year_risk) / 10.0
+    calibration = JAPAN_DEMENTIA_PARTIAL_CALIBRATION[
+        "male" if sex == "male" else "female"
+    ]
+    annual_hazard = -np.log1p(-ten_year_risk) / 10.0 * calibration
     event_free_survival = 1.0
     cumulative_dementia = 0.0
     risks = [0.0]

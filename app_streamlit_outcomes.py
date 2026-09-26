@@ -15,6 +15,7 @@ from calc_engine_outcomes import OutcomesEngine
 from dementia_prevention import (
     DSDRS_EVIDENCE_URL,
     GLUCOSE_CONTROL_EVIDENCE_URL,
+    JAPAN_DEMENTIA_COHORT_URL,
     LDL_LEVEL_EVIDENCE_URL,
     STATIN_EVIDENCE_URL,
     dementia_biomarker_hazard_ratio,
@@ -1128,14 +1129,15 @@ with result_col:
         st.caption(MORTALITY_ALL_CAUSE_DEATH_CAPTION)
     elif selected_outcome == "dementia":
         st.caption(
-            "2型糖尿病患者（60歳以上）の年齢別発症率から作成した参考推定です。"
+            "2型糖尿病患者（60歳以上）の年齢別発症率を、日本の実測コホートへ部分較正した参考推定です。"
             "10年までは実線、10年超は同じ年齢別発症率と治療効果が続く仮定の外挿を点線で表示します。"
             "血圧・LDL低下は薬剤、食事、運動、手入力のいずれでも低下量から反映します。"
             "介入併用時は相対効果の乗算を仮定しています。"
         )
-        dementia_links = st.columns(2)
+        dementia_links = st.columns(3)
         dementia_links[0].link_button("認知症基礎曲線の根拠", DSDRS_EVIDENCE_URL)
-        dementia_links[1].link_button("LDL値と認知症の根拠", LDL_LEVEL_EVIDENCE_URL)
+        dementia_links[1].link_button("日本実測の根拠", JAPAN_DEMENTIA_COHORT_URL)
+        dementia_links[2].link_button("LDL値と認知症の根拠", LDL_LEVEL_EVIDENCE_URL)
 
     if care_mode != "continue":
         with st.container(border=True):

@@ -9,10 +9,10 @@
 ### 構成
 
 - 認知症は全死亡、心筋梗塞、脳卒中、透析、大切断、失明と同列の主要アウトカムとする。
-- 基礎曲線は、2型糖尿病患者用DSDRSの年齢点数だけに対応する観察10年リスクへ一致させる。
+- 基礎曲線は、2型糖尿病患者用DSDRSの年齢点数だけに対応する観察10年リスクを出発点とし、日本の実測コホートへ部分較正する。
 - 元研究の検証範囲である10年までは実線とする。10年超は、同じ年齢別発症率と介入の相対効果が続く仮定の外挿として点線で表示する。
 - 元研究の対象外である60歳未満の期間は発症率を外挿しない。
-- 日本人に較正された個人予測ではなく、研究集団からの参考推定として表示する。
+- 日本の単一コホートへ部分較正した参考推定であり、日本人に対する個人予測モデルとして検証済みではない。
 - 高齢者で認知症発症前の死亡を無視して累積率が過大にならないよう、厚生労働省「令和6(2024)年簡易生命表」の性・年齢別死亡率を競合リスクとして年ごとに反映する。
 
 ### 基礎曲線
@@ -31,6 +31,14 @@ ExaltoらのDiabetes Specific Dementia Risk Scoreで、年齢だけを加点し�
 以前は年齢別粗発症率を到達年齢ごとに積算していたため、60歳の10年リスクが11.9%となり、元モデルの7.4%より高かった。2026-09-26に元モデルへ再較正した。
 
 2026-09-26にさらに、認知症発症前の死亡を競合リスクとして追加した。特に高齢者・男性で、生存者だけを前提にした単純な1−生存曲線による過大推定を抑える。死亡率の出典: [厚生労働省 令和6年簡易生命表](https://www.mhlw.go.jp/toukei/saikin/hw/life/life24/)。
+
+### 日本実測への部分較正（2026-09-26）
+
+大阪府八尾市の25,029人を追跡した日本人コホートでは、65～74歳の糖尿病患者における要介護認知症の発症率は男性97例/7,873人年（12.3/1,000人年）、女性88例/6,482人年（13.6/1,000人年）だった。一方、DSDRS年齢曲線から得る65～74歳の平均発症ハザードは約22.1/1,000人年である。
+
+両者は「全認知症」と「要介護認知症」でアウトカム定義が異なり、八尾市研究の判定感度は臨床診断に対して73%であるため、実測値へ完全に合わせると過小推定し得る。このため第一段階では、DSDRSと日本実測値の対数差の約半分だけを縮め、認知症発症ハザードへ男性0.75、女性0.78を乗じる。75歳以上へも同じ係数を適用するが、直接較正データが乏しいため参考推定とし、10年超は引き続き点線で示す。
+
+出典: Tanaka M et al. *Sex- and age-specific impacts of smoking, overweight/obesity, hypertension, and diabetes mellitus in the development of disabling dementia in a Japanese population.* Environ Health Prev Med. 2023;28:11. DOI: 10.1265/ehpm.22-00187. [J-STAGE全文](https://www.jstage.jst.go.jp/article/ehpm/28/0/28_22-00187/_html/-char/en) / [Consensus](https://consensus.app/papers/sex-and-agespecific-impacts-of-smoking-overweightobesity-tanaka-imano/92a0588f683a5478a74bd8da720babeb/)
 
 出典: Exalto LG et al. *Risk score for prediction of 10 year dementia risk in individuals with type 2 diabetes: a cohort study.* Lancet Diabetes Endocrinol. 2013;1:183-190. DOI: 10.1016/S2213-8587(13)70048-2. [Consensus](https://consensus.app/papers/risk-score-for-prediction-of-10-year-dementia-risk-in-exalto-biessels/ba8f28761c10508a89fc8c000e3c93e3/)
 

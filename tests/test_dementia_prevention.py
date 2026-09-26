@@ -1,4 +1,5 @@
 from dementia_prevention import (
+    JAPAN_DEMENTIA_PARTIAL_CALIBRATION,
     dementia_biomarker_hazard_ratio,
     dementia_curve,
     selected_dementia_evidence,
@@ -71,6 +72,14 @@ def test_competing_mortality_reduces_elderly_risk_and_differs_by_sex():
     male = dementia_curve(age=85, years=10, sex="male")["risk"][-1]
     female = dementia_curve(age=85, years=10, sex="female")["risk"][-1]
     assert 0 < male < female < 0.631
+
+
+def test_japanese_real_world_calibration_is_partial_not_full_replacement():
+    assert JAPAN_DEMENTIA_PARTIAL_CALIBRATION == {"male": 0.75, "female": 0.78}
+    male = dementia_curve(age=65, years=10, sex="male")["risk"][-1]
+    female = dementia_curve(age=65, years=10, sex="female")["risk"][-1]
+    assert 0.09 < male < 0.12
+    assert 0.10 < female < 0.13
 
 
 def test_biomarker_lowering_applies_without_requiring_medication():
