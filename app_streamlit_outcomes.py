@@ -25,7 +25,10 @@ from dementia_prevention import (
     selected_dementia_evidence,
 )
 from dm_outcomes import ACR_CATEGORY_MG_G, DIABETES_OUTCOMES, DiabetesOutcomeModel
-from lifestyle_interventions import DIET_EFFECTS, EXERCISE_EFFECTS, apply_lifestyle_effects
+from lifestyle_interventions import (
+    DIET_COMPONENT_KEYS, DIET_EFFECTS, DIET_PATTERN_KEYS, EXERCISE_EFFECTS,
+    apply_lifestyle_effects,
+)
 from exercise_fitness import (
     FITNESS_MORTALITY_SOURCE, FITNESS_TRAINING_SOURCE, fitness_scenario,
 )
@@ -547,7 +550,7 @@ def risk_at_horizon(outcome: str, horizon: int, targets: dict) -> float:
         years_since_quit,
         quit_today,
         bmi_now=bmi_now,
-        bmi_target=bmi_target if bmi_target != bmi_now else None,
+        bmi_target=targets.get("bmi_target", bmi_target),
         egfr_now=egfr_now,
         egfr_target=egfr_target if egfr_target != egfr_now else None,
         acr_now=acr_now,
@@ -610,6 +613,8 @@ def build_medication_contributions(outcome: str, horizon: int):
         "sbp_target": float(sbp_now),
         "ldl_target": float(ldl_now),
         "a1c_target": float(a1c_now),
+        # Attribute the pattern's BMI change to diet, not to preceding drugs.
+        "bmi_target": float(bmi_now) if any(k in DIET_PATTERN_KEYS for k in diet_intervention_keys) else float(bmi_target),
     }
     running_risk = risk_at_horizon(outcome, horizon, current_targets)
     contributions = []
@@ -624,6 +629,7 @@ def build_medication_contributions(outcome: str, horizon: int):
             selected_ldl=selected["ldl"],
             selected_a1c=selected["hba1c"],
         )
+        next_targets["bmi_target"] = current_targets["bmi_target"]
         next_risk = risk_at_horizon(outcome, horizon, next_targets)
         contributions.append(
             {
@@ -639,13 +645,17 @@ def build_medication_contributions(outcome: str, horizon: int):
             sbp=current_targets["sbp_target"],
             ldl=current_targets["ldl_target"],
             a1c=current_targets["a1c_target"],
+            bmi=current_targets["bmi_target"],
             diet_keys=[diet_key],
             diabetes_context=True,
         )
+        if not diet_targets["applied"]:
+            continue
         next_targets = {
             "sbp_target": diet_targets["sbp"],
             "ldl_target": diet_targets["ldl"],
             "a1c_target": diet_targets["a1c"],
+            "bmi_target": diet_targets["bmi"],
         }
         next_risk = risk_at_horizon(outcome, horizon, next_targets)
         contributions.append(
@@ -669,6 +679,7 @@ def build_medication_contributions(outcome: str, horizon: int):
             "sbp_target": exercise_targets["sbp"],
             "ldl_target": exercise_targets["ldl"],
             "a1c_target": exercise_targets["a1c"],
+            "bmi_target": current_targets["bmi_target"],
         }
         next_risk = risk_at_horizon(outcome, horizon, next_targets)
         contributions.append(
@@ -911,7 +922,11 @@ with input_col:
         with bmi_left:
             bmi_now = st.number_input("現在のBMI", 10.0, 50.0, 24.0, 0.1)
         with bmi_right:
-            bmi_target = st.number_input("目標BMI", 10.0, 50.0, 24.0, 0.1)
+            bmi_target = st.number_input(
+                "目標BMI", 10.0, 50.0, 24.0, 0.1,
+                disabled=care_mode != "continue" and st.session_state.get("diet_pattern") in DIET_PATTERN_KEYS,
+                help="食事パターン選択中はこの手入力値を使わず、食事療法欄の自動計算BMIを使います。",
+            )
 
         st.markdown("**書類作成に使用する身体情報**")
         body_left, body_middle, body_right = st.columns(3)
@@ -1047,16 +1062,29 @@ with input_col:
         elif use_meds:
             st.caption("薬剤を選択すると、年間費用と主な副作用をここに表示します。")
 
+    applied_diet_intervention_keys = []
     if care_mode != "continue":
       with st.container(border=True):
         st.markdown("#### 🥗 食事療法")
-        diet_intervention_keys = st.multiselect(
-            "食事プログラム",
-            list(DIET_EFFECTS),
-            format_func=lambda key: DIET_EFFECTS[key].label,
-            key="diet_interventions",
-            placeholder="食事介入を選択",
+        diet_pattern = st.selectbox(
+            "食事療法の選び方",
+            [None, *DIET_PATTERN_KEYS],
+            format_func=lambda key: "個別の食事介入" if key is None else DIET_EFFECTS[key].label,
+            key="diet_pattern",
         )
+        if diet_pattern is None:
+            diet_intervention_keys = st.multiselect(
+                "食事プログラム",
+                DIET_COMPONENT_KEYS,
+                format_func=lambda key: DIET_EFFECTS[key].label,
+                key="diet_interventions",
+                placeholder="食事介入を選択",
+            )
+        else:
+            diet_intervention_keys = [diet_pattern]
+            bmi_target = float(bmi_now)
+            st.caption(DIET_EFFECTS[diet_pattern].definition)
+            st.caption("食事パターンは1種類のみ。含まれる減塩・糖質・脂肪制限を二重に加算しません。BMIの手入力目標も置き換えます。")
         if diet_intervention_keys:
             if not selected_meds:
                 sbp_tgt = float(sbp_now)
@@ -1066,17 +1094,38 @@ with input_col:
                 sbp=sbp_tgt,
                 ldl=ldl_tgt,
                 a1c=a1c_tgt,
+                bmi=float(bmi_now) if diet_pattern is not None else None,
                 diet_keys=diet_intervention_keys,
                 diabetes_context=True,
             )
+            applied_diet_intervention_keys = [effect.key for effect in diet_result["applied"]]
             sbp_tgt = float(diet_result["sbp"])
             ldl_tgt = float(diet_result["ldl"])
             a1c_tgt = float(diet_result["a1c"])
+            if diet_pattern is not None:
+                bmi_target = float(diet_result["bmi"])
+            for reason in diet_result["skip_reasons"]:
+                st.warning(reason)
             diet_metrics = st.columns(3)
             diet_metrics[0].metric("介入後SBP", f"{sbp_tgt:.1f}")
             diet_metrics[1].metric("介入後LDL", f"{ldl_tgt:.1f}")
             diet_metrics[2].metric("介入後HbA1c", f"{a1c_tgt:.2f}%")
+            if diet_pattern is not None:
+                st.metric("食事介入後BMI（推定）", f"{bmi_target:.2f}", f"{bmi_target - float(bmi_now):+.2f}", delta_color="off")
+                st.caption(
+                    "対照食との差を1回反映し、維持する推定です。BMI低下は現在BMI 25以上のみ。"
+                    "グラフの幅には食事効果量・長期維持の不確実性を含みません。"
+                )
+                if diet_pattern == "meal_replacement":
+                    st.caption("通常の減量食に対する追加差の設定です。低血糖や栄養不足を避けるため医療者と調整してください。高齢者では筋量・フレイルにも注意が必要です。")
+                if diet_pattern == "dash":
+                    st.caption("腎機能低下・高カリウム血症がある場合、食品の内容や量は医療者と調整してください。")
             with st.expander("効果量と根拠を確認", expanded=False):
+                if diet_pattern is not None:
+                    st.caption(
+                        "毎年減量・改善し続ける計算ではなく、個人の達成値や長期の予防効果を保証しません。"
+                        "BMIとリスクの関連を既存モデルへ入力した推定で、減量による独立した予防効果が証明された値ではありません。"
+                    )
                 for diet_key in diet_intervention_keys:
                     diet_effect = DIET_EFFECTS[diet_key]
                     st.markdown(f"**{diet_effect.label}** — {diet_effect.definition}")
@@ -1147,7 +1196,9 @@ with input_col:
         else:
             st.caption("運動療法を選択すると、予測検査値と各アウトカムへ反映します。")
       if selected_meds or diet_intervention_keys or exercise_intervention_key is not None:
-        st.info("介入を選択中は、手入力した目標値を使わず、現在値に選択した効果だけを反映しています。")
+        st.info("介入を選択中は、SBP・LDL・HbA1cの手入力目標値を使わず、現在値に選択した効果だけを反映しています。")
+        if any(k in DIET_PATTERN_KEYS for k in diet_intervention_keys) and (selected_meds or exercise_intervention_key is not None):
+            st.caption("薬剤・運動との併用は効果量を組み合わせた推定です。組合せ自体のRCT結果ではなく、相互作用や効果の重複で過大評価する可能性があります。")
     else:
         diet_intervention_keys = []
         exercise_intervention_key = None
@@ -1533,7 +1584,7 @@ if st.session_state.get("show_document_creation"):
         st.session_state["show_document_creation"] = False
         st.rerun()
 
-    lifestyle_labels = [DIET_EFFECTS[key].label for key in diet_intervention_keys]
+    lifestyle_labels = [DIET_EFFECTS[key].label for key in applied_diet_intervention_keys]
     if exercise_intervention_key is not None:
         lifestyle_labels.append(EXERCISE_EFFECTS[exercise_intervention_key].label)
 
