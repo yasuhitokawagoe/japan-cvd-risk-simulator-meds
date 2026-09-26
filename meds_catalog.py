@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import re
+import math
+from numbers import Real
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple, Any
 import pandas as pd
@@ -39,6 +41,8 @@ def _parse_yen_per_year(x: Any) -> Optional[int]:
     """'4,088 円/年' などから整数円を返す"""
     if x is None:
         return None
+    if isinstance(x, Real):
+        return int(x) if math.isfinite(x) and x >= 0 else None
     s = _norm(x)
     m = re.search(r"([0-9][0-9,]*)\s*円", s)
     if not m:
@@ -136,6 +140,7 @@ class Med:
     annual_cost_yen: Optional[int]
     side_effects: str
     ref: str
+    cost_basis: str = ""
     
     def to_dict(self) -> Dict[str, Any]:
         drug_name, dose_label = split_medication_key(self.key)
@@ -149,6 +154,7 @@ class Med:
             "annual_cost_yen": self.annual_cost_yen,
             "side_effects": self.side_effects,
             "ref": self.ref,
+            "cost_basis": self.cost_basis,
         }
 
 def load_meds_catalog(
@@ -185,7 +191,8 @@ def load_meds_catalog(
         meds.append(Med(
             key=key, category=category, domain="sbp",
             mean=float(mean), low=low, high=high,
-            annual_cost_yen=annual, side_effects=se, ref=ref
+            annual_cost_yen=annual, side_effects=se, ref=ref,
+            cost_basis=_norm(row.get("算出式", "")),
         ))
     
     # ---- LDL ----
@@ -205,7 +212,8 @@ def load_meds_catalog(
         meds.append(Med(
             key=key, category=category, domain="ldl",
             mean=float(mean), low=low, high=high,
-            annual_cost_yen=annual, side_effects=se, ref=ref
+            annual_cost_yen=annual, side_effects=se, ref=ref,
+            cost_basis=_norm(row.get("算出式", "")),
         ))
     
     # ---- HbA1c ----
@@ -225,7 +233,8 @@ def load_meds_catalog(
         meds.append(Med(
             key=key, category=category, domain="hba1c",
             mean=float(mean), low=low, high=high,
-            annual_cost_yen=annual, side_effects=se, ref=ref
+            annual_cost_yen=annual, side_effects=se, ref=ref,
+            cost_basis=_norm(row.get("算出式", "")),
         ))
     
     out: Dict[str, List[Dict[str, Any]]] = {"sbp": [], "ldl": [], "hba1c": []}

@@ -1035,6 +1035,16 @@ with input_col:
             st.metric(cost_label, f"{annual_cost_yen:,} 円/年")
             if not cost_complete:
                 st.caption("薬価未登録: " + " / ".join(meds_summary.get("missing_cost_labels", [])))
+            if any("インクリシラン" in m.get("key", "") for m in selected_meds):
+                st.caption("レクビオは維持期の年2回分で計算。初年度は3回投与で1,184,274円です。")
+            with st.expander("薬剤費の内訳・計算方法", expanded=False):
+                st.caption("薬剤料の概算です。診察・調剤・注射手技・針代などは含みません。")
+                for med in selected_meds:
+                    cost = med.get("annual_cost_yen")
+                    amount = f"{cost:,} 円/年" if cost is not None else "薬価未登録"
+                    st.write(f"{med['key']}: {amount}")
+                    if med.get("cost_basis"):
+                        st.caption(med["cost_basis"])
             with st.expander("主な副作用を確認", expanded=False):
                 if side_effects_md.strip():
                     st.markdown(side_effects_md)
