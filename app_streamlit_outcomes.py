@@ -4,6 +4,13 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from access_analytics import record_visit, total_visits
+from bone_health import (
+    DIABETES_DRUG_FRACTURE_URL,
+    DIABETES_FRACTURE_MODEL_URL,
+    JAPAN_HIP_FRACTURE_URL,
+    OSTEOPOROSIS_TREATMENT_URL,
+    bone_health_flags,
+)
 from calc_engine_outcomes import OutcomesEngine
 from dementia_prevention import (
     BP_LOWERING_EVIDENCE,
@@ -431,12 +438,15 @@ def calculate_past_treatment_benefit(years: int) -> dict:
         diabetes_medications=selected_a1c_meds,
     )
     treatment_hr = float(np.prod([item.estimate for item in dementia_evidence["supported"]]))
-    untreated_dementia = dementia_curve(age=float(start_age), years=int(years))["risk"] * 100.0
-    treated_dementia = dementia_curve(
+    untreated_dementia_result = dementia_curve(age=float(start_age), years=int(years))
+    treated_dementia_result = dementia_curve(
         age=float(start_age), years=int(years), hazard_ratio=treatment_hr,
-    )["risk"] * 100.0
+    )
+    untreated_dementia = untreated_dementia_result["risk"] * 100.0
+    treated_dementia = treated_dementia_result["risk"] * 100.0
+    dementia_years = len(untreated_dementia) - 1
     result["dementia"] = {
-        "time": list(range(-int(years), 1)),
+        "time": list(range(-dementia_years, 1)),
         "untreated": untreated_dementia.tolist(),
         "treated": treated_dementia.tolist(),
         "avoided": max(0.0, untreated_dementia[-1] - treated_dementia[-1]),
@@ -1052,16 +1062,17 @@ with result_col:
     baseline_risk = selected_data["baseline_cumulative"][-1]
     target_risk = selected_data["target_cumulative"][-1]
     arr = baseline_risk - target_risk
+    displayed_horizon = int(selected_data["time"][-1])
 
     metric_cols = st.columns(3)
     if care_mode == "continue":
         harm = target_risk - baseline_risk
-        metric_cols[0].metric(f"{horizon}年・服薬継続", f"{baseline_risk:.1f}%")
-        metric_cols[1].metric(f"{horizon}年・今日から全薬中止", f"{target_risk:.1f}%")
+        metric_cols[0].metric(f"{displayed_horizon}年・服薬継続", f"{baseline_risk:.1f}%")
+        metric_cols[1].metric(f"{displayed_horizon}年・今日から全薬中止", f"{target_risk:.1f}%")
         metric_cols[2].metric("中止によるリスク増加", f"+{harm:.1f} pt")
     else:
-        metric_cols[0].metric(f"{horizon}年・現在", f"{baseline_risk:.1f}%")
-        metric_cols[1].metric(f"{horizon}年・目標達成時", f"{target_risk:.1f}%")
+        metric_cols[0].metric(f"{displayed_horizon}年・現在", f"{baseline_risk:.1f}%")
+        metric_cols[1].metric(f"{displayed_horizon}年・目標達成時", f"{target_risk:.1f}%")
         metric_cols[2].metric("リスク減少幅", f"{arr:.1f} pt")
 
     st.plotly_chart(
@@ -1073,8 +1084,8 @@ with result_col:
         st.caption(MORTALITY_ALL_CAUSE_DEATH_CAPTION)
     elif selected_outcome == "dementia":
         st.caption(
-            "2型糖尿病患者（60歳以上）の年齢別発症率から作成した参考推定です。"
-            "60歳未満の期間は元研究の適用範囲外です。介入併用時は相対効果の乗算を仮定しています。"
+            "2型糖尿病患者（60歳以上）の年齢別発症率から作成した10年以内の参考推定です。"
+            "元研究の範囲を越える長期外挿は行いません。介入併用時は相対効果の乗算を仮定しています。"
         )
         st.link_button("認知症基礎曲線の根拠", DSDRS_EVIDENCE_URL)
 
@@ -1082,7 +1093,7 @@ with result_col:
         with st.container(border=True):
             st.markdown(
                 f'<h4 class="arr-breakdown-title" translate="no" '
-                f'data-title="各治療によるリスク減少（{horizon}年間）"></h4>',
+                f'data-title="各治療によるリスク減少（{displayed_horizon}年間）"></h4>',
                 unsafe_allow_html=True,
             )
             contributions = build_medication_contributions(selected_outcome, horizon)
@@ -1165,6 +1176,32 @@ with result_col:
                     "一貫して確認されていないため、効果量には加えていません。"
                 )
                 st.link_button("厳格血糖管理のRCTメタ解析", GLUCOSE_CONTROL_EVIDENCE_URL)
+
+    with st.container(border=True):
+        st.markdown("#### 🦴 骨の健康（参考）")
+        st.caption(
+            "骨粗鬆症・骨折は補足情報です。骨密度、既往骨折、末梢神経障害、転倒歴などが"
+            "未入力のため、絶対リスク曲線や診断結果は表示しません。"
+        )
+        bone_flags = bone_health_flags(
+            age=float(age), sex=sex, bmi=float(bmi_now), egfr=float(egfr_now),
+            diabetes_medications=selected_a1c_meds,
+        )
+        if bone_flags:
+            st.markdown("**診察時に確認したい項目**")
+            for flag in bone_flags:
+                st.markdown(f"- {flag}")
+        else:
+            st.info("現在の入力項目から追加の確認フラグはありません。骨折歴や骨密度は別途評価が必要です。")
+        st.write(
+            "日本の大腿骨近位部骨折調査と2型糖尿病患者の骨折予測研究はありますが、"
+            "個人の骨折リスク計算には追加情報が必要です。骨粗鬆症治療薬には骨折予防のRCT根拠があります。"
+        )
+        bone_links = st.columns(4)
+        bone_links[0].link_button("日本の骨折疫学", JAPAN_HIP_FRACTURE_URL)
+        bone_links[1].link_button("糖尿病骨折モデル", DIABETES_FRACTURE_MODEL_URL)
+        bone_links[2].link_button("骨粗鬆症治療", OSTEOPOROSIS_TREATMENT_URL)
+        bone_links[3].link_button("糖尿病薬と骨折", DIABETES_DRUG_FRACTURE_URL)
 
     if care_mode == "continue" and selected_meds and treatment_years > 0:
         past_benefit = calculate_past_treatment_benefit(int(treatment_years))

@@ -38,17 +38,17 @@ BP_LOWERING_EVIDENCE = DementiaEvidence(
 GLP1_EVIDENCE = DementiaEvidence(
     key="glp1_ra",
     label="GLP-1受容体作動薬",
-    relative_effect="認知症・認知障害オッズ 約45%低下",
-    estimate=0.55,
-    estimate_type="OR",
+    relative_effect="認知症発症ハザード 約10%低下（保守的推定）",
+    estimate=0.90,
+    estimate_type="HR",
     evidence_summary=(
-        "心血管保護作用を持つ糖尿病薬のRCTメタ解析（26試験・164,531人）。"
-        "GLP-1受容体作動薬では認知症・認知障害 OR 0.55（95%CI 0.35–0.86）。"
-        "認知症を主要評価項目とした試験ではないため、確認試験が必要。"
+        "2型糖尿病109,778人の観察コホートで認知症 HR 0.90（95%CI 0.83–0.97）。"
+        "観察研究メタ解析ではOR 0.58、探索的RCT解析ではOR 0.55であり幅が大きいため、"
+        "曲線には最も保守的な0.90を採用。"
     ),
     source_url=(
-        "https://consensus.app/papers/cardioprotective-glucoselowering-agents-and-dementia-"
-        "seminer-mulihano/bb7ccbb1ba7158fbb51ab40119bb5f8b/"
+        "https://consensus.app/papers/impact-of-glucagon%E2%80%90like-peptide%E2%80%901-receptor-"
+        "agonists-on-cheng-yang/89acae5b8222597b836f4beedcfe34d8/"
     ),
 )
 
@@ -81,8 +81,9 @@ DSDRS_EVIDENCE_URL = (
 
 
 def dementia_curve(*, age: float, years: int, hazard_ratio: float = 1.0) -> dict:
-    """年齢別発症率を積算した認知症曲線。元研究の対象外（60歳未満）は外挿しない。"""
-    times = np.arange(0, max(0, int(years)) + 1, dtype=float)
+    """年齢別発症率を積算した10年以内の認知症曲線。"""
+    validated_years = min(max(0, int(years)), 10)
+    times = np.arange(0, validated_years + 1, dtype=float)
     survival = 1.0
     risks = [0.0]
     for elapsed in range(1, len(times)):
