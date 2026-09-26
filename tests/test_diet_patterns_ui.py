@@ -31,12 +31,18 @@ st.session_state["diet_test_probe"] = {
 
     def test_selection_reset_no_stacking_and_restore(self):
         app = self.make_app()
+        self.assertEqual(app.selectbox(key="diet_pattern").options, [
+            "個別の食事介入", "野菜・低脂肪乳製品を増やす減塩食",
+            "魚・野菜中心で、油の質を見直す食事", "専用の食品に置き換える減量食",
+        ])
         self.number(app, "現在のBMI").set_value(30).run()
         self.number(app, "目標BMI").set_value(22).run()
         app.multiselect(key="diet_interventions").set_value(["salt", "carb", "fat"]).run()
         app.selectbox(key="diet_pattern").select("dash").run()
         first = self.probe(app)
         self.assertEqual(first["keys"], ["dash"])
+        self.assertEqual(first["contributions"][0]["name"], "食事：野菜・低脂肪乳製品を増やす減塩食")
+        self.assertTrue(any("研究上の名称：DASH食" in m.value for m in app.markdown))
         for actual, expected in zip(first["targets"], (146.06, 156.47, 8, 29.36)):
             self.assertAlmostEqual(actual, expected)
         self.assertTrue(self.number(app, "目標BMI").disabled)
@@ -89,7 +95,7 @@ st.session_state["diet_test_probe"] = {
             args = render.call_args.kwargs
             self.assertAlmostEqual(args["bmi_target"], 29.172)
             self.assertAlmostEqual(args["a1c_after"], 7.693)
-            self.assertEqual(args["lifestyle_interventions"], ("地中海食",))
+            self.assertEqual(args["lifestyle_interventions"], ("魚・野菜中心で、油の質を見直す食事",))
             self.assertEqual(args["risk_curves"], self.probe(app)["document_data"])
         app.session_state["show_document_creation"] = False
         app.session_state["care_mode"] = "continue"
