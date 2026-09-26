@@ -949,20 +949,20 @@ with input_col:
             use_meds = False
         elif use_meds and meds_catalog:
             med_label_prefix = "現在の" if care_mode == "continue" else ""
-            sbp_tab, ldl_tab, a1c_tab = st.tabs([
-                f"{med_label_prefix}降圧薬",
-                f"{med_label_prefix}脂質薬",
-                f"{med_label_prefix}糖尿病薬",
-            ])
-            with sbp_tab:
+            with st.container():
+                st.markdown(f"##### {med_label_prefix}降圧薬")
                 selected_sbp_meds = medication_selector(
                     "降圧薬", meds_catalog["sbp"], "current_sbp_meds",
                 )
-            with ldl_tab:
+            st.divider()
+            with st.container():
+                st.markdown(f"##### {med_label_prefix}脂質薬")
                 selected_ldl_meds = medication_selector(
                     "脂質薬", meds_catalog["ldl"], "current_ldl_meds",
                 )
-            with a1c_tab:
+            st.divider()
+            with st.container():
+                st.markdown(f"##### {med_label_prefix}糖尿病薬")
                 selected_a1c_meds = medication_selector(
                     "糖尿病薬", meds_catalog["hba1c"], "current_a1c_meds",
                 )
