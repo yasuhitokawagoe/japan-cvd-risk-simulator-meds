@@ -95,3 +95,14 @@ JAGESの自立した65歳以上44,083人、2010〜2019年の追跡。
 
 結果：`tests/` 全体で **117 passed / 35 subtests passed**。既存の糖尿病モデル・スマホ画面のテストも含む。
 ローカルCondaの既知の`readline`クラッシュを避けるため、テスト起動時のみ`sys.modules["readline"] = None`を指定。アプリや計算関数は差し替えていない。
+
+## 公開確認
+
+- ブランチ：`codex/pc-diabetes-selection`、公開コード：`d754547`。
+- URL：https://dm-care-med-selector-preview-production.up.railway.app/
+- Railway service：`6858e7fd-3732-47d9-b499-0c94bf826206`。
+- Deployment：`04ee0067-b398-4741-aee1-5a4dc7cdda85`、`SUCCESS`。
+- 公開ブラウザで初期DMオン7項目、手動オフ5項目を確認。60歳の認知症は未算出の理由を表示。
+- 架空の70歳男性で一般住民の認知症曲線と説明を表示。HR切替後のグラフ数0を確認。
+- 架空の70歳男性、CKD-EPI eGFR 25、UACR 300 mg/gCr、CKD適用条件確認済みで、2年8.1%・5年27.9%を表示しローカル式と一致。HRモードでも介入HRではない旨の注意書きを確認。
+- 旧PC deployment `cc543bdc-eb03-4c52-bfb6-6036dbb1c76c`、スマホ deployment `91e1ae18-a6d0-427f-ae66-d11529b7fc3d` は変更なし。
