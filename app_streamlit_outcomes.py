@@ -35,6 +35,9 @@ from exercise_fitness import (
 from meds_catalog import apply_meds_to_targets, load_meds_catalog
 from medical_cost_ui import render_medication_costs
 from risk_display import hazard_ratio_curve, format_hr, format_hazard_change
+from pc_diabetes_selection import (
+    DIABETES_MODEL_KEY, mark_diabetes_selection_manual, sync_diabetes_selection,
+)
 import pdf_plan_ui
 from treatment_backcast import reconstruct_untreated_values
 
@@ -192,7 +195,7 @@ st.markdown(
     f"""
     <div class="app-hero">
       <div class="hero-copy">
-        <div class="hero-kicker">DIABETES CARE &amp; COMPLICATION PREVENTION</div>
+        <div class="hero-kicker">LIFESTYLE CARE &amp; RISK PREVENTION</div>
         <h1 class="hero-title">生活習慣病療養指導シュミレーター</h1>
         <p class="hero-subtitle">血糖・血圧・腎機能と治療による将来リスクの変化を可視化し、合併症予防の目標を一緒に考えます。教育・共有意思決定支援用。</p>
       </div>
@@ -326,7 +329,7 @@ def slider_with_nudges(
     return st.session_state[key]
 
 
-def calculate_cumulative_risk_curves(years: int):
+def calculate_cumulative_risk_curves(years: int, *, has_type2_diabetes: bool = True):
     cumulative_data = {}
     for outcome in CARDIOVASCULAR_OUTCOMES:
         cumulative_data[outcome] = {
@@ -363,6 +366,7 @@ def calculate_cumulative_risk_curves(years: int):
                 egfr_target=egfr_target if egfr_target != egfr_now else None,
                 acr_now=acr_now,
                 acr_target=acr_target if acr_target != acr_now else None,
+                apply_hba1c_effect=has_type2_diabetes,
             )
             cumulative_data[outcome]["time"].append(float(year))
             for scenario in ("baseline", "target"):
@@ -375,6 +379,9 @@ def calculate_cumulative_risk_curves(years: int):
                 cumulative_data[outcome][f"{scenario}_ci_upper"].append(
                     result["upper"][scenario] * 100.0
                 )
+    if not has_type2_diabetes:
+        return cumulative_data
+
     dm_common = {
         "age": float(age),
         "sex": 1 if sex == "male" else 0,
@@ -440,7 +447,7 @@ def calculate_cumulative_risk_curves(years: int):
     return cumulative_data
 
 
-def calculate_past_treatment_benefit(years: int) -> dict:
+def calculate_past_treatment_benefit(years: int, *, has_type2_diabetes: bool = True) -> dict:
     """治療開始から現在までの、無治療との累積リスク差を推定する。"""
     start_age = max(20, int(age) - int(years))
     result = {}
@@ -455,6 +462,7 @@ def calculate_past_treatment_benefit(years: int) -> dict:
                 float(a1c_tgt), float(a1c_now),
                 smoking_status, cigs_per_day, years_smoked, years_since_quit,
                 assume_quit_today_in_target=False,
+                apply_hba1c_effect=has_type2_diabetes,
             )
             untreated_curve.append(float(risk["baseline"]) * 100.0)
             treated_curve.append(float(risk["target"]) * 100.0)
@@ -464,6 +472,14 @@ def calculate_past_treatment_benefit(years: int) -> dict:
             "treated": treated_curve,
             "avoided": max(0.0, untreated_curve[-1] - treated_curve[-1]),
         }
+
+    mortality = result["mortality"]
+    survival_gain = np.asarray(mortality["untreated"]) - np.asarray(mortality["treated"])
+    result["estimated_life_years_gained"] = max(
+        0.0, float(np.trapezoid(survival_gain / 100.0, dx=1.0))
+    )
+    if not has_type2_diabetes:
+        return result
 
     dm_common = {
         "age": float(start_age), "sex": 1 if sex == "male" else 0,
@@ -517,11 +533,6 @@ def calculate_past_treatment_benefit(years: int) -> dict:
         "avoided": max(0.0, untreated_dementia[-1] - treated_dementia[-1]),
     }
 
-    mortality = result["mortality"]
-    survival_gain = np.asarray(mortality["untreated"]) - np.asarray(mortality["treated"])
-    result["estimated_life_years_gained"] = max(
-        0.0, float(np.trapezoid(survival_gain / 100.0, dx=1.0))
-    )
     return result
 
 
@@ -555,6 +566,7 @@ def risk_at_horizon(outcome: str, horizon: int, targets: dict) -> float:
         egfr_target=egfr_target if egfr_target != egfr_now else None,
         acr_now=acr_now,
         acr_target=acr_target if acr_target != acr_now else None,
+        apply_hba1c_effect=has_type2_diabetes,
     )
     return float(result["point"]["target"])
 
@@ -647,7 +659,7 @@ def build_medication_contributions(outcome: str, horizon: int):
             a1c=current_targets["a1c_target"],
             bmi=current_targets["bmi_target"],
             diet_keys=[diet_key],
-            diabetes_context=True,
+            diabetes_context=has_type2_diabetes,
         )
         if not diet_targets["applied"]:
             continue
@@ -673,8 +685,10 @@ def build_medication_contributions(outcome: str, horizon: int):
             ldl=current_targets["ldl_target"],
             a1c=current_targets["a1c_target"],
             exercise_key=exercise_intervention_key,
-            diabetes_context=True,
+            diabetes_context=has_type2_diabetes,
         )
+        if not exercise_targets["applied"]:
+            return contributions
         next_targets = {
             "sbp_target": exercise_targets["sbp"],
             "ldl_target": exercise_targets["ldl"],
@@ -896,6 +910,22 @@ with input_col:
                     key="a1c_target", nudge=0.5, step=0.1,
                 )
 
+        sync_diabetes_selection(st.session_state, float(a1c_now))
+        has_type2_diabetes = st.checkbox(
+            "2型糖尿病として計算する（治療中を含む）",
+            key=DIABETES_MODEL_KEY,
+            on_change=mark_diabetes_selection_manual,
+            args=(st.session_state,),
+            help="現在のHbA1cが6.5%以上で自動チェックします。手動で変更した設定を優先し、数値が下がっても自動解除しません。",
+        )
+        st.caption(
+            "HbA1c 6.5%以上で自動チェックしますが、確定診断ではありません。"
+            "未診断の場合は手動で外してください。治療で低い場合も診断済みならチェックしてください。"
+            "1型糖尿病はこのアプリの推定対象外です。"
+        )
+        if not has_type2_diabetes:
+            st.caption("オフ時はHbA1cによるリスク補正と2型糖尿病専用の推定を適用しません。1型糖尿病用に切り替わる設定ではありません。")
+
     with st.expander("喫煙・BMI・腎機能・尿アルブミン", expanded=False):
         smoking_status = st.selectbox(
             "喫煙状況",
@@ -940,7 +970,7 @@ with input_col:
         with body_right:
             dbp_now = st.number_input("拡張期血圧 (mmHg)", 40, 140, 90, 1)
 
-        st.markdown("**糖尿病合併症予測に使用する腎指標**")
+        st.markdown("**リスク予測に使用する腎指標**")
         egfr_left, egfr_right = st.columns(2)
         with egfr_left:
             egfr_now = st.number_input("現在のeGFR", 5.0, 120.0, 80.0, 1.0)
@@ -983,9 +1013,12 @@ with input_col:
             st.divider()
             with st.container():
                 st.markdown(f"##### {med_label_prefix}糖尿病薬")
-                selected_a1c_meds = medication_selector(
-                    "糖尿病薬", meds_catalog["hba1c"], "current_a1c_meds",
-                )
+                if has_type2_diabetes:
+                    selected_a1c_meds = medication_selector(
+                        "糖尿病薬", meds_catalog["hba1c"], "current_a1c_meds",
+                    )
+                else:
+                    st.caption("糖尿病薬の効果試算は2型糖尿病のチェック時のみ利用できます。非糖尿病の心不全・CKDに対する薬効は、この計算には含めません。")
             all_selected_labels = [med["key"] for med in (
                 selected_sbp_meds + selected_ldl_meds + selected_a1c_meds
             )]
@@ -1063,6 +1096,7 @@ with input_col:
             st.caption("薬剤を選択すると、年間費用と主な副作用をここに表示します。")
 
     applied_diet_intervention_keys = []
+    applied_exercise = False
     if care_mode != "continue":
       with st.container(border=True):
         st.markdown("#### 🥗 食事療法")
@@ -1096,7 +1130,7 @@ with input_col:
                 a1c=a1c_tgt,
                 bmi=float(bmi_now) if diet_pattern is not None else None,
                 diet_keys=diet_intervention_keys,
-                diabetes_context=True,
+                diabetes_context=has_type2_diabetes,
             )
             applied_diet_intervention_keys = [effect.key for effect in diet_result["applied"]]
             sbp_tgt = float(diet_result["sbp"])
@@ -1165,8 +1199,11 @@ with input_col:
                 ldl=ldl_tgt,
                 a1c=a1c_tgt,
                 exercise_key=exercise_intervention_key,
-                diabetes_context=True,
+                diabetes_context=has_type2_diabetes,
             )
+            applied_exercise = bool(exercise_result["applied"])
+            for reason in exercise_result["skip_reasons"]:
+                st.warning(reason + " 効果がないという意味ではなく、このモデルでの数値化は対象外です。")
             sbp_tgt = float(exercise_result["sbp"])
             ldl_tgt = float(exercise_result["ldl"])
             a1c_tgt = float(exercise_result["a1c"])
@@ -1177,7 +1214,8 @@ with input_col:
             include_fitness = st.checkbox(
                 "心肺体力の改善も考慮する（探索的推定・全死亡のみ）",
                 value=False, key="include_exercise_fitness",
-            )
+                disabled=not has_type2_diabetes,
+            ) and has_type2_diabetes
             if include_fitness:
                 fitness_info = fitness_scenario([0], exercise_intervention_key, enabled=True)
                 st.caption(
@@ -1230,7 +1268,11 @@ with input_col:
     )
 
 horizon = _years_from_choice(horizon_choice)
-cumulative_data = calculate_cumulative_risk_curves(horizon)
+cumulative_data = calculate_cumulative_risk_curves(horizon, has_type2_diabetes=has_type2_diabetes)
+available_outcomes = tuple(key for key in OUTCOME_DISPLAY_ORDER if key in cumulative_data)
+for selection_key in ("display_outcome", "past_benefit_outcome"):
+    if st.session_state.get(selection_key) not in available_outcomes:
+        st.session_state[selection_key] = available_outcomes[0]
 # Preserve ordinary results only for document export; the screen uses the selected scenario.
 document_risk_curves = {key: dict(value) for key, value in cumulative_data.items()}
 fitness_projection = fitness_scenario(
@@ -1250,6 +1292,12 @@ if fitness_projection is not None:
 with result_col:
     st.markdown('<div class="result-anchor" aria-hidden="true"></div>', unsafe_allow_html=True)
     st.subheader("リアルタイム予測")
+    if not has_type2_diabetes:
+        st.info(
+            "2型糖尿病向けの大切断・失明は表示していません。"
+            "透析と認知症も現在は2型糖尿病用モデルのため数値を表示しません。"
+            "非糖尿病の透析予測には別モデルが必要です。リスクがゼロという意味ではありません。"
+        )
     hr_mode = st.checkbox("HR表示に切り替える（累積ハザード比の推定）", key="show_hazard_ratio")
     if hr_mode:
         st.caption(
@@ -1261,7 +1309,7 @@ with result_col:
         )
     selected_outcome = st.radio(
         "表示するアウトカム",
-        OUTCOME_DISPLAY_ORDER,
+        available_outcomes,
         index=0,
         format_func=lambda value: OUTCOME_META[value]["label"],
         horizontal=True,
@@ -1367,9 +1415,9 @@ with result_col:
         st.info("左側で現在服用中の薬を選ぶと、全薬中止との比較を表示します。")
 
     with st.container(border=True):
-        st.markdown("#### 7アウトカムの比較")
+        st.markdown(f"#### {len(available_outcomes)}アウトカムの比較")
         summary_cols = st.columns(3)
-        for index, outcome in enumerate(OUTCOME_DISPLAY_ORDER):
+        for index, outcome in enumerate(available_outcomes):
             data = cumulative_data[outcome]
             outcome_arr = data["baseline_cumulative"][-1] - data["target_cumulative"][-1]
             if hr_mode:
@@ -1410,7 +1458,9 @@ with result_col:
             bone_col1, bone_col2 = st.columns(2)
             with bone_col1:
                 prior_fragility_fracture = st.checkbox("脆弱性骨折歴あり")
-                peripheral_neuropathy = st.checkbox("糖尿病性末梢神経障害あり")
+                peripheral_neuropathy = st.checkbox(
+                    "糖尿病性末梢神経障害あり", disabled=not has_type2_diabetes,
+                ) and has_type2_diabetes
             with bone_col2:
                 glucocorticoid_use = st.checkbox("長期ステロイド使用あり")
                 has_t_score = st.checkbox("大腿骨頸部Tスコアが分かる")
@@ -1421,6 +1471,7 @@ with result_col:
             fracture_risk_10y = hip_fracture_risk(
                 age=float(age), sex=sex, years=10,
                 prior_fragility_fracture=prior_fragility_fracture,
+                has_type2_diabetes=has_type2_diabetes,
             )
             st.markdown("**薬物介入（参考試算）**")
             osteoporosis_drug_key = st.selectbox(
@@ -1444,6 +1495,7 @@ with result_col:
             treated_fracture_risk_10y = hip_fracture_risk(
                 age=float(age), sex=sex, years=10,
                 prior_fragility_fracture=prior_fragility_fracture,
+                has_type2_diabetes=has_type2_diabetes,
                 treatment_rr=float(drug_effect["hip_rr"]),
                 treatment_years=(
                     int(treatment_duration) if osteoporosis_drug_key != "none" else 0
@@ -1476,7 +1528,9 @@ with result_col:
                 ):
                     st.warning("高度腎機能低下ではビスホスホネートの適否を個別に確認してください。")
             st.caption(
-                "2型糖尿病RR 1.33と、骨折歴がある場合は既往骨折HR 1.82を反映。"
+                ("2型糖尿病RR 1.33を反映。" if has_type2_diabetes else
+                 "一般人口の発生率を使い、2型糖尿病RR 1.33は適用しません。非糖尿病者だけで較正したモデルではありません。")
+                + "骨折歴がある場合は既往骨折HR 1.82を反映。"
                 "神経障害・ステロイドは注意喚起だけに使い、未検証の上乗せはしません。"
             )
         bone_flags = bone_health_flags(
@@ -1505,7 +1559,7 @@ with result_col:
         bone_links[4].link_button("薬剤別股関節骨折効果", HIP_FRACTURE_TREATMENT_NMA_URL)
 
     if care_mode == "continue" and selected_meds and treatment_years > 0:
-        past_benefit = calculate_past_treatment_benefit(int(treatment_years))
+        past_benefit = calculate_past_treatment_benefit(int(treatment_years), has_type2_diabetes=has_type2_diabetes)
         st.markdown("## ⏪ これまでの治療で得られた利益")
         st.caption(
             f"治療開始から現在までの{int(treatment_years)}年間を、最初から薬を使わなかった場合と比較した推定です。"
@@ -1520,7 +1574,7 @@ with result_col:
         st.caption("全死亡の生存曲線差を治療期間内で積分した集団平均のモデル推定です。個人の寿命を断定する値ではありません。")
 
         benefit_cols = st.columns(3)
-        for index, outcome in enumerate(OUTCOME_DISPLAY_ORDER):
+        for index, outcome in enumerate(available_outcomes):
             benefit = past_benefit[outcome]
             benefit_cols[index % 3].metric(
                 OUTCOME_META[outcome]["label"],
@@ -1531,7 +1585,7 @@ with result_col:
 
         past_outcome = st.selectbox(
             "過去の累積利益を表示するアウトカム",
-            OUTCOME_DISPLAY_ORDER,
+            available_outcomes,
             format_func=lambda value: OUTCOME_META[value]["label"],
             key="past_benefit_outcome",
         )
@@ -1589,7 +1643,7 @@ if st.session_state.get("show_document_creation"):
         st.rerun()
 
     lifestyle_labels = [DIET_EFFECTS[key].label for key in applied_diet_intervention_keys]
-    if exercise_intervention_key is not None:
+    if applied_exercise:
         lifestyle_labels.append(EXERCISE_EFFECTS[exercise_intervention_key].label)
 
     pdf_plan_ui.render_plan_section(
@@ -1613,5 +1667,6 @@ if st.session_state.get("show_document_creation"):
         sbp_after=sbp_tgt,
         ldl_after=ldl_tgt,
         a1c_after=a1c_tgt,
+        diabetes_model_enabled=has_type2_diabetes,
         key_prefix="dm_care",
     )

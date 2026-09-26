@@ -380,11 +380,12 @@ class OutcomesEngine:
                              hba1c_now: float, hba1c_target: float,
                              smoking_status: str, cigs_per_day: int,
                              years_smoked: float, years_since_quit: float,
-                             assume_quit_today_in_target: bool = False) -> dict:
+                             assume_quit_today_in_target: bool = False,
+                             apply_hba1c_effect: bool = True) -> dict:
         # 現在の値と目標値の差を計算（正の値はリスク増加、負の値はリスク減少）
         delta_sbp = sbp_now - sbp_target
         delta_ldl_mmol = (ldl_now_mg - ldl_target_mg) / 38.67
-        delta_hba1c = hba1c_now - hba1c_target
+        delta_hba1c = hba1c_now - hba1c_target if apply_hba1c_effect else 0.0
 
         pack_years = (cigs_per_day / 20.0) * max(0.0, years_smoked)
 
@@ -408,7 +409,7 @@ class OutcomesEngine:
         rr_a1c_base = 1.0
         rr_sbp_target = self.rr_sbp(outcome, delta_sbp)           
         rr_ldl_target = self.rr_ldl(outcome, delta_ldl_mmol)      
-        rr_a1c_target = self.rr_hba1c(outcome, delta_hba1c, hba1c_target)
+        rr_a1c_target = self.rr_hba1c(outcome, delta_hba1c, hba1c_target) if apply_hba1c_effect else 1.0
 
         risk_base = 0.0; surv_base = 1.0
         risk_tgt  = 0.0; surv_tgt  = 1.0

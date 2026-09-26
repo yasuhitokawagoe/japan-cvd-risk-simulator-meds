@@ -76,9 +76,13 @@ def hip_fracture_risk(
     *, age: float, sex: str, years: int = 10,
     prior_fragility_fracture: bool = False,
     treatment_rr: float = 1.0, treatment_years: int = 0,
+    has_type2_diabetes: bool = True,
 ) -> float:
-    """死亡を競合リスクとした2型糖尿病患者の大腿骨骨折参考確率。"""
-    multiplier = TYPE2_DIABETES_HIP_FRACTURE_RR
+    """日本の一般人口の発生率を基にした参考確率（死亡を競合リスクとする）。
+
+    2型糖尿病の追加倍率は対象者のみ。既存呼び出しの既定値は維持する。
+    """
+    multiplier = TYPE2_DIABETES_HIP_FRACTURE_RR if has_type2_diabetes else 1.0
     if prior_fragility_fracture:
         multiplier *= PRIOR_FRAGILITY_FRACTURE_HIP_HR
     event_free_survival = 1.0

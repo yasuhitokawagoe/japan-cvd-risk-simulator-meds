@@ -93,6 +93,7 @@ def render_plan_section(
     ldl_after: Optional[float] = None,
     a1c_after: Optional[float] = None,
     treatment_benefit: Optional[Mapping] = None,
+    diabetes_model_enabled: Optional[bool] = None,
     key_prefix: str = "pc",
 ) -> None:
     """
@@ -150,6 +151,10 @@ def render_plan_section(
         has_lipid_meds=bool(lipid_medications),
         has_diabetes_meds=bool(diabetes_medications),
     )
+    if diabetes_model_enabled is not None:
+        # Respect the PC user's override even when current HbA1c is >=6.5.
+        diagnoses["diabetes"] = diabetes_model_enabled
+        st.caption("糖尿病の候補はシミュレーターのチェック設定を引き継いでいます。自動チェックを含むため、診断と一致するか確認してください。")
     medication_names = [*bp_medications, *lipid_medications, *diabetes_medications]
 
     if height_cm is not None and weight_kg is not None and sbp_now is not None and dbp_now is not None:
@@ -165,6 +170,7 @@ def render_plan_section(
     diagnosis_signature = (
         round(float(sbp_now or 0), 1), round(float(dbp_now or 0), 1),
         round(float(ldl_now), 1), round(float(a1c_now), 1), tuple(medication_names),
+        diabetes_model_enabled,
     )
     diagnosis_signature_key = f"{p}_diagnosis_signature"
     if st.session_state.get(diagnosis_signature_key) != diagnosis_signature:
