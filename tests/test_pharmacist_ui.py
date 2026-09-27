@@ -106,6 +106,17 @@ st.session_state["pharm_test_risk"] = (cumulative_data, sbp_tgt, ldl_tgt, a1c_tg
         self.assertFalse(app.exception)
         self.assertNotIn("pharm_selection", [widget.key for widget in app.multiselect])
 
+    def test_mode_checkbox_is_directly_above_document_button_when_off_and_on(self):
+        app = AppTest.from_file(str(ROOT / "app_streamlit_outcomes.py"), default_timeout=40).run()
+        for enabled in (False, True):
+            app.checkbox(key="pharmacist_mode").set_value(enabled).run()
+            self.assertFalse(app.exception, [e.message for e in app.exception])
+            elements = list(app.main.children.values())
+            keys = [getattr(element, "key", None) for element in elements]
+            self.assertEqual(keys.index("open_document_creation"), keys.index("pharmacist_mode") + 1)
+            self.assertEqual(len([widget for widget in app.checkbox if widget.key == "pharmacist_mode"]), 1)
+        self.assertEqual(app.multiselect(key="pharm_selection").value, [])
+
 
 if __name__ == "__main__":
     unittest.main()

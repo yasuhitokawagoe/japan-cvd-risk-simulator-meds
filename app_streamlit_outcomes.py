@@ -1382,9 +1382,6 @@ if fitness_projection is not None:
 
 with result_col:
     st.markdown('<div class="result-anchor" aria-hidden="true"></div>', unsafe_allow_html=True)
-    pharmacist_mode = st.checkbox("薬剤師の指導モード", key="pharmacist_mode")
-    if pharmacist_mode:
-        render_pharmacist_mode(selected_meds, st.session_state.get("osteoporosis_drug", "none"))
     st.subheader("リアルタイム予測")
     if not has_type2_diabetes:
         st.info(
@@ -1801,6 +1798,7 @@ if access_stats.get("historical_estimate", 0):
     st.caption(f"※ 累計アクセスは過去約{access_stats['historical_estimate']:,}件への概算補正を含みます。補正後の訪問は別途実測で加算しています。")
 
 st.divider()
+pharmacist_mode = st.checkbox("薬剤師の指導モード", key="pharmacist_mode")
 if st.button(
     "📄 書類作成へ進む",
     type="primary",
@@ -1808,6 +1806,9 @@ if st.button(
     key="open_document_creation",
 ):
     st.session_state["show_document_creation"] = True
+
+if pharmacist_mode:
+    render_pharmacist_mode(selected_meds, st.session_state.get("osteoporosis_drug", "none"))
 
 if st.session_state.get("show_document_creation"):
     if fitness_projection is not None:
