@@ -34,6 +34,7 @@ from exercise_fitness import (
 )
 from meds_catalog import apply_meds_to_targets, load_meds_catalog
 from medical_cost_ui import render_medication_costs
+from pharmacist_ui import render_pharmacist_mode
 from risk_display import hazard_ratio_curve, format_hr, format_hazard_change
 from pc_diabetes_selection import (
     DIABETES_MODEL_KEY, mark_diabetes_selection_manual, sync_diabetes_selection,
@@ -1381,6 +1382,9 @@ if fitness_projection is not None:
 
 with result_col:
     st.markdown('<div class="result-anchor" aria-hidden="true"></div>', unsafe_allow_html=True)
+    pharmacist_mode = st.checkbox("薬剤師の指導モード", key="pharmacist_mode")
+    if pharmacist_mode:
+        render_pharmacist_mode(selected_meds, st.session_state.get("osteoporosis_drug", "none"))
     st.subheader("リアルタイム予測")
     if not has_type2_diabetes:
         st.info(
