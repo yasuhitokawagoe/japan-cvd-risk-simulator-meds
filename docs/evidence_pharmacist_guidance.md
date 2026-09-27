@@ -72,3 +72,12 @@ PC画面テストではモードと指導薬を変更してもリスク曲線・
 実行結果：`tests/` 全体 **143 passed / 136 subtests passed**。
 初回の全体実行では変更していないアクセス集計の並列初期化テストにSQLiteの一時ロックが1件発生（残り142件通過）。同じコマンドで再実行し全件通過。アクセス集計の実装はこの変更には含めていない。
 ローカルCondaのreadline読み込み不具合を避けるため、テスト起動時のみ既存の `sys.modules["readline"] = None` を使用。アプリの計算・入力は差し替えていない。
+
+## PCプレビューへの展開
+
+- 実装コミット：`0dc08d5`、ブランチ `codex/pc-diabetes-selection`。
+- 対象：[薬剤選択PCプレビュー](https://dm-care-med-selector-preview-production.up.railway.app/)。
+- Railway deployment：`5fe27624-bb6e-4f70-8fb4-9baad9f9e19c`、状態 `SUCCESS`（2026-09-27）。
+- ローカル実画面で指導薬の検索、メトホルミンの全説明、未確認時の保存不可、架空用法と2つの確認後の保存ボタン有効化、リスク欄の継続表示、文字の折返しを確認。
+- 公開実画面で新しいチェック、全47薬剤の表示、デノスマブの検索・選択、骨粗鬆症に固有の説明とPMDAリンク、実薬未確認時の保存不可を確認。モード変更後も初期例の全死亡リスク24.9%→12.9%は不変。
+- 元のPC `dm-care-live-preview`（`cc543bdc-eb03-4c52-bfb6-6036dbb1c76c`）とスマホ `dm-care-patient-mobile-preview`（`91e1ae18-a6d0-427f-ae66-d11529b7fc3d`）のdeploymentは変更していない。
